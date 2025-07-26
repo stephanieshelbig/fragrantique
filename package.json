@@ -1,6 +1,6 @@
 
 {
-  "name": "fragrantique-working-router",
+  "name": "fragrantique-router-demo",
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
