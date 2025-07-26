@@ -8,7 +8,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/@:username" element={<Boutique />} />
+      <Route path="/:handle" element={<Boutique />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

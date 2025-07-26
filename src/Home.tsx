@@ -5,17 +5,15 @@ import { useNavigate } from 'react-router-dom';
 export default function Home() {
   const navigate = useNavigate();
 
-  const handleClick = () => {
-    console.log("clicked");
-    navigate("/@stephanie");
-  };
-
   return (
     <div style={{ padding: "2rem", fontFamily: "Georgia" }}>
       <h1 style={{ color: "#D4AF37" }}>Fragrantique Home</h1>
       <p style={{ color: "#888" }}>Welcome to your personal fragrance boutique.</p>
       <button
-        onClick={handleClick}
+        onClick={() => {
+          console.log("clicked");
+          navigate("/stephanie");
+        }}
         style={{
           background: "#FADADD",
           border: "none",
