@@ -1,75 +1,82 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function App() {
-  const user = {
-    username: 'stephanie',
-    name: 'Stephanie Helbig',
-    bio: 'Welcome to my fragrance boutique.',
-    profileImage: 'https://via.placeholder.com/100x100.png?text=👑',
-    fragrances: [
-      {
-        name: 'Chanel No. 5',
-        brand: 'Chanel',
-        year: 1921,
-        image: 'https://fimgs.net/mdimg/perfume/375x500.61.jpg',
-        notes: ['aldehydes', 'jasmine', 'rose', 'sandalwood', 'vanilla'],
-        accord: 'powdery, floral, woody',
-        review: 'The timeless classic. Elegant, powdery, iconic.',
-        decant: true,
-      }
-    ]
-  };
+  const [fragrances, setFragrances] = useState([
+    {
+      id: 1,
+      name: 'Chanel No. 5',
+      brand: 'Chanel',
+      image: 'https://fimgs.net/mdimg/perfume/375x500.61.jpg'
+    },
+    {
+      id: 2,
+      name: 'Delina',
+      brand: 'Parfums de Marly',
+      image: 'https://fimgs.net/mdimg/perfume/375x500.37511.jpg'
+    },
+    {
+      id: 3,
+      name: 'Baccarat Rouge 540',
+      brand: 'Maison Francis Kurkdjian',
+      image: 'https://fimgs.net/mdimg/perfume/375x500.25167.jpg'
+    }
+  ]);
+
+  function handleDragStart(e, index) {
+    e.dataTransfer.setData('dragIndex', index.toString());
+  }
+
+  function handleDrop(e, dropIndex) {
+    const dragIndex = parseInt(e.dataTransfer.getData('dragIndex'), 10);
+    if (dragIndex === dropIndex) return;
+    const updated = [...fragrances];
+    const [moved] = updated.splice(dragIndex, 1);
+    updated.splice(dropIndex, 0, moved);
+    setFragrances(updated);
+  }
 
   return (
     <div style={{
       background: '#FFFCF9',
-      minHeight: '100vh',
       fontFamily: 'Georgia, serif',
       color: '#2C2C2C',
       padding: '2rem',
+      minHeight: '100vh'
     }}>
-      <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.5rem', color: '#D4AF37' }}>@{user.username}'s Boutique</h1>
-        <img src={user.profileImage} alt="Profile" style={{ borderRadius: '50%' }} />
-        <p style={{ marginTop: '0.5rem' }}>{user.name}</p>
-        <p style={{ fontStyle: 'italic', color: '#555' }}>{user.bio}</p>
-      </header>
+      <h1 style={{ textAlign: 'center', color: '#D4AF37' }}>@stephanie's Boutique</h1>
+      <p style={{ textAlign: 'center', color: '#555' }}>Drag and drop to rearrange your shelf</p>
 
-      <main style={{ maxWidth: '800px', margin: '0 auto' }}>
-        <h2 style={{ color: '#D4AF37', marginBottom: '1rem' }}>My Fragrance Shelf</h2>
-        {user.fragrances.map((frag, index) => (
-          <div key={index} style={{
-            display: 'flex',
-            gap: '1rem',
-            marginBottom: '2rem',
-            padding: '1rem',
-            background: '#ffffff',
-            border: '1px solid #fce4ec',
-            borderRadius: '10px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
-          }}>
-            <img src={frag.image} alt={frag.name} style={{ height: '120px', borderRadius: '8px' }} />
-            <div>
-              <h3 style={{ margin: 0 }}>{frag.name} by {frag.brand}</h3>
-              <p style={{ fontSize: '0.9rem', color: '#777' }}>Released: {frag.year}</p>
-              <p><strong>Notes:</strong> {frag.notes.join(', ')}</p>
-              <p><strong>Accord:</strong> {frag.accord}</p>
-              <p><em>{frag.review}</em></p>
-              {frag.decant && (
-                <button style={{
-                  backgroundColor: '#FADADD',
-                  color: '#2C2C2C',
-                  border: '1px solid #D4AF37',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}>Purchase Decant</button>
-              )}
-            </div>
+      <div style={{
+        display: 'flex',
+        gap: '1rem',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        marginTop: '2rem'
+      }}>
+        {fragrances.map((frag, index) => (
+          <div
+            key={frag.id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => handleDrop(e, index)}
+            style={{
+              border: '1px solid #fce4ec',
+              padding: '1rem',
+              borderRadius: '10px',
+              width: '200px',
+              background: 'white',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+              textAlign: 'center'
+            }}
+          >
+            <img src={frag.image} alt={frag.name} style={{ width: '100%', borderRadius: '8px' }} />
+            <h3 style={{ margin: '0.5rem 0', color: '#D4AF37' }}>{frag.name}</h3>
+            <p style={{ fontSize: '0.9rem', color: '#888' }}>{frag.brand}</p>
           </div>
         ))}
-      </main>
+      </div>
     </div>
   );
 }
