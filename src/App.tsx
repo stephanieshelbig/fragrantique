@@ -1,1 +1,15 @@
-// React App content goes here (Google login, fragrance shelf, etc.)
+
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import Home from './Home';
+import Boutique from './Boutique';
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/@:username" element={<Boutique />} />
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  );
+}
