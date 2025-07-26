@@ -1,13 +1,31 @@
-
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 export default function Home() {
+  const navigate = useNavigate();
+
+  function goToBoutique() {
+    navigate('/@stephanie');
+  }
+
   return (
     <div style={{ padding: "2rem", fontFamily: "Georgia" }}>
       <h1 style={{ color: "#D4AF37" }}>Fragrantique Home</h1>
       <p style={{ color: "#888" }}>Welcome to your personal fragrance boutique.</p>
-      <Link to="/@stephanie" style={{ color: "#FADADD" }}>Go to Stephanie's Boutique</Link>
+      <button 
+        onClick={goToBoutique}
+        style={{
+          background: "#FADADD",
+          border: "none",
+          padding: "0.75rem 1.5rem",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontSize: "1rem",
+          color: "#5A3E2B"
+        }}
+      >
+        Go to Stephanie's Boutique
+      </button>
     </div>
   );
 }
