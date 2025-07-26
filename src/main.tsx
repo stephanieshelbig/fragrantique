@@ -1,1 +1,1 @@
-// Entry point for React app.
+// Entry point for React app with routing and Supabase integration.

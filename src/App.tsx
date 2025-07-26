@@ -1,1 +1,1 @@
-// React app with Google login, drag-and-drop shelf, and add fragrance form.
+// React App content goes here (Google login, fragrance shelf, etc.)
