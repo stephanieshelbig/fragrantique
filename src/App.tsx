@@ -44,8 +44,8 @@ export default function App() {
             gap: '1rem',
             marginBottom: '2rem',
             padding: '1rem',
-            background: '#fff',
-            border: '1px solid #eee',
+            background: '#ffffff',
+            border: '1px solid #fce4ec',
             borderRadius: '10px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
           }}>
@@ -58,9 +58,9 @@ export default function App() {
               <p><em>{frag.review}</em></p>
               {frag.decant && (
                 <button style={{
-                  backgroundColor: '#D4AF37',
-                  color: 'white',
-                  border: 'none',
+                  backgroundColor: '#FADADD',
+                  color: '#2C2C2C',
+                  border: '1px solid #D4AF37',
                   padding: '0.5rem 1rem',
                   borderRadius: '6px',
                   cursor: 'pointer'
