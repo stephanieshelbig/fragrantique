@@ -1,4 +1,4 @@
-// Boutique component with drag-and-drop and Google profile header
+// Boutique Component Placeholder
 import React from 'react';
 
 export default function Boutique() {
@@ -9,8 +9,7 @@ export default function Boutique() {
         <h1 style={{ color: '#d4af37' }}>Stephanie Helbig</h1>
       </header>
       <section>
-        {/* Fragrance grid would go here */}
-        <p>Drag-and-drop shelf loading...</p>
+        <p>Drag-and-drop fragrance shelf here...</p>
       </section>
     </div>
   );
