@@ -1,6 +1,6 @@
 
 {
-  "name": "fragrantique-auth-ready",
+  "name": "fragrantique-auth-redirect-fix",
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
