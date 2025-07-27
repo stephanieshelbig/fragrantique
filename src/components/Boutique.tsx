@@ -1,4 +1,4 @@
-// Simulated Boutique component with drag-and-drop and Google profile header
+// Boutique component with drag-and-drop and Google profile header
 import React from 'react';
 
 export default function Boutique() {
