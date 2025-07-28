@@ -4,9 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import Auth from './components/Auth';
 import Boutique from './components/Boutique';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 function App() {
   const [session, setSession] = useState(null);
@@ -15,13 +13,12 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
-
     supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
   }, []);
 
-  return session ? <Boutique /> : <Auth />;
+  return session ? <Boutique session={session} /> : <Auth supabase={supabase} />;
 }
 
 export default App;
