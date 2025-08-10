@@ -1,0 +1,1 @@
+export default function Explore(){return <div>Explore boutiques (coming soon)</div>;}

@@ -1,0 +1,15 @@
+'use client';import { useEffect,useState } from 'react';import { supabase } from '@/lib/supabase';import Image from 'next/image';
+export default function FragranceDetail({params}:{params:{id:string}}){const [item,setItem]=useState<any>(null);const [comments,setComments]=useState<any[]>([]);const [text,setText]=useState('');
+useEffect(()=>{(async()=>{const {data}=await supabase.from('fragrances').select('*').eq('id',params.id).single();setItem(data);const cs=await supabase.from('comments').select('*').eq('fragrance_id',params.id).order('created_at',{ascending:false});setComments(cs.data||[]);})()},[params.id]);
+async function addComment(){if(!text.trim())return;await supabase.from('comments').insert({fragrance_id:params.id,content:text});setText('');const cs=await supabase.from('comments').select('*').eq('fragrance_id',params.id).order('created_at',{ascending:false});setComments(cs.data||[]);}
+if(!item)return <div>Loading...</div>;
+return(<div className="grid md:grid-cols-2 gap-8"><div className="glass-card p-4">{item.image_url&&<Image alt={item.name} src={item.image_url} width={600} height={600} className="w-full h-auto rounded-lg"/>}
+<h1 className="text-2xl font-semibold mt-3">{item.brand} — {item.name}</h1>{item.fragrantica_url&&<a className="text-sm underline" href={item.fragrantica_url} target="_blank">View on Fragrantica</a>}
+<div className="mt-4 space-y-2"><h3 className="font-semibold">Accords</h3><div className="space-y-1">{(item.accords||[]).map((a:any,idx:number)=>(
+<div key={idx} className="flex items-center gap-2"><div className="h-2 flex-1 bg-neutral-200 rounded"><div className="h-2 rounded" style={{width:`${a.strength??50}%`,background:'var(--gold)'}}/></div><span className="text-xs w-28">{a.name}</span></div>))}</div></div>
+{item.decant_price&&item.decant_payment_link&&(<a href={item.decant_payment_link} target="_blank" className="mt-4 inline-block bg-[var(--gold)] text-white px-4 py-2 rounded-lg">Buy decant — ${item.decant_price}</a>)}
+{(!item.decant_payment_link)&&<p className="text-xs opacity-60 mt-2">Seller has not added a payment link yet.</p>}
+<p className="text-[10px] opacity-60 mt-2">A 5% platform fee may apply at checkout.</p></div>
+<div><div className="glass-card p-4 mb-4"><h3 className="font-semibold mb-2">Comments</h3><div className="space-y-2 max-h-[300px] overflow-auto">{comments.map(c=>(<div key={c.id} className="text-sm"><span className="opacity-60 mr-2">{new Date(c.created_at).toLocaleString()}</span>{c.content}</div>))}</div>
+<div className="mt-3 flex gap-2"><input value={text} onChange={e=>setText(e.target.value)} className="flex-1 border rounded-lg px-3 py-2" placeholder="Write a comment..."/><button onClick={addComment} className="px-4 rounded-lg bg-[var(--gold)] text-white">Post</button></div></div>
+<div className="glass-card p-4"><h3 className="font-semibold mb-2">Notes</h3><p className="text-sm whitespace-pre-wrap">{item.notes||'—'}</p></div></div></div>);}

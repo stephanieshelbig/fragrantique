@@ -1,0 +1,8 @@
+'use client';import { useEffect,useState } from 'react';import { supabase } from '@/lib/supabase';
+type Message={id:string;content:string;created_at:string;user_email:string|null};
+export default function Chat(){const [messages,setMessages]=useState<Message[]>([]);const [input,setInput]=useState('');const [email,setEmail]=useState<string|null>(null);
+useEffect(()=>{supabase.auth.getUser().then(({data})=>setEmail(data.user?.email??null));load();const chan=supabase.channel('public:messages').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},payload=>{setMessages(m=>[payload.new as Message,...m]);}).subscribe();return()=>{supabase.removeChannel(chan);};},[]);
+async function load(){const {data}=await supabase.from('messages').select('*').order('created_at',{ascending:false}).limit(50);setMessages(data as any||[]);}
+async function send(){if(!input.trim())return;await supabase.from('messages').insert({content:input,user_email:email});setInput('');}
+return(<div className="max-w-2xl mx-auto"><div className="glass-card p-4 h-[420px] overflow-auto flex flex-col-reverse"><div>{messages.map(m=>(<div key={m.id} className="py-1 text-sm"><span className="opacity-60 mr-2">{new Date(m.created_at).toLocaleTimeString()}</span><b>{m.user_email??'Anonymous'}:</b> {m.content}</div>))}</div></div>
+<div className="mt-3 flex gap-2"><input value={input} onChange={e=>setInput(e.target.value)} className="flex-1 border rounded-lg px-3 py-2" placeholder="Say hi..."/><button onClick={send} className="px-4 rounded-lg bg-[var(--gold)] text-white">Send</button></div></div>);}

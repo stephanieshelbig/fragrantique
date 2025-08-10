@@ -1,0 +1,24 @@
+-- Fragrantique MVP schema
+create table if not exists profiles ( id uuid primary key default auth.uid(), username text unique, email text, created_at timestamp with time zone default now() );
+create table if not exists fragrances ( id uuid primary key default gen_random_uuid(), name text not null, brand text not null, image_url text, fragrantica_url text, notes text, accords jsonb, decant_price numeric, decant_payment_link text, owner uuid references profiles(id), created_at timestamp with time zone default now() );
+create table if not exists user_fragrances ( id uuid primary key default gen_random_uuid(), user_id uuid references profiles(id) on delete cascade, fragrance_id uuid references fragrances(id) on delete cascade, position int default 0, created_at timestamp with time zone default now() );
+create table if not exists comments ( id uuid primary key default gen_random_uuid(), fragrance_id uuid references fragrances(id) on delete cascade, user_id uuid references profiles(id), content text not null, created_at timestamp with time zone default now() );
+create table if not exists messages ( id uuid primary key default gen_random_uuid(), content text not null, user_email text, created_at timestamp with time zone default now() );
+create or replace function public.handle_new_user() returns trigger as $$ begin insert into public.profiles (id, email, username) values (new.id, new.email, split_part(new.email,'@',1)); return new; end; $$ language plpgsql security definer;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
+alter table profiles enable row level security; alter table fragrances enable row level security; alter table user_fragrances enable row level security; alter table comments enable row level security; alter table messages enable row level security;
+create policy "profiles are readable" on profiles for select using (true);
+create policy "insert own profile" on profiles for insert with check (auth.uid() = id);
+create policy "update own profile" on profiles for update using (auth.uid() = id);
+create policy "fragrances readable" on fragrances for select using (true);
+create policy "insert fragrance if logged in" on fragrances for insert with check (auth.role() = 'authenticated');
+create policy "owner can update/delete fragrance" on fragrances for update using (owner = auth.uid());
+create policy "owner can delete fragrance" on fragrances for delete using (owner = auth.uid());
+create policy "user_fragrances readable" on user_fragrances for select using (true);
+create policy "user can manage their shelves" on user_fragrances for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "comments readable" on comments for select using (true);
+create policy "insert comments if logged in" on comments for insert with check (auth.role() = 'authenticated');
+create policy "author can delete comment" on comments for delete using (user_id = auth.uid());
+create policy "messages readable" on messages for select using (true);
+create policy "any logged-in can insert message" on messages for insert with check (auth.role() = 'authenticated');
