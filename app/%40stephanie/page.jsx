@@ -29,3 +29,29 @@ export default function StephanieBoutique() {
         .select('fragrance:fragrances(*)')
         .eq('user_id', profile.id)
         .order('position', { ascending: true });
+
+      if (error) {
+        console.error(error);
+        setLoading(false);
+        return;
+      }
+
+      // Extract fragrance objects
+      const fragranceList = data.map((f) => f.fragrance);
+      setFragrances(fragranceList);
+      setLoading(false);
+    }
+
+    loadFragrances();
+  }, []);
+
+  if (loading) {
+    return <div className="p-6">Loading your boutique…</div>;
+  }
+
+  return (
+    <div className="p-6">
+      <FragranceShelf fragrances={fragrances} />
+    </div>
+  );
+}
