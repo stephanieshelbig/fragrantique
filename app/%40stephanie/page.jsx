@@ -10,7 +10,6 @@ export default function StephanieBoutique() {
 
   useEffect(() => {
     async function loadFragrances() {
-      // Get Stephanie's user ID
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
@@ -18,27 +17,23 @@ export default function StephanieBoutique() {
         .single();
 
       if (profileError || !profile) {
-        console.error(profileError || 'Profile not found');
         setLoading(false);
         return;
       }
 
-      // Get all fragrances linked to Stephanie
       const { data, error } = await supabase
         .from('user_fragrances')
         .select('fragrance:fragrances(*)')
         .eq('user_id', profile.id)
         .order('position', { ascending: true });
 
-      if (error) {
-        console.error(error);
+      if (error || !data) {
         setLoading(false);
         return;
       }
 
-      // Extract fragrance objects
-      const fragranceList = data.map((f) => f.fragrance);
-      setFragrances(fragranceList);
+      const list = data.map((row) => row.fragrance);
+      setFragrances(list);
       setLoading(false);
     }
 
