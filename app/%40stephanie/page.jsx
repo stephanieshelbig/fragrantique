@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import FragranceShelf from '@/components/FragranceShelf';
 import Image from 'next/image';
+import BoutiqueShelves from '@/components/BoutiqueShelves';
 import bgImage from '@/public/Fragrantique_boutiqueBackground.png';
 
 export default function StephanieBoutique() {
@@ -32,7 +32,6 @@ export default function StephanieBoutique() {
       setFragrances(data ? data.map((f) => f.fragrance) : []);
       setLoading(false);
     }
-
     loadFragrances();
   }, []);
 
@@ -41,8 +40,8 @@ export default function StephanieBoutique() {
   }
 
   return (
-    <div className="relative min-h-screen">
-      {/* Background */}
+    <div className="relative min-h-[70vh]">
+      {/* Background image */}
       <Image
         src={bgImage}
         alt="Boutique Background"
@@ -50,13 +49,12 @@ export default function StephanieBoutique() {
         style={{ objectFit: 'cover' }}
         priority
       />
-      {/* Overlay to soften background */}
-      <div className="absolute inset-0 bg-white/70 backdrop-blur-sm" />
 
-      {/* Content */}
-      <div className="relative p-6">
-        <FragranceShelf fragrances={fragrances} />
-      </div>
+      {/* Soft overlay so bottles pop */}
+      <div className="absolute inset-0 bg-white/50" />
+
+      {/* Shelves overlay (bottles positioned onto shelves) */}
+      <BoutiqueShelves fragrances={fragrances} />
     </div>
   );
 }
