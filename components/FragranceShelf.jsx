@@ -19,7 +19,7 @@ export default function FragranceShelf({ fragrances }) {
         return (
           <div
             key={fragrance.id}
-            className="glass-card p-3 cursor-pointer hover:shadow-lg transition rounded-xl"
+            className="bg-white/80 p-3 cursor-pointer hover:shadow-lg transition rounded-xl"
             onClick={() => router.push(`/fragrance/${fragrance.id}`)}
           >
             <div className="w-full aspect-[3/4] overflow-hidden rounded-md bg-white">
