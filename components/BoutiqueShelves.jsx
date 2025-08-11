@@ -1,11 +1,13 @@
-
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-const SHELF_Y = [27.15, 38.09, 48.14, 58.20, 68.26, 77.54, 83.89];
-const SHELF_LEFT_PCT = 20;
-const SHELF_RIGHT_PCT = 80;
+/** Shelf top edges (percent from top of image) */
+const SHELF_TOP_Y = [24.6, 35.6, 45.9, 56.1, 66.2, 75.4, 82.1];
+// If any row is a hair off, nudge an entry ±0.5 until it sits perfectly.
+
+const SHELF_LEFT_PCT = 20;   // inner alcove left bound
+const SHELF_RIGHT_PCT = 80;  // inner alcove right bound
 
 const DESKTOP_H = 120;
 const TABLET_H  = 100;
@@ -19,6 +21,7 @@ function getBottleH() {
   return DESKTOP_H;
 }
 
+/** Prefer the transparent PNG if present */
 function srcFrom(f) {
   const best = f.image_url_transparent || f.image_url;
   if (!best) return '';
@@ -45,8 +48,9 @@ export default function BoutiqueShelves({ fragrances }) {
     return () => window.removeEventListener('resize', measure);
   }, []);
 
+  // Distribute fragrances top→bottom across shelves
   const rows = useMemo(() => {
-    const r = SHELF_Y.map(() => []);
+    const r = SHELF_TOP_Y.map(() => []);
     (fragrances || []).forEach((f, i) => r[i % r.length].push(f));
     return r;
   }, [fragrances]);
@@ -54,6 +58,7 @@ export default function BoutiqueShelves({ fragrances }) {
   return (
     <div ref={wrapperRef} className="absolute inset-0 pointer-events-none z-10">
       {rows.map((rowFrags, idx) => {
+        // spacing calc
         const estBottleW = Math.round(bottleH * 0.75);
         const minGap = 16;
         let gap = minGap;
@@ -66,10 +71,10 @@ export default function BoutiqueShelves({ fragrances }) {
         return (
           <div
             key={idx}
-            className="absolute flex items-center"
+            className="absolute flex items-end"
             style={{
-              top: `${SHELF_Y[idx]}%`,
-              transform: 'translateY(-50%)',
+              top: `${SHELF_TOP_Y[idx]}%`,
+              transform: 'translateY(-0%)', // anchor line is the shelf top
               left: `${SHELF_LEFT_PCT}%`,
               right: `${100 - SHELF_RIGHT_PCT}%`,
               justifyContent: 'center',
@@ -85,10 +90,14 @@ export default function BoutiqueShelves({ fragrances }) {
                   src={imgSrc}
                   alt={`${f.brand || ''} — ${f.name || ''}`}
                   title={`${f.brand || ''} — ${f.name || ''}`}
-                  className="object-contain hover:scale-[1.05] transition-transform duration-150"
+                  className="object-contain hover:scale-[1.04] transition-transform duration-150"
                   style={{
                     height: `${bottleH}px`,
                     width: 'auto',
+                    transform: 'translate(-50%, -100%)', // bottom sits on the shelf line
+                    position: 'relative',
+                    left: '50%',
+                    // Blend white JPGs a bit; transparent PNGs will ignore this
                     mixBlendMode: 'multiply',
                     filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
                     pointerEvents: 'auto',
