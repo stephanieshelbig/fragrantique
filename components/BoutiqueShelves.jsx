@@ -3,18 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-/** 
- * Shelf TOP edges in % from the top of the image.
- * These are tuned for your boutique background.
- * If a row is a hair off, bump a single value by ±0.4 at a time.
- */
-const SHELF_TOP_Y = [31.9, 42.7, 52.9, 63.0, 73.1, 82.2, 88.6];
+/** Shelf TOP edges (% from image top). Slight overlap for realism. */
+const SHELF_TOP_Y = [27.3, 38.1, 48.3, 58.4, 68.5, 77.6, 84.0];
 
-/** Inner alcove bounds (left/right in %) */
+/** Column centers (% from image left) for the three alcoves */
+const SHELF_CENTER_X = { left: 31.8, center: 50.0, right: 68.2 };
+const COLUMNS = ['left', 'center', 'right'];
+
+/** Inner alcove horizontal bounds used when distributing evenly */
 const SHELF_LEFT_PCT = 20;
 const SHELF_RIGHT_PCT = 80;
 
-/** Heights by breakpoint */
+/** Bottle heights */
 const H_DESKTOP = 120, H_TABLET = 100, H_MOBILE = 84;
 
 function getBottleH() {
@@ -36,161 +36,218 @@ function srcFrom(f) {
   return `${base}${base.includes('?') ? '&' : '?'}v=${ver}`;
 }
 
+/** Helper: snap to nearest shelf + column */
+function nearestShelfIndex(topPct) {
+  let best = 0, bestDist = Infinity;
+  SHELF_TOP_Y.forEach((y, i) => {
+    const d = Math.abs(topPct - y);
+    if (d < bestDist) { best = i; bestDist = d; }
+  });
+  return best;
+}
+function nearestColumnKey(leftPct) {
+  let best = 'center', bestDist = Infinity;
+  for (const k of COLUMNS) {
+    const d = Math.abs(leftPct - SHELF_CENTER_X[k]);
+    if (d < bestDist) { best = k; bestDist = d; }
+  }
+  return best;
+}
+
 export default function BoutiqueShelves({ userId, items, onItemsChange }) {
-  const wrapRef = useRef(null);
+  /**
+   * items: [{ linkId, position, shelf_index?, column_key?, fragrance: {...} }]
+   * We keep backward-compat by deriving defaults when missing.
+   */
+  const rootRef = useRef(null);
   const [bottleH, setBottleH] = useState(getBottleH());
   const [arrange, setArrange] = useState(false);
-  const [dragIdx, setDragIdx] = useState(null);
+  const [dragging, setDragging] = useState(null); // {idx, offsetX, offsetY}
+  const [dragPos, setDragPos] = useState(null);   // {xPct, yPct}
   const [showGuides, setShowGuides] = useState(false);
 
-  // Toggle guides with "G"
+  // Key toggle for shelf guides
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key.toLowerCase() === 'g') setShowGuides((v) => !v);
-    };
+    const onKey = (e) => { if (e.key.toLowerCase() === 'g') setShowGuides(v => !v); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Recompute size on resize
+  // Resize -> recompute bottle size
   useEffect(() => {
     const onResize = () => setBottleH(getBottleH());
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  /** Distribute linear items across shelves (top→bottom) */
-  const rows = useMemo(() => {
-    const r = SHELF_TOP_Y.map(() => []);
-    (items || []).forEach((it, i) => r[i % r.length].push(it));
-    return r;
+  /** Ensure each item has a shelf + column default (round-robin fallback) */
+  const normalized = useMemo(() => {
+    if (!items?.length) return [];
+    return items.map((it, i) => {
+      const shelf_index = Number.isInteger(it.shelf_index) ? it.shelf_index : (i % SHELF_TOP_Y.length);
+      const column_key = it.column_key || COLUMNS[(Math.floor(i / SHELF_TOP_Y.length)) % COLUMNS.length] || 'center';
+      return { ...it, shelf_index, column_key };
+    });
   }, [items]);
 
-  /** Helpers to reorder the linear list */
-  function moveItem(list, from, to) {
-    const next = list.slice();
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    return next.map((it, idx) => ({ ...it, position: idx }));
+  /** For rendering: group by shelf index, then by column */
+  const byShelf = useMemo(() => {
+    const rows = SHELF_TOP_Y.map(() => ({ left: [], center: [], right: [] }));
+    normalized.forEach((it) => {
+      const s = Math.max(0, Math.min(SHELF_TOP_Y.length - 1, it.shelf_index));
+      const c = COLUMNS.includes(it.column_key) ? it.column_key : 'center';
+      rows[s][c].push(it);
+    });
+    return rows;
+  }, [normalized]);
+
+  /** Persist a single item’s shelf/column/position */
+  async function saveItemLayout(it, shelf_index, column_key, positionOverride = null) {
+    if (!userId) return;
+    const nextPos = positionOverride ?? it.position ?? 0;
+    await supabase
+      .from('user_fragrances')
+      .update({ shelf_index, column_key, position: nextPos })
+      .eq('id', it.linkId)
+      .eq('user_id', userId);
   }
 
-  function indexOfLinkId(list, linkId) {
-    return list.findIndex((it) => it.linkId === linkId);
-  }
-
-  /** Persist positions to Supabase */
-  async function persistOrder(next) {
-    if (!userId || !next?.length) return;
-    for (const it of next) {
-      await supabase
-        .from('user_fragrances')
-        .update({ position: it.position })
-        .eq('id', it.linkId)
-        .eq('user_id', userId);
-    }
-  }
-
-  /** Drag & Drop */
-  function onDragStart(e, idx) {
-    setDragIdx(idx);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(idx));
-  }
-  function onDragOver(e) {
+  /** Pointer-based drag so we can compute real percentages */
+  function onPointerDown(e, idx) {
     if (!arrange) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    const box = rootRef.current.getBoundingClientRect();
+    const xPct = ((e.clientX - box.left) / box.width) * 100;
+    const yPct = ((e.clientY - box.top) / box.height) * 100;
+    setDragging({ idx });
+    setDragPos({ xPct, yPct });
+    (e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId));
   }
-  async function onDrop(e, targetIdx) {
-    if (!arrange) return;
-    e.preventDefault();
-    const srcText = e.dataTransfer.getData('text/plain');
-    const srcIdx = dragIdx ?? (srcText ? parseInt(srcText, 10) : null);
-    setDragIdx(null);
-    if (srcIdx == null || srcIdx === targetIdx) return;
+  function onPointerMove(e) {
+    if (!arrange || !dragging || !rootRef.current) return;
+    const box = rootRef.current.getBoundingClientRect();
+    const xPct = ((e.clientX - box.left) / box.width) * 100;
+    const yPct = ((e.clientY - box.top) / box.height) * 100;
+    setDragPos({ xPct, yPct });
+  }
+  async function onPointerUp() {
+    if (!arrange || dragging == null || !dragPos) { setDragging(null); return; }
+    const idx = dragging.idx;
+    const it = normalized[idx];
+    // Snap to nearest anchors
+    const snappedShelf = nearestShelfIndex(dragPos.yPct);
+    const snappedCol = nearestColumnKey(dragPos.xPct);
 
-    const next = moveItem(items, srcIdx, targetIdx);
-    onItemsChange(next);
-    await persistOrder(next);
+    // Update local state
+    const updated = normalized.map((x, i) =>
+      i === idx ? { ...x, shelf_index: snappedShelf, column_key: snappedCol } : x
+    );
+    onItemsChange(updated);
+
+    // Persist
+    await saveItemLayout(it, snappedShelf, snappedCol, it.position ?? idx);
+
+    setDragging(null);
+    setDragPos(null);
   }
 
-  function onBottleClick(fragranceId) {
+  /** Click opens fragrance page (disabled in arrange mode) */
+  function handleClick(fragranceId) {
     if (arrange) return;
     window.location.href = `/fragrance/${fragranceId}`;
   }
 
+  /** Helper to render one bottle at an anchor position */
+  function Bottle({ it }) {
+    const x = SHELF_CENTER_X[it.column_key] ?? SHELF_CENTER_X.center;
+    const y = SHELF_TOP_Y[it.shelf_index] ?? SHELF_TOP_Y[0];
+    const draggingThis = dragging && normalized[dragging.idx]?.linkId === it.linkId;
+
+    return (
+      <div
+        className={`absolute ${arrange ? 'ring-1 ring-pink-400/50 rounded-md' : ''}`}
+        style={{
+          top: `${y}%`,
+          left: `${x}%`,
+          transform: 'translate(-50%, -100%)',
+          height: `${bottleH}px`,
+          pointerEvents: 'auto',
+          cursor: arrange ? 'grab' : 'pointer',
+          zIndex: draggingThis ? 30 : 'auto',
+        }}
+        title={`${it.fragrance.brand || ''} — ${it.fragrance.name || ''}`}
+        onClick={() => handleClick(it.fragrance.id)}
+        onPointerDown={(e) => onPointerDown(e, normalized.findIndex(n => n.linkId === it.linkId))}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={srcFrom(it.fragrance)}
+          alt={it.fragrance.name || 'fragrance'}
+          className={`object-contain transition-transform duration-150 ${arrange ? 'hover:scale-[1.02]' : 'hover:scale-[1.04]'}`}
+          style={{
+            height: '100%',
+            width: 'auto',
+            mixBlendMode: 'multiply', // transparent PNGs ignore this
+            filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
+            touchAction: 'none',
+          }}
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div ref={wrapRef} className="absolute inset-0 pointer-events-none z-10">
-      {/* Arrange toggle */}
+    <div
+      ref={rootRef}
+      className="absolute inset-0 pointer-events-none z-10"
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      {/* Arrange / Done button */}
       <div className="absolute right-4 top-4 z-20 pointer-events-auto">
         <button
-          onClick={() => setArrange((v) => !v)}
+          onClick={() => setArrange(v => !v)}
           className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'} hover:opacity-90`}
-          title="Drag to reorder; saves automatically (press G to toggle guides)"
+          title="Drag bottles to reposition (press G to toggle guides)"
         >
           {arrange ? 'Done' : 'Arrange shelves'}
         </button>
       </div>
 
-      {/* Optional shelf guides for fine-tuning */}
-      {showGuides && SHELF_TOP_Y.map((y, i) => (
-        <div
-          key={`guide-${i}`}
-          className="absolute left-0 right-0 border-t-2 border-pink-500/60"
-          style={{ top: `${y}%` }}
-        />
-      ))}
+      {/* Guides */}
+      {showGuides && (
+        <>
+          {SHELF_TOP_Y.map((y, i) => (
+            <div
+              key={`guide-y-${i}`}
+              className="absolute left-0 right-0 border-t-2 border-pink-500/60"
+              style={{ top: `${y}%` }}
+            />
+          ))}
+          {Object.entries(SHELF_CENTER_X).map(([k, x]) => (
+            <div
+              key={`guide-x-${k}`}
+              className="absolute top-0 bottom-0 border-l-2 border-pink-500/40"
+              style={{ left: `${x}%` }}
+            />
+          ))}
+        </>
+      )}
 
-      {rows.map((rowItems, rowIdx) => (
-        <div
-          key={rowIdx}
-          className="absolute flex items-start justify-evenly"
-          style={{
-            top: `${SHELF_TOP_Y[rowIdx]}%`,       // shelf TOP edge
-            left: `${SHELF_LEFT_PCT}%`,
-            right: `${100 - SHELF_RIGHT_PCT}%`,
-            transform: 'translateY(0)',
-            gap: '20px',
-            pointerEvents: 'none',
-          }}
-          onDragOver={onDragOver}
-        >
-          {rowItems.map((it) => {
-            const globalIdx = indexOfLinkId(items, it.linkId);
-            return (
-              <div
-                key={it.linkId}
-                className={`flex items-end ${arrange ? 'ring-1 ring-pink-400/50 rounded-md' : ''}`}
-                style={{
-                  height: `${bottleH}px`,
-                  pointerEvents: 'auto',
-                  transform: 'translateY(-100%)', // bottom sits ON the line above
-                  cursor: arrange ? 'grab' : 'pointer',
-                }}
-                draggable={arrange}
-                onDragStart={(e) => onDragStart(e, globalIdx)}
-                onDrop={(e) => onDrop(e, globalIdx)}
-                onClick={() => onBottleClick(it.fragrance.id)}
-                title={`${it.fragrance.brand || ''} — ${it.fragrance.name || ''}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={srcFrom(it.fragrance)}
-                  alt={it.fragrance.name || 'fragrance'}
-                  loading="lazy"
-                  className={`object-contain transition-transform duration-150 ${arrange ? 'hover:scale-[1.02]' : 'hover:scale-[1.04]'}`}
-                  style={{
-                    height: '100%',
-                    width: 'auto',
-                    mixBlendMode: 'multiply', // transparent PNGs ignore this
-                    filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
-      ))}
+      {/* Render all bottles at their anchors */}
+      {normalized.map((it) => <Bottle key={it.linkId} it={it} />)}
+
+      {/* Fallback layout if some shelves/columns are empty and you still want even distribution:
+          Keep it commented unless needed
+      <div
+        className="absolute"
+        style={{
+          top: `${SHELF_TOP_Y[0]}%`,
+          left: `${SHELF_LEFT_PCT}%`,
+          right: `${100 - SHELF_RIGHT_PCT}%`,
+          display: 'none'
+        }}
+      /> */}
     </div>
   );
 }
