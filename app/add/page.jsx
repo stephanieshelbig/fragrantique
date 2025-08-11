@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -21,32 +20,72 @@ export default function AddFragrance() {
   const update = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
   async function submit() {
+    setMessage('');
+
+    // 1) Insert fragrance
     const accords = form.accords
       .split(',')
       .map((x) => x.trim())
       .filter(Boolean)
       .map((name) => ({ name, strength: 50 }));
 
-    const { data, error } = await supabase
+    const { data: ins, error: insErr } = await supabase
       .from('fragrances')
       .insert({
-        name: form.name,
-        brand: form.brand,
+        name: form.name || null,
+        brand: form.brand || null,
         image_url: form.image_url || null,
         fragrantica_url: form.fragrantica_url || null,
         notes: form.notes || null,
-        accords,
+        accords: accords.length ? accords : null,
         decant_price: form.decant_price ? Number(form.decant_price) : null,
         decant_payment_link: form.decant_payment_link || null,
       })
       .select('id')
       .single();
 
-    if (error) {
-      setMessage(error.message);
+    if (insErr) {
+      setMessage(`Save error: ${insErr.message}`);
+      return;
+    }
+
+    setNewId(ins.id);
+
+    // 2) Auto-link to the current user's shelves at the last position
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes?.user?.id;
+    if (!userId) {
+      setMessage('Saved. Please log in to add it to your shelves.');
+      return;
+    }
+
+    // Find next position (append)
+    const { data: positions, error: posErr } = await supabase
+      .from('user_fragrances')
+      .select('position')
+      .eq('user_id', userId)
+      .order('position', { ascending: false })
+      .limit(1);
+
+    if (posErr) {
+      setMessage(`Saved, but shelf lookup failed: ${posErr.message}`);
+      return;
+    }
+
+    const nextPos = positions?.length ? (positions[0].position ?? 0) + 1 : 0;
+
+    const { error: linkErr } = await supabase
+      .from('user_fragrances')
+      .insert({
+        user_id: userId,
+        fragrance_id: ins.id,
+        position: nextPos,
+      });
+
+    if (linkErr) {
+      setMessage(`Saved, but couldn’t add to shelves: ${linkErr.message}`);
     } else {
-      setNewId(data.id);
-      setMessage('Added! You can now remove the background to make it float on the shelf.');
+      setMessage('Saved and added to your shelves ✨ You can remove the background to make it float.');
     }
   }
 
@@ -93,7 +132,7 @@ export default function AddFragrance() {
       </div>
 
       <button onClick={submit} className="w-full bg-[var(--gold)] text-white rounded-lg py-2">
-        Save
+        Save (and add to my shelves)
       </button>
 
       {newId && (
@@ -103,7 +142,7 @@ export default function AddFragrance() {
       )}
 
       {message && <p className="text-sm">{message}</p>}
-      <p className="text-xs opacity-60">Tip: Use a high-contrast bottle photo for best background removal.</p>
+      <p className="text-xs opacity-60">Tip: high-contrast images remove backgrounds best.</p>
     </div>
   );
 }
