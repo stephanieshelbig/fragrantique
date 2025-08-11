@@ -50,7 +50,7 @@ export default function BoutiqueShelves({ fragrances }) {
   }, [fragrances]);
 
   return (
-    <div ref={wrapperRef} className="absolute inset-0 pointer-events-none">
+    <div ref={wrapperRef} className="absolute inset-0 pointer-events-none z-10">
       {rows.map((rowFrags, idx) => {
         // Simple even spacing within the inner alcove
         // Assume average bottle aspect 3:4 => width ≈ bottleH * 0.75
@@ -110,3 +110,4 @@ export default function BoutiqueShelves({ fragrances }) {
     </div>
   );
 }
+
