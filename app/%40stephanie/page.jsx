@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,47 +5,61 @@ import { supabase } from '@/lib/supabase';
 import BoutiqueShelves from '@/components/BoutiqueShelves';
 
 export default function StephanieBoutique() {
-  const [fragrances, setFragrances] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [items, setItems] = useState([]); // [{ linkId, position, fragrance: {...} }]
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const { data: profileData, error: profileErr } = await supabase
+      // Find Stephanie’s profile
+      const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .select('id')
         .eq('username', 'stephanie')
         .single();
-      if (profileErr || !profileData) {
-        console.error(profileErr || 'No profile');
+      if (pErr || !profile) {
         setLoading(false);
         return;
       }
+      setUserId(profile.id);
 
-      const { data: fragData, error: fragErr } = await supabase
+      // Load shelves with positions (ordered)
+      const { data, error } = await supabase
         .from('user_fragrances')
-        .select('fragrance:fragrances(*)')
-        .eq('user_id', profileData.id)
+        .select('id, position, fragrance:fragrances(*)')
+        .eq('user_id', profile.id)
         .order('position', { ascending: true });
 
-      if (fragErr) {
-        console.error(fragErr);
-      } else {
-        setFragrances(fragData.map(f => f.fragrance));
+      if (!error && data) {
+        const mapped = data.map((row) => ({
+          linkId: row.id,
+          position: row.position ?? 0,
+          fragrance: row.fragrance,
+        }));
+        setItems(mapped);
       }
       setLoading(false);
     }
     load();
   }, []);
 
+  if (loading) return <div className="p-6">Loading your boutique…</div>;
+
   return (
-    <div className="relative w-full h-full" style={{
-      backgroundImage: 'url(/Fragrantique_boutiqueBackground.png)',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      minHeight: '100vh',
-      overflow: 'hidden'
-    }}>
-      {!loading && <BoutiqueShelves fragrances={fragrances} />}
+    <div className="relative mx-auto max-w-6xl w-full px-2" style={{ minHeight: '80vh' }}>
+      <div
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: 'url(/Fragrantique_boutiqueBackground.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      />
+      <BoutiqueShelves
+        userId={userId}
+        items={items}
+        onItemsChange={setItems}
+      />
     </div>
   );
 }
