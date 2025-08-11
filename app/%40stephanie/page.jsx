@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import BoutiqueShelves from '@/components/BoutiqueShelves';
-import bgImage from '@/public/Fragrantique_boutiqueBackground.png';
 
 export default function StephanieBoutique() {
   const [fragrances, setFragrances] = useState([]);
@@ -12,26 +11,36 @@ export default function StephanieBoutique() {
 
   useEffect(() => {
     async function loadFragrances() {
-      const { data: profile } = await supabase
+      // Find Stephanie's profile
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('username', 'stephanie')
         .single();
 
-      if (!profile) {
+      if (profileError || !profile) {
+        console.error(profileError || 'Profile not found');
         setLoading(false);
         return;
       }
 
-      const { data } = await supabase
+      // Load all bottles on Stephanie's shelves (ordered)
+      const { data, error } = await supabase
         .from('user_fragrances')
         .select('fragrance:fragrances(*)')
         .eq('user_id', profile.id)
         .order('position', { ascending: true });
 
-      setFragrances(data ? data.map((f) => f.fragrance) : []);
+      if (error) {
+        console.error(error);
+        setLoading(false);
+        return;
+      }
+
+      setFragrances((data || []).map((row) => row.fragrance));
       setLoading(false);
     }
+
     loadFragrances();
   }, []);
 
@@ -40,21 +49,25 @@ export default function StephanieBoutique() {
   }
 
   return (
-    <div className="relative min-h-[70vh]">
-      {/* Background image */}
-      <Image
-        src={bgImage}
-        alt="Boutique Background"
-        fill
-        style={{ objectFit: 'cover' }}
-        priority
-      />
+    <div className="relative mx-auto max-w-6xl w-full">
+      {/* 3:2 ratio box to match 1536x1024 background */}
+      <div className="relative w-full" style={{ aspectRatio: '3 / 2' }}>
+        {/* Background image lives in /public */}
+        <Image
+          src="/Fragrantique_boutiqueBackground.png"
+          alt="Boutique Background"
+          fill
+          style={{ objectFit: 'cover' }}
+          priority
+        />
 
-      {/* Soft overlay so bottles pop */}
-      <div className="absolute inset-0 bg-white/50" />
+        {/* Optional soft veil to make bottles pop:
+        <div className="absolute inset-0 bg-white/40" />
+        */}
 
-      {/* Shelves overlay (bottles positioned onto shelves) */}
-      <BoutiqueShelves fragrances={fragrances} />
+        {/* Bottles overlay (free-floating on shelves) */}
+        <BoutiqueShelves fragrances={fragrances} />
+      </div>
     </div>
   );
 }
