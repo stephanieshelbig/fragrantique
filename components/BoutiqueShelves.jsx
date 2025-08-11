@@ -26,9 +26,12 @@ function getBottleH() {
 function srcFrom(f) {
   const best = f.image_url_transparent || f.image_url;
   if (!best) return '';
-  return best.startsWith('http')
+  const base = best.startsWith('http')
     ? best
     : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${best}`;
+  // use created_at if present, else fall back to now
+  const ver = f.created_at ? new Date(f.created_at).getTime() : Date.now();
+  return `${base}${base.includes('?') ? '&' : '?'}v=${ver}`;
 }
 
 export default function BoutiqueShelves({ fragrances }) {
