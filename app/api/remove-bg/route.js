@@ -35,7 +35,8 @@ export async function POST(req) {
 
     const cutout = Buffer.from(await rb.arrayBuffer());
 
-    const path = `${userId}/${fragranceId}.png`;
+    const ts = Date.now();
+const path = `${userId}/${fragranceId}-${ts}.png`;
     const { error: upErr } = await supabaseAdmin.storage
       .from('bottles')
       .upload(path, cutout, {
