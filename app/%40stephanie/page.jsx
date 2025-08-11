@@ -17,7 +17,10 @@ export default function StephanieBoutique() {
         .select('id')
         .eq('username', 'stephanie')
         .single();
-      if (pErr || !profile) return setLoading(false);
+      if (pErr || !profile) {
+        setLoading(false);
+        return;
+      }
 
       // Get bottles on her shelves (ordered)
       const { data, error } = await supabase
@@ -26,7 +29,9 @@ export default function StephanieBoutique() {
         .eq('user_id', profile.id)
         .order('position', { ascending: true });
 
-      if (!error && data) setFragrances(data.map((r) => r.fragrance));
+      if (!error && data) {
+        setFragrances(data.map((r) => r.fragrance));
+      }
       setLoading(false);
     }
     load();
@@ -36,7 +41,12 @@ export default function StephanieBoutique() {
 
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
-      {/* Keep a fixed aspect (3:2) so shelf positions stay accurate */}
+      {/* Debug badge - remove later */}
+      <div className="absolute left-2 top-2 z-20 bg-black/60 text-white text-xs px-2 py-1 rounded">
+        static %40stephanie page
+      </div>
+
+      {/* Keep a fixed aspect ratio so shelf positions stay accurate */}
       <div className="relative w-full" style={{ aspectRatio: '3 / 2' }}>
         {/* Background image */}
         <Image
