@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import BoutiqueShelves from '@/components/BoutiqueShelves';
 
@@ -46,20 +47,25 @@ export default function StephanieBoutique() {
   if (loading) return <div className="p-6">Loading your boutique…</div>;
 
   return (
-    <div className="relative mx-auto max-w-6xl w-full px-2" style={{ minHeight: '80vh' }}>
-      <div
-        className="absolute inset-0 -z-10"
-        style={{
-          backgroundImage: 'url(/Fragrantique_boutiqueBackground.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      />
-      <BoutiqueShelves
-        userId={userId}
-        items={items}
-        onItemsChange={setItems}
-      />
+    <div className="mx-auto max-w-6xl w-full px-2">
+      {/* Keep a fixed 3:2 box so shelf % positions stay accurate */}
+      <div className="relative w-full" style={{ aspectRatio: '3 / 2' }}>
+        {/* Background image */}
+        <Image
+          src="/Fragrantique_boutiqueBackground.png" // must live in /public
+          alt="Boutique Background"
+          fill
+          style={{ objectFit: 'cover' }}
+          priority
+        />
+
+        {/* Bottles overlay (drag & drop etc.) */}
+        <BoutiqueShelves
+          userId={userId}
+          items={items}
+          onItemsChange={setItems}
+        />
+      </div>
     </div>
   );
 }
