@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-/** Shelf *top* edges in % from the top of the image (nudge ±0.3 if needed) */
-const SHELF_TOP_Y = [24.6, 35.6, 45.9, 56.1, 66.2, 75.4, 82.1];
-/** Inner alcove bounds */
+/** 
+ * Shelf TOP edges in % from the top of the image.
+ * These are tuned for your boutique background.
+ * If a row is a hair off, bump a single value by ±0.4 at a time.
+ */
+const SHELF_TOP_Y = [31.9, 42.7, 52.9, 63.0, 73.1, 82.2, 88.6];
+
+/** Inner alcove bounds (left/right in %) */
 const SHELF_LEFT_PCT = 20;
 const SHELF_RIGHT_PCT = 80;
+
 /** Heights by breakpoint */
 const H_DESKTOP = 120, H_TABLET = 100, H_MOBILE = 84;
 
@@ -35,8 +41,18 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
   const [bottleH, setBottleH] = useState(getBottleH());
   const [arrange, setArrange] = useState(false);
   const [dragIdx, setDragIdx] = useState(null);
+  const [showGuides, setShowGuides] = useState(false);
 
-  /** Recompute size on resize */
+  // Toggle guides with "G"
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key.toLowerCase() === 'g') setShowGuides((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Recompute size on resize
   useEffect(() => {
     const onResize = () => setBottleH(getBottleH());
     window.addEventListener('resize', onResize);
@@ -55,7 +71,6 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     const next = list.slice();
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
-    // normalize positions to 0..n-1
     return next.map((it, idx) => ({ ...it, position: idx }));
   }
 
@@ -63,10 +78,9 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     return list.findIndex((it) => it.linkId === linkId);
   }
 
-  /** Persist positions to Supabase (sequential updates) */
+  /** Persist positions to Supabase */
   async function persistOrder(next) {
     if (!userId || !next?.length) return;
-    // Update each link row’s position; keep it simple and reliable
     for (const it of next) {
       await supabase
         .from('user_fragrances')
@@ -76,20 +90,17 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     }
   }
 
-  /** Drag events (no external libs) */
+  /** Drag & Drop */
   function onDragStart(e, idx) {
     setDragIdx(idx);
     e.dataTransfer.effectAllowed = 'move';
-    // Give the browser something to carry
     e.dataTransfer.setData('text/plain', String(idx));
   }
-
   function onDragOver(e) {
     if (!arrange) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   }
-
   async function onDrop(e, targetIdx) {
     if (!arrange) return;
     e.preventDefault();
@@ -103,9 +114,8 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     await persistOrder(next);
   }
 
-  /** Click (when not arranging) goes to the fragrance detail */
   function onBottleClick(fragranceId) {
-    if (arrange) return; // disable clicks in arrange mode
+    if (arrange) return;
     window.location.href = `/fragrance/${fragranceId}`;
   }
 
@@ -116,18 +126,27 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
         <button
           onClick={() => setArrange((v) => !v)}
           className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'} hover:opacity-90`}
-          title="Drag to reorder; saves automatically"
+          title="Drag to reorder; saves automatically (press G to toggle guides)"
         >
           {arrange ? 'Done' : 'Arrange shelves'}
         </button>
       </div>
+
+      {/* Optional shelf guides for fine-tuning */}
+      {showGuides && SHELF_TOP_Y.map((y, i) => (
+        <div
+          key={`guide-${i}`}
+          className="absolute left-0 right-0 border-t-2 border-pink-500/60"
+          style={{ top: `${y}%` }}
+        />
+      ))}
 
       {rows.map((rowItems, rowIdx) => (
         <div
           key={rowIdx}
           className="absolute flex items-start justify-evenly"
           style={{
-            top: `${SHELF_TOP_Y[rowIdx]}%`,             // shelf top edge
+            top: `${SHELF_TOP_Y[rowIdx]}%`,       // shelf TOP edge
             left: `${SHELF_LEFT_PCT}%`,
             right: `${100 - SHELF_RIGHT_PCT}%`,
             transform: 'translateY(0)',
@@ -136,14 +155,8 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
           }}
           onDragOver={onDragOver}
         >
-          {rowItems.map((it, colIdx) => {
-            // Compute the global index in the linear list
-            const globalIdx = (function () {
-              // items are laid out round-robin by modulo of rows length
-              // Find this item’s index in the linear array by linkId
-              return indexOfLinkId(items, it.linkId);
-            })();
-
+          {rowItems.map((it) => {
+            const globalIdx = indexOfLinkId(items, it.linkId);
             return (
               <div
                 key={it.linkId}
@@ -151,7 +164,7 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
                 style={{
                   height: `${bottleH}px`,
                   pointerEvents: 'auto',
-                  transform: 'translateY(-100%)', // bottom sits on shelf line
+                  transform: 'translateY(-100%)', // bottom sits ON the line above
                   cursor: arrange ? 'grab' : 'pointer',
                 }}
                 draggable={arrange}
@@ -169,7 +182,7 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
                   style={{
                     height: '100%',
                     width: 'auto',
-                    mixBlendMode: 'multiply', // transparent PNGs ignore; JPGs blend a bit
+                    mixBlendMode: 'multiply', // transparent PNGs ignore this
                     filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
                   }}
                 />
