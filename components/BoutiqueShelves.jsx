@@ -3,16 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-/** Shelf TOP edges (% from image top). Slight overlap for realism. */
-const SHELF_TOP_Y = [27.3, 38.1, 48.3, 58.4, 68.5, 77.6, 84.0];
+/** Shelf TOP edges (% from image top), nudged lower so bottles sit on the lip */
+const SHELF_TOP_Y = [28.5, 39.3, 49.6, 59.7, 69.8, 78.9, 85.5]; // 0 = top, 6 = bottom
 
-/** Column centers (% from image left) for the three alcoves */
+/** Column centers (% from image left) for three alcoves */
 const SHELF_CENTER_X = { left: 31.8, center: 50.0, right: 68.2 };
 const COLUMNS = ['left', 'center', 'right'];
-
-/** Inner alcove horizontal bounds used when distributing evenly */
-const SHELF_LEFT_PCT = 20;
-const SHELF_RIGHT_PCT = 80;
 
 /** Bottle heights */
 const H_DESKTOP = 120, H_TABLET = 100, H_MOBILE = 84;
@@ -36,7 +32,7 @@ function srcFrom(f) {
   return `${base}${base.includes('?') ? '&' : '?'}v=${ver}`;
 }
 
-/** Helper: snap to nearest shelf + column */
+/** Nearest anchors for snapping */
 function nearestShelfIndex(topPct) {
   let best = 0, bestDist = Infinity;
   SHELF_TOP_Y.forEach((y, i) => {
@@ -54,19 +50,47 @@ function nearestColumnKey(leftPct) {
   return best;
 }
 
+/** Bottom-first, horizontal fill for any items missing shelf/col */
+function bottomFirstDefaults(items) {
+  if (!items?.length) return [];
+  const out = [];
+  const startShelf = SHELF_TOP_Y.length - 1; // bottom index
+  let shelf = startShelf;
+  let colIdx = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    let s = Number.isInteger(it.shelf_index) ? it.shelf_index : null;
+    let c = it.column_key || null;
+
+    if (s == null || !COLUMNS.includes(c)) {
+      // assign using bottom-first left->center->right, then move up a shelf
+      s = shelf;
+      c = COLUMNS[colIdx];
+
+      colIdx++;
+      if (colIdx >= COLUMNS.length) {
+        colIdx = 0;
+        shelf = Math.max(0, shelf - 1);
+      }
+    }
+    out.push({ ...it, shelf_index: s, column_key: c });
+  }
+  return out;
+}
+
 export default function BoutiqueShelves({ userId, items, onItemsChange }) {
   /**
    * items: [{ linkId, position, shelf_index?, column_key?, fragrance: {...} }]
-   * We keep backward-compat by deriving defaults when missing.
    */
   const rootRef = useRef(null);
   const [bottleH, setBottleH] = useState(getBottleH());
   const [arrange, setArrange] = useState(false);
-  const [dragging, setDragging] = useState(null); // {idx, offsetX, offsetY}
+  const [dragging, setDragging] = useState(null); // {idx}
   const [dragPos, setDragPos] = useState(null);   // {xPct, yPct}
   const [showGuides, setShowGuides] = useState(false);
 
-  // Key toggle for shelf guides
+  // Toggle guides with "G"
   useEffect(() => {
     const onKey = (e) => { if (e.key.toLowerCase() === 'g') setShowGuides(v => !v); };
     window.addEventListener('keydown', onKey);
@@ -80,26 +104,8 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  /** Ensure each item has a shelf + column default (round-robin fallback) */
-  const normalized = useMemo(() => {
-    if (!items?.length) return [];
-    return items.map((it, i) => {
-      const shelf_index = Number.isInteger(it.shelf_index) ? it.shelf_index : (i % SHELF_TOP_Y.length);
-      const column_key = it.column_key || COLUMNS[(Math.floor(i / SHELF_TOP_Y.length)) % COLUMNS.length] || 'center';
-      return { ...it, shelf_index, column_key };
-    });
-  }, [items]);
-
-  /** For rendering: group by shelf index, then by column */
-  const byShelf = useMemo(() => {
-    const rows = SHELF_TOP_Y.map(() => ({ left: [], center: [], right: [] }));
-    normalized.forEach((it) => {
-      const s = Math.max(0, Math.min(SHELF_TOP_Y.length - 1, it.shelf_index));
-      const c = COLUMNS.includes(it.column_key) ? it.column_key : 'center';
-      rows[s][c].push(it);
-    });
-    return rows;
-  }, [normalized]);
+  /** Normalize with defaults: bottom shelf first, horizontal */
+  const normalized = useMemo(() => bottomFirstDefaults(items), [items]);
 
   /** Persist a single item’s shelf/column/position */
   async function saveItemLayout(it, shelf_index, column_key, positionOverride = null) {
@@ -133,7 +139,8 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     if (!arrange || dragging == null || !dragPos) { setDragging(null); return; }
     const idx = dragging.idx;
     const it = normalized[idx];
-    // Snap to nearest anchors
+
+    // Snap to nearest shelf + column
     const snappedShelf = nearestShelfIndex(dragPos.yPct);
     const snappedCol = nearestColumnKey(dragPos.xPct);
 
@@ -143,7 +150,7 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     );
     onItemsChange(updated);
 
-    // Persist
+    // Persist to DB
     await saveItemLayout(it, snappedShelf, snappedCol, it.position ?? idx);
 
     setDragging(null);
@@ -156,11 +163,11 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
     window.location.href = `/fragrance/${fragranceId}`;
   }
 
-  /** Helper to render one bottle at an anchor position */
-  function Bottle({ it }) {
+  /** Render a bottle at its anchors */
+  function Bottle({ it, idx }) {
     const x = SHELF_CENTER_X[it.column_key] ?? SHELF_CENTER_X.center;
-    const y = SHELF_TOP_Y[it.shelf_index] ?? SHELF_TOP_Y[0];
-    const draggingThis = dragging && normalized[dragging.idx]?.linkId === it.linkId;
+    const y = SHELF_TOP_Y[it.shelf_index] ?? SHELF_TOP_Y[SHELF_TOP_Y.length - 1];
+    const draggingThis = dragging && dragging.idx === idx;
 
     return (
       <div
@@ -176,7 +183,7 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
         }}
         title={`${it.fragrance.brand || ''} — ${it.fragrance.name || ''}`}
         onClick={() => handleClick(it.fragrance.id)}
-        onPointerDown={(e) => onPointerDown(e, normalized.findIndex(n => n.linkId === it.linkId))}
+        onPointerDown={(e) => onPointerDown(e, idx)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -220,34 +227,24 @@ export default function BoutiqueShelves({ userId, items, onItemsChange }) {
           {SHELF_TOP_Y.map((y, i) => (
             <div
               key={`guide-y-${i}`}
-              className="absolute left-0 right-0 border-t-2 border-pink-500/60"
-              style={{ top: `${y}%` }}
+              className="absolute left-0 right-0 border-top border-pink-500"
+              style={{ top: `${y}%`, borderTopWidth: 2, opacity: 0.6 }}
             />
           ))}
           {Object.entries(SHELF_CENTER_X).map(([k, x]) => (
             <div
               key={`guide-x-${k}`}
-              className="absolute top-0 bottom-0 border-l-2 border-pink-500/40"
-              style={{ left: `${x}%` }}
+              className="absolute top-0 bottom-0 border-left border-pink-500"
+              style={{ left: `${x}%`, borderLeftWidth: 2, opacity: 0.4 }}
             />
           ))}
         </>
       )}
 
-      {/* Render all bottles at their anchors */}
-      {normalized.map((it) => <Bottle key={it.linkId} it={it} />)}
-
-      {/* Fallback layout if some shelves/columns are empty and you still want even distribution:
-          Keep it commented unless needed
-      <div
-        className="absolute"
-        style={{
-          top: `${SHELF_TOP_Y[0]}%`,
-          left: `${SHELF_LEFT_PCT}%`,
-          right: `${100 - SHELF_RIGHT_PCT}%`,
-          display: 'none'
-        }}
-      /> */}
+      {/* Render all bottles */}
+      {normalized.map((it, idx) => (
+        <Bottle key={it.linkId} it={it} idx={idx} />
+      ))}
     </div>
   );
 }
