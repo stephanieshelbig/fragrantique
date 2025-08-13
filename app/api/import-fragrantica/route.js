@@ -3,29 +3,43 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // needs service role to insert for your account
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// naive “brand from name” splitter if text is like “Alexandria II — Xerjoff”
-function splitNameBrand(label) {
-  if (!label) return { name: null, brand: null };
-  const parts = label.split(' — ');
-  if (parts.length === 2) return { name: parts[0].trim(), brand: parts[1].trim() };
-  // fallback: “Name Brand” -> try last word as brand, or just keep name
-  return { name: label.trim(), brand: null };
+// Robust parser: read brand & name from Fragrantica URL
+function parseFromUrl(url) {
+  try {
+    if (!url) return {};
+    const u = new URL(url);
+    const m = u.pathname.match(/\/perfume\/([^/]+)\/([^/]+)\.html/i);
+    if (!m) return {};
+    const brandSlug = m[1];
+    const nameSlugWithId = m[2]; // e.g. "Elle-Anniversary-88612"
+    // drop trailing numeric id (if present)
+    const nameSlug = nameSlugWithId.replace(/-\d+$/, '');
+    const brand = decodeURIComponent(brandSlug).replace(/-/g, ' ').trim();
+    const name = decodeURIComponent(nameSlug).replace(/-/g, ' ').trim();
+    return { brand, name };
+  } catch {
+    return {};
+  }
+}
+
+function norm(s) {
+  return (s || '').trim().toLowerCase();
 }
 
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { memberId, rows, targetUsername } = body || {};
+    const { rows, targetUsername } = body || {};
 
-    if (!Array.isArray(rows) || !rows.length) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'No rows provided' }, { status: 400 });
     }
 
     // find target user (defaults to stephanie)
-    let username = targetUsername || 'stephanie';
+    const username = targetUsername || 'stephanie';
     const { data: prof, error: pErr } = await supabase
       .from('profiles')
       .select('id, username')
@@ -38,38 +52,61 @@ export async function POST(req) {
 
     const userId = prof.id;
 
-    // (1) Upsert fragrances
-    // We’ll de-dupe by (fragrantica_url) if present, else by (name+brand) lowercase.
-    const inserted = [];
+    let createdFragrances = 0;
+    let linkedNew = 0;
+    let skippedExistingLink = 0;
+    let skippedUnparseable = 0;
+
     for (const r of rows) {
-      const name = r.name?.trim() || splitNameBrand(r.label).name;
-      const brand = r.brand?.trim() || splitNameBrand(r.label).brand;
+      // Prefer parsing brand/name from URL; fall back to label if needed
+      let { brand, name } = parseFromUrl(r.url);
+      if (!name) {
+        // try label fallback like "Name — Brand" or "Name Brand"
+        const label = (r.label || '').trim();
+        if (label.includes(' — ')) {
+          const [n, b] = label.split(' — ');
+          name = (name || n || '').trim();
+          brand = (brand || b || '').trim();
+        } else {
+          // very weak fallback: keep label as name
+          name = name || label;
+        }
+      }
+
+      // minimal sanity
+      if (!name) {
+        skippedUnparseable++;
+        continue;
+      }
+
       const image_url = r.image || null;
       const fragrantica_url = r.url || null;
 
-      if (!name) continue;
+      // Try match by URL first
+      let fragranceId = null;
 
-      // Try to find existing by URL
-      let { data: existingByUrl } = fragrantica_url
-        ? await supabase.from('fragrances')
-            .select('id')
-            .eq('fragrantica_url', fragrantica_url)
-            .maybeSingle()
-        : { data: null };
-
-      // Try by name+brand if needed
-      if (!existingByUrl) {
-        const { data: existingByNB } = await supabase
+      if (fragrantica_url) {
+        const { data: byUrl } = await supabase
           .from('fragrances')
           .select('id')
-          .ilike('name', name)
-          .ilike('brand', brand || '')
+          .eq('fragrantica_url', fragrantica_url)
           .maybeSingle();
-        existingByUrl = existingByNB;
+        if (byUrl?.id) fragranceId = byUrl.id;
       }
 
-      let fragranceId = existingByUrl?.id;
+      // Match by normalized name+brand if still not found
+      if (!fragranceId) {
+        const { data: byNB } = await supabase
+          .from('fragrances')
+          .select('id, name, brand')
+          .limit(50);
+        const got = (byNB || []).find(
+          (x) => norm(x.name) === norm(name) && norm(x.brand) === norm(brand)
+        );
+        if (got?.id) fragranceId = got.id;
+      }
 
+      // Create if needed
       if (!fragranceId) {
         const { data: ins, error: insErr } = await supabase
           .from('fragrances')
@@ -82,14 +119,15 @@ export async function POST(req) {
           .select('id')
           .single();
 
-        if (insErr) {
-          // just skip this one
+        if (insErr || !ins?.id) {
+          skippedUnparseable++;
           continue;
         }
         fragranceId = ins.id;
+        createdFragrances++;
       }
 
-      // (2) Link to user shelves if not already linked
+      // Link to user shelves if not already linked
       const { data: existsLink } = await supabase
         .from('user_fragrances')
         .select('id')
@@ -97,38 +135,51 @@ export async function POST(req) {
         .eq('fragrance_id', fragranceId)
         .maybeSingle();
 
-      if (!existsLink) {
-        // Choose next position (append)
-        const { data: last } = await supabase
-          .from('user_fragrances')
-          .select('position')
-          .eq('user_id', userId)
-          .order('position', { ascending: false })
-          .limit(1);
-
-        const nextPos = last?.length ? (last[0].position ?? 0) + 1 : 0;
-
-        // Bottom-shelf, left→center→right fill (rough starter: cycle by nextPos)
-        const SHELVES = 7; // 0=top .. 6=bottom
-        const bottom = 6;
-        const shelf_index = bottom - Math.floor(nextPos / 3); // wrap upward
-        const column_key = ['left', 'center', 'right'][nextPos % 3];
-
-        await supabase
-          .from('user_fragrances')
-          .insert({
-            user_id: userId,
-            fragrance_id: fragranceId,
-            position: nextPos,
-            shelf_index: Math.max(0, shelf_index),
-            column_key,
-          });
+      if (existsLink?.id) {
+        skippedExistingLink++;
+        continue;
       }
 
-      inserted.push(fragranceId);
+      // Choose next position (append)
+      const { data: last } = await supabase
+        .from('user_fragrances')
+        .select('position')
+        .eq('user_id', userId)
+        .order('position', { ascending: false })
+        .limit(1);
+
+      const nextPos = last?.length ? (last[0].position ?? 0) + 1 : 0;
+
+      // Bottom-shelf, left→center→right fill; wrap upward
+      const SHELVES = 7; // 0=top .. 6=bottom
+      const bottom = 6;
+      const shelf_index = Math.max(0, bottom - Math.floor(nextPos / 3));
+      const column_key = ['left', 'center', 'right'][nextPos % 3];
+
+      await supabase
+        .from('user_fragrances')
+        .insert({
+          user_id: userId,
+          fragrance_id: fragranceId,
+          position: nextPos,
+          shelf_index,
+          column_key,
+        });
+
+      linkedNew++;
     }
 
-    return NextResponse.json({ ok: true, count: inserted.length });
+    return NextResponse.json({
+      ok: true,
+      createdFragrances,
+      linkedNew,
+      skippedExistingLink,
+      skippedUnparseable,
+      received: rows.length,
+      message:
+        `Received ${rows.length}; added ${createdFragrances} new fragrances; linked ${linkedNew}; ` +
+        `skipped ${skippedExistingLink} existing links; ${skippedUnparseable} unparseable.`
+    });
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Import failed' }, { status: 500 });
   }
