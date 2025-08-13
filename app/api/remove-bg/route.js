@@ -55,7 +55,7 @@ async function removeBg_via_replicate(imageUrl) {
     };
   }
 
-  // Use a current rembg version; if Replicate updates it later, this may need refreshing.
+  // Current rembg version hash (update if Replicate rotates versions)
   const version = 'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003';
 
   const start = await fetch('https://api.replicate.com/v1/predictions', {
@@ -64,20 +64,12 @@ async function removeBg_via_replicate(imageUrl) {
       Authorization: `Token ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      version,
-      input: { image: imageUrl },
-    }),
+    body: JSON.stringify({ version, input: { image: imageUrl } }),
   });
 
   if (!start.ok) {
     const text = await start.text().catch(() => '');
-    return {
-      ok: false,
-      reason: 'replicate_start_error',
-      status: start.status,
-      detail: text || 'Replicate start failed',
-    };
+    return { ok: false, reason: 'replicate_start_error', status: start.status, detail: text || 'Replicate start failed' };
   }
 
   const started = await start.json();
@@ -85,11 +77,7 @@ async function removeBg_via_replicate(imageUrl) {
   try {
     pred = await pollPrediction(started.id, token);
   } catch (e) {
-    return {
-      ok: false,
-      reason: 'replicate_poll_error',
-      detail: e.message || 'poll failed',
-    };
+    return { ok: false, reason: 'replicate_poll_error', detail: e.message || 'poll failed' };
   }
 
   const outUrl = Array.isArray(pred.output) ? pred.output[0] : pred.output;
@@ -100,12 +88,7 @@ async function removeBg_via_replicate(imageUrl) {
   const resp = await fetch(outUrl);
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    return {
-      ok: false,
-      reason: 'replicate_fetch_output_failed',
-      status: resp.status,
-      detail: text || 'failed to fetch output',
-    };
+    return { ok: false, reason: 'replicate_fetch_output_failed', status: resp.status, detail: text || 'failed to fetch output' };
   }
 
   const buf = Buffer.from(await resp.arrayBuffer());
@@ -115,30 +98,47 @@ async function removeBg_via_replicate(imageUrl) {
 export async function POST(req) {
   try {
     const { imageUrl, fragranceId } = await req.json();
-    if (!imageUrl || !fragranceId) {
-      return NextResponse.json(
-        { success: false, error: 'imageUrl and fragranceId required' },
-        { status: 400 }
-      );
+    if (!fragranceId) {
+      return NextResponse.json({ success: false, error: 'fragranceId required' }, { status: 400 });
     }
 
-    // Force Replicate only (no remove.bg so we avoid “insufficient credits”)
-    const step = await removeBg_via_replicate(imageUrl);
+    // Load the fragrance to check current state
+    const { data: frag, error: fErr } = await supabase
+      .from('fragrances')
+      .select('id, image_url, image_url_transparent')
+      .eq('id', fragranceId)
+      .single();
 
+    if (fErr || !frag) {
+      return NextResponse.json({ success: false, error: 'fragrance not found' }, { status: 404 });
+    }
+
+    // SAFEGUARD: already has transparent → skip (no charges)
+    if (frag.image_url_transparent) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        reason: 'already_transparent',
+        publicUrl: frag.image_url_transparent,
+      });
+    }
+
+    // Use provided imageUrl (from the UI) or fallback to DB field
+    const src = imageUrl || frag.image_url;
+    if (!src) {
+      return NextResponse.json({ success: false, error: 'no image_url set for this fragrance' }, { status: 400 });
+    }
+
+    // Run Replicate removal
+    const step = await removeBg_via_replicate(src);
     if (!step.ok) {
-      // Pass through a detailed error so you can see exactly what’s wrong
       return NextResponse.json(
-        {
-          success: false,
-          error: step.reason || 'replicate_failed',
-          status: step.status || null,
-          detail: step.detail || null,
-        },
+        { success: false, error: step.reason || 'replicate_failed', status: step.status || null, detail: step.detail || null },
         { status: 400 }
       );
     }
 
-    // Upload to storage and update DB
+    // Upload PNG to storage and update DB
     const publicUrl = await uploadToStorage(fragranceId, step.png);
     const { error: updErr } = await supabase
       .from('fragrances')
@@ -146,10 +146,7 @@ export async function POST(req) {
       .eq('id', fragranceId);
 
     if (updErr) {
-      return NextResponse.json(
-        { success: false, error: `db update failed: ${updErr.message}` },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, error: `db update failed: ${updErr.message}` }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -159,9 +156,6 @@ export async function POST(req) {
       modelVersion: step.version,
     });
   } catch (e) {
-    return NextResponse.json(
-      { success: false, error: e.message || 'error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: e.message || 'error' }, { status: 500 });
   }
 }
