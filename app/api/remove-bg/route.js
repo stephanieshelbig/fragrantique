@@ -7,9 +7,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ---------- Helpers ----------
+// Upload transparent PNG to a PUBLIC "sources" bucket and return its public URL
 async function uploadToStorage(fragranceId, pngBuffer) {
-  // Upload transparent PNG to a PUBLIC bucket named "sources"
   const path = `transparent/${fragranceId}-${Date.now()}.png`;
   const { error: upErr } = await supabase.storage
     .from('sources')
@@ -25,8 +24,8 @@ async function uploadToStorage(fragranceId, pngBuffer) {
   return pub.publicUrl;
 }
 
+// Poll Replicate prediction
 async function pollPrediction(id, token) {
-  // Poll Replicate prediction until it finishes (or times out)
   for (let i = 0; i < 60; i++) {
     const r = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
       headers: {
@@ -45,13 +44,20 @@ async function pollPrediction(id, token) {
   throw new Error('prediction timeout');
 }
 
-// ---------- Engines ----------
+// Run background removal via Replicate rembg
 async function removeBg_via_replicate(imageUrl) {
   const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) return { ok: false, reason: 'no_replicate_token' };
+  if (!token) {
+    return {
+      ok: false,
+      reason: 'replicate_no_token',
+      detail: 'REPLICATE_API_TOKEN is not set',
+    };
+  }
 
-  // Start prediction with a current rembg version hash
-  // (If Replicate updates, replace with their latest version hash)
+  // Use a current rembg version; if Replicate updates it later, this may need refreshing.
+  const version = 'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003';
+
   const start = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
@@ -59,66 +65,53 @@ async function removeBg_via_replicate(imageUrl) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      // rembg model
-      version:
-        'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003',
+      version,
       input: { image: imageUrl },
     }),
   });
 
   if (!start.ok) {
-    const t = await start.text().catch(() => '');
-    return { ok: false, reason: 'replicate_start_error', detail: t };
+    const text = await start.text().catch(() => '');
+    return {
+      ok: false,
+      reason: 'replicate_start_error',
+      status: start.status,
+      detail: text || 'Replicate start failed',
+    };
   }
 
   const started = await start.json();
-  const pred = await pollPrediction(started.id, token);
+  let pred;
+  try {
+    pred = await pollPrediction(started.id, token);
+  } catch (e) {
+    return {
+      ok: false,
+      reason: 'replicate_poll_error',
+      detail: e.message || 'poll failed',
+    };
+  }
 
-  // Output is usually a URL (or first element of an array)
   const outUrl = Array.isArray(pred.output) ? pred.output[0] : pred.output;
   if (!outUrl || typeof outUrl !== 'string') {
     return { ok: false, reason: 'replicate_output_invalid' };
   }
 
-  // Fetch PNG bytes
   const resp = await fetch(outUrl);
-  if (!resp.ok) return { ok: false, reason: 'replicate_fetch_output_failed' };
-  const buf = Buffer.from(await resp.arrayBuffer());
-  return { ok: true, png: buf };
-}
-
-async function removeBg_via_removebg(imageUrl) {
-  const key = process.env.REMOVE_BG_API_KEY;
-  if (!key) return { ok: false, reason: 'no_removebg_key' };
-
-  const form = new URLSearchParams();
-  form.set('image_url', imageUrl);
-  form.set('size', 'auto');
-  form.set('format', 'png');
-
-  const res = await fetch('https://api.remove.bg/v1.0/removebg', {
-    method: 'POST',
-    headers: { 'X-Api-Key': key },
-    body: form,
-  });
-
-  if (res.ok) {
-    const buf = Buffer.from(await res.arrayBuffer());
-    return { ok: true, png: buf };
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    return {
+      ok: false,
+      reason: 'replicate_fetch_output_failed',
+      status: resp.status,
+      detail: text || 'failed to fetch output',
+    };
   }
 
-  // Error (JSON or text)
-  const text = await res.text().catch(() => '');
-  const isCredits =
-    text.includes('insufficient_credits') || text.includes('Insufficient credits');
-  return {
-    ok: false,
-    reason: isCredits ? 'insufficient_credits' : 'removebg_api_error',
-    detail: text,
-  };
+  const buf = Buffer.from(await resp.arrayBuffer());
+  return { ok: true, png: buf, engine: 'replicate', version };
 }
 
-// ---------- Route ----------
 export async function POST(req) {
   try {
     const { imageUrl, fragranceId } = await req.json();
@@ -129,24 +122,24 @@ export async function POST(req) {
       );
     }
 
-    // Prefer Replicate first (free/cheaper), then remove.bg as a backup
-    let step = await removeBg_via_replicate(imageUrl);
+    // Force Replicate only (no remove.bg so we avoid “insufficient credits”)
+    const step = await removeBg_via_replicate(imageUrl);
 
     if (!step.ok) {
-      // If Replicate failed (no token, start error, etc.), try remove.bg
-      step = await removeBg_via_removebg(imageUrl);
-    }
-
-    if (!step.ok) {
+      // Pass through a detailed error so you can see exactly what’s wrong
       return NextResponse.json(
-        { success: false, error: step.reason || 'remove failed', detail: step.detail || null },
+        {
+          success: false,
+          error: step.reason || 'replicate_failed',
+          status: step.status || null,
+          detail: step.detail || null,
+        },
         { status: 400 }
       );
     }
 
-    // Upload to Supabase Storage and update DB
+    // Upload to storage and update DB
     const publicUrl = await uploadToStorage(fragranceId, step.png);
-
     const { error: updErr } = await supabase
       .from('fragrances')
       .update({ image_url_transparent: publicUrl })
@@ -159,7 +152,12 @@ export async function POST(req) {
       );
     }
 
-    return NextResponse.json({ success: true, publicUrl });
+    return NextResponse.json({
+      success: true,
+      publicUrl,
+      engine: step.engine,
+      modelVersion: step.version,
+    });
   } catch (e) {
     return NextResponse.json(
       { success: false, error: e.message || 'error' },
