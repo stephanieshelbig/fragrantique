@@ -1,117 +1,84 @@
 "use client";
-
-import { useState, useEffect } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import Image from "next/image";
-import { Rnd } from "react-rnd";
+import { useState, useEffect, useRef } from "react";
 
 export default function StephanieBoutique() {
-  const supabase = createClientComponentClient();
   const [fragrances, setFragrances] = useState([]);
-  const [editing, setEditing] = useState(false);
-  const shelfY = 530; // <-- Adjusted to match bottom shelf height in your screenshot
-  const startX = 250; // <-- First bottle X position
-  const bottleSpacing = 180; // <-- Horizontal space between bottles
+  const shelfY = 540; // adjust so bottles sit on bottom shelf in your screenshot
+  const shelfSpacing = 120; // horizontal spacing between bottles
+  const isDragging = useRef(false);
+  const dragItem = useRef(null);
+  const offset = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
+    // fetch fragrances from Supabase or your data source
     async function loadFragrances() {
-      const { data, error } = await supabase
-        .from("user_fragrances")
-        .select(`
-          id,
-          fragrance:fragrances (
-            name,
-            image_url_transparent
-          ),
-          x,
-          y
-        `)
-        .eq("user_id", "stephanie"); // Replace with actual user id or logic
-
-      if (error) console.error(error);
-
-      // If coordinates are missing, place bottles horizontally along bottom shelf
-      const arranged = data.map((item, index) => ({
-        ...item,
-        x: item.x ?? startX + index * bottleSpacing,
-        y: item.y ?? shelfY
+      const res = await fetch("/api/get-fragrances");
+      const data = await res.json();
+      // Give each fragrance a starting position on the bottom shelf
+      const positioned = data.map((f, i) => ({
+        ...f,
+        x: 300 + i * shelfSpacing,
+        y: shelfY,
       }));
-
-      setFragrances(arranged);
+      setFragrances(positioned);
     }
     loadFragrances();
   }, []);
 
-  async function savePositions() {
-    for (const f of fragrances) {
-      await supabase
-        .from("user_fragrances")
-        .update({ x: f.x, y: f.y })
-        .eq("id", f.id);
-    }
-    setEditing(false);
-  }
+  const onMouseDown = (e, index) => {
+    isDragging.current = true;
+    dragItem.current = index;
+    offset.current = {
+      x: e.clientX - fragrances[index].x,
+      y: e.clientY - fragrances[index].y,
+    };
+  };
+
+  const onMouseMove = (e) => {
+    if (!isDragging.current) return;
+    const newFragrances = [...fragrances];
+    newFragrances[dragItem.current] = {
+      ...newFragrances[dragItem.current],
+      x: e.clientX - offset.current.x,
+      y: e.clientY - offset.current.y,
+    };
+    setFragrances(newFragrances);
+  };
+
+  const onMouseUp = () => {
+    isDragging.current = false;
+    dragItem.current = null;
+  };
 
   return (
     <div
       style={{
-        backgroundImage: `url('/Fragrantique_boutiqueBackground.png')`,
+        backgroundImage: "url('/background.jpg')", // replace with your background
         backgroundSize: "cover",
         backgroundPosition: "center",
+        width: "100%",
         height: "100vh",
-        width: "100vw",
-        position: "relative"
+        position: "relative",
+        overflow: "hidden",
       }}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
     >
-      <button
-        onClick={() => {
-          if (editing) savePositions();
-          else setEditing(true);
-        }}
-        style={{
-          position: "absolute",
-          top: 20,
-          right: 20,
-          zIndex: 10,
-          background: "#fff",
-          border: "1px solid #ccc",
-          borderRadius: "5px",
-          padding: "8px 12px"
-        }}
-      >
-        {editing ? "Save arrangement" : "Arrange shelves"}
-      </button>
-
-      {fragrances.map((item, index) => {
-        const imageUrl =
-          item.fragrance.image_url_transparent ||
-          item.fragrance.image_url;
-
-        return (
-          <Rnd
-            key={item.id}
-            size={{ width: 100, height: "auto" }}
-            position={{ x: item.x, y: item.y }}
-            onDragStop={(e, d) => {
-              if (editing) {
-                const updated = [...fragrances];
-                updated[index] = { ...updated[index], x: d.x, y: d.y };
-                setFragrances(updated);
-              }
-            }}
-            disableDragging={!editing}
-            enableResizing={false}
-          >
-            <Image
-              src={imageUrl}
-              alt={item.fragrance.name}
-              width={100}
-              height={150}
-              style={{ objectFit: "contain" }}
-            />
-          </Rnd>
-        );
-      })}
+      {fragrances.map((f, i) => (
+        <img
+          key={f.id}
+          src={f.image_url_transparent || f.image_url}
+          style={{
+            position: "absolute",
+            left: f.x,
+            top: f.y,
+            width: "80px",
+            cursor: "grab",
+            userSelect: "none",
+          }}
+          onMouseDown={(e) => onMouseDown(e, i)}
+        />
+      ))}
     </div>
   );
 }
