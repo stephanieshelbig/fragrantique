@@ -5,20 +5,36 @@ import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 
 /** Shelf TOP edges (% from image top). Tuned so bottoms sit on the lip. */
-const SHELF_TOP_Y = [28.5, 39.3, 49.6, 59.7, 69.8, 78.9, 83.0]; // 0 = top, 6 = bottom
+const SHELF_TOP_Y = [28.5, 39.3, 49.6, 59.7, 69.8, 78.9, 83.0]; // 0=top, 6=bottom
 
-/** Column centers (% from image left) for the three alcoves */
-const SHELF_CENTER_X = { left: 31.8, center: 50.0, right: 68.2 };
-const COLUMNS = ['left', 'center', 'right'];
+/** Inner alcove bounds (where bottles can sit), as % from left edge */
+const SHELF_LEFT_PCT = 20;
+const SHELF_RIGHT_PCT = 80;
 
-/** Bottle heights per breakpoint */
-const H_DESKTOP = 90, H_TABLET = 75, H_MOBILE = 64;
+/** Responsive bottle heights */
+const H_DESKTOP = 60, H_TABLET = 50, H_MOBILE = 42; // ~half size
 function bottleH() {
   if (typeof window === 'undefined') return H_DESKTOP;
   const w = window.innerWidth;
   if (w < 640) return H_MOBILE;
   if (w < 1024) return H_TABLET;
   return H_DESKTOP;
+}
+
+/** Responsive columns per shelf */
+function columnCount() {
+  if (typeof window === 'undefined') return 9;
+  const w = window.innerWidth;
+  if (w < 640) return 5;
+  if (w < 1024) return 7;
+  return 9;
+}
+
+/** Evenly spaced X centers (in %) across the inner bounds */
+function makeCenters(n) {
+  const span = SHELF_RIGHT_PCT - SHELF_LEFT_PCT;
+  const step = span / (n + 1);
+  return Array.from({ length: n }, (_, i) => SHELF_LEFT_PCT + step * (i + 1));
 }
 
 /** Prefer transparent PNG; cache-bust with a version param */
@@ -41,39 +57,40 @@ function nearestShelfIndex(topPct) {
   });
   return best;
 }
-function nearestColumnKey(leftPct) {
-  let best = 'center', dist = Infinity;
-  for (const k of COLUMNS) {
-    const d = Math.abs(leftPct - SHELF_CENTER_X[k]);
-    if (d < dist) { dist = d; best = k; }
-  }
+function nearestColumnIndex(leftPct, centers) {
+  let best = 0, dist = Infinity;
+  centers.forEach((x, i) => {
+    const d = Math.abs(leftPct - x);
+    if (d < dist) { dist = d; best = i; }
+  });
   return best;
 }
 
-/** Bottom-shelf-first defaults for unslotted bottles */
-function applyBottomFirstDefaults(list) {
+/** Bottom-shelf-first defaults for unslotted bottles, filling horizontally then wrapping up */
+function applyBottomFirstDefaults(list, colsPerShelf) {
   if (!list?.length) return [];
   const out = [];
-  const bottom = SHELF_TOP_Y.length - 1; // bottom index = 6
+  const bottom = SHELF_TOP_Y.length - 1; // 6
   let shelf = bottom;
-  let colIdx = 0;
+  let col = 0;
 
   for (let i = 0; i < list.length; i++) {
     const it = list[i];
     let s = Number.isInteger(it.shelf_index) ? it.shelf_index : null;
-    let c = it.column_key && COLUMNS.includes(it.column_key) ? it.column_key : null;
+    let c = Number.isInteger(it.column_index) ? it.column_index : null;
 
     if (s == null || c == null) {
       s = shelf;
-      c = COLUMNS[colIdx];
-      colIdx++;
-      if (colIdx >= COLUMNS.length) {
-        colIdx = 0;
+      c = col;
+
+      col++;
+      if (col >= colsPerShelf) {
+        col = 0;
         shelf = Math.max(0, shelf - 1); // move up a shelf
       }
-      it._needsSave = true; // mark so we persist the defaulted layout once
+      it._needsSave = true; // mark so we persist once
     }
-    out.push({ ...it, shelf_index: s, column_key: c });
+    out.push({ ...it, shelf_index: s, column_index: c });
   }
   return out;
 }
@@ -81,9 +98,10 @@ function applyBottomFirstDefaults(list) {
 export default function StephanieBoutique() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
-  const [items, setItems] = useState([]); // [{ linkId, position, shelf_index, column_key, fragrance }]
-  const rootRef = useRef(null);
+  const [items, setItems] = useState([]); // [{ linkId, position, shelf_index, column_index, fragrance }]
   const [bH, setBH] = useState(bottleH());
+  const [cols, setCols] = useState(columnCount());
+  const rootRef = useRef(null);
   const [arrange, setArrange] = useState(false);
   const [drag, setDrag] = useState(null); // { idx }
   const [dragPos, setDragPos] = useState(null); // { xPct, yPct }
@@ -96,12 +114,17 @@ export default function StephanieBoutique() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Bottle height on resize
+  // Responsive sizes / columns
   useEffect(() => {
-    const onResize = () => setBH(bottleH());
+    const onResize = () => {
+      setBH(bottleH());
+      setCols(columnCount());
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  const centers = useMemo(() => makeCenters(cols), [cols]);
 
   // Load shelves for 'stephanie'
   useEffect(() => {
@@ -118,31 +141,35 @@ export default function StephanieBoutique() {
       // load shelves (ordered)
       const { data, error } = await supabase
         .from('user_fragrances')
-        .select('id, position, shelf_index, column_key, fragrance:fragrances(*)')
+        .select('id, position, shelf_index, column_index, column_key, fragrance:fragrances(*)')
         .eq('user_id', prof.id)
         .order('position', { ascending: true });
 
       if (error) { setLoading(false); return; }
 
-      // map into items and apply defaults for missing slots
       const mapped = (data || []).map((row, i) => ({
         linkId: row.id,
         position: row.position ?? i,
         shelf_index: row.shelf_index,
-        column_key: row.column_key,
+        // back-compat: map old column_key to an index if column_index is null
+        column_index:
+          Number.isInteger(row.column_index)
+            ? row.column_index
+            : (row.column_key === 'left' ? 0 : row.column_key === 'center' ? 1 : row.column_key === 'right' ? 2 : null),
         fragrance: row.fragrance,
       }));
 
-      const withDefaults = applyBottomFirstDefaults(mapped);
+      // Fill missing positions bottom-first with current column count
+      const withDefaults = applyBottomFirstDefaults(mapped, cols);
 
-      // persist any defaulted ones (one-time)
+      // Persist any defaulted ones (one-time) with the *current* columns grid
       for (const it of withDefaults) {
         if (it._needsSave) {
           await supabase
             .from('user_fragrances')
             .update({
               shelf_index: it.shelf_index,
-              column_key: it.column_key,
+              column_index: it.column_index,
               position: it.position,
             })
             .eq('id', it.linkId)
@@ -153,23 +180,24 @@ export default function StephanieBoutique() {
       setItems(withDefaults);
       setLoading(false);
     })();
-  }, []);
+    // re-run if the column count changes (so new defaults use the fresh grid)
+  }, [cols]);
 
   // Move bottle by snapping to nearest shelf + column, then save
   async function placeAndSave(idx, xPct, yPct) {
     const it = items[idx];
     const s = nearestShelfIndex(yPct);
-    const c = nearestColumnKey(xPct);
+    const c = nearestColumnIndex(xPct, centers);
 
     const next = items.map((x, i) =>
-      i === idx ? { ...x, shelf_index: s, column_key: c } : x
+      i === idx ? { ...x, shelf_index: s, column_index: c } : x
     );
     setItems(next);
 
     if (userId) {
       await supabase
         .from('user_fragrances')
-        .update({ shelf_index: s, column_key: c, position: it.position ?? idx })
+        .update({ shelf_index: s, column_index: c, position: it.position ?? idx })
         .eq('id', it.linkId)
         .eq('user_id', userId);
     }
@@ -177,8 +205,7 @@ export default function StephanieBoutique() {
 
   // Pointer drag (no dependencies)
   function onPointerDown(e, idx) {
-    if (!arrange) { 
-      // open fragrance detail if not arranging
+    if (!arrange) {
       const id = items[idx]?.fragrance?.id;
       if (id) window.location.href = `/fragrance/${id}`;
       return;
@@ -205,8 +232,6 @@ export default function StephanieBoutique() {
     setDragPos(null);
   }
 
-  const arranged = useMemo(() => items || [], [items]);
-
   if (loading) return <div className="p-6">Loading your boutique…</div>;
 
   return (
@@ -227,7 +252,7 @@ export default function StephanieBoutique() {
           priority
         />
 
-        {/* Arrange / Done + Guides toggle help */}
+        {/* Controls */}
         <div className="absolute right-4 top-4 z-20 pointer-events-auto flex gap-2">
           <button
             onClick={() => setArrange(v => !v)}
@@ -255,9 +280,9 @@ export default function StephanieBoutique() {
                 style={{ top: `${y}%` }}
               />
             ))}
-            {Object.entries(SHELF_CENTER_X).map(([k, x]) => (
+            {makeCenters(cols).map((x, i) => (
               <div
-                key={`gx-${k}`}
+                key={`gx-${i}`}
                 className="absolute top-0 bottom-0 border-l-2 border-pink-500/40"
                 style={{ left: `${x}%` }}
               />
@@ -266,9 +291,14 @@ export default function StephanieBoutique() {
         )}
 
         {/* Bottles */}
-        {arranged.map((it, idx) => {
-          const x = SHELF_CENTER_X[it.column_key] ?? SHELF_CENTER_X.center;
-          const y = SHELF_TOP_Y[it.shelf_index] ?? SHELF_TOP_Y[SHELF_TOP_Y.length - 1];
+        {items.map((it, idx) => {
+          const xCenters = centers;
+          const xPct = xCenters[
+            Math.max(0, Math.min(xCenters.length - 1, it.column_index ?? 0))
+          ];
+          const yPct = SHELF_TOP_Y[
+            Math.max(0, Math.min(SHELF_TOP_Y.length - 1, it.shelf_index ?? SHELF_TOP_Y.length - 1))
+          ];
 
           const draggingThis = drag && drag.idx === idx;
 
@@ -277,8 +307,8 @@ export default function StephanieBoutique() {
               key={it.linkId}
               className={`absolute ${arrange ? 'ring-1 ring-pink-400/50 rounded-md' : ''}`}
               style={{
-                top: `${y}%`,
-                left: `${x}%`,
+                top: `${yPct}%`,
+                left: `${xPct}%`,
                 transform: 'translate(-50%, -100%)',
                 height: `${bH}px`,
                 pointerEvents: 'auto',
@@ -296,7 +326,7 @@ export default function StephanieBoutique() {
                 style={{
                   height: '100%',
                   width: 'auto',
-                  mixBlendMode: 'multiply', // ignored by transparent PNGs
+                  mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
                   touchAction: 'none',
                 }}
