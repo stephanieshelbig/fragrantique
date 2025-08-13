@@ -1,35 +1,65 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export default function AdminPage() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+function Card({ href, title, desc }) {
+  return (
+    <Link href={href} className="block rounded-2xl border p-4 hover:shadow transition">
+      <div className="text-lg font-semibold">{title}</div>
+      <div className="text-sm text-gray-600 mt-1">{desc}</div>
+    </Link>
+  );
+}
+
+export default function AdminHome() {
+  const [counts, setCounts] = useState(null);
 
   useEffect(() => {
-    async function checkAdmin() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-        if (!error && data?.is_admin) setIsAdmin(true);
-      }
-      setLoading(false);
-    }
-    checkAdmin();
+    (async () => {
+      // lightweight stats for quick overview
+      const [{ count: fragrances }, { count: links }] = await Promise.all([
+        supabase.from('fragrances').select('*', { count: 'exact', head: true }),
+        supabase.from('user_fragrances').select('*', { count: 'exact', head: true }),
+      ]);
+      setCounts({ fragrances: fragrances ?? 0, links: links ?? 0 });
+    })();
   }, []);
 
-  if (loading) return <div className="p-6">Loading…</div>;
-  if (!isAdmin) return <div className="p-6">Unauthorized</div>;
-
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
-      <p>This is where admin tools will go.</p>
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <div className="flex items-end justify-between">
+        <h1 className="text-2xl font-bold">Admin</h1>
+        {counts && (
+          <div className="text-sm text-gray-600">
+            {counts.fragrances} fragrances · {counts.links} shelf links
+          </div>
+        )}
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card
+          href="/admin/image-fixer"
+          title="Image Fixer"
+          desc="Paste/Upload image URLs, remove backgrounds, scan for broken links."
+        />
+        <Card
+          href="/admin/clean-images"
+          title="Background Remover"
+          desc="Batch create transparent PNGs via remove.bg for missing items."
+        />
+        <Card
+          href="/admin/import-fragrantica"
+          title="Import from Fragrantica"
+          desc="Bookmarklet-based importer (or console) to pull your Wardrobe."
+        />
+        <Card
+          href="/admin/import-paste"
+          title="Import (Paste JSON)"
+          desc="Paste JSON captured from Fragrantica to add/update bottles."
+        />
+      </div>
     </div>
   );
 }
