@@ -12,7 +12,7 @@ const SHELF_CENTER_X = { left: 31.8, center: 50.0, right: 68.2 };
 const COLUMNS = ['left', 'center', 'right'];
 
 /** Bottle heights per breakpoint */
-const H_DESKTOP = 120, H_TABLET = 100, H_MOBILE = 84;
+const H_DESKTOP = 60, H_TABLET = 50, H_MOBILE = 42;
 function bottleH() {
   if (typeof window === 'undefined') return H_DESKTOP;
   const w = window.innerWidth;
