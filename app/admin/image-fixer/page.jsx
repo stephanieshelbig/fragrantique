@@ -11,17 +11,16 @@ export default function ImageFixer() {
   const [working, setWorking] = useState(false);
   const [filter, setFilter] = useState('missing_any'); // missing_any | missing_src | missing_transparent | all
   const [status, setStatus] = useState('');
-  const [userId, setUserId] = useState(null); // needed for remove-bg
-  const fileInputs = useRef({}); // map fragranceId -> input ref
+  const [userId, setUserId] = useState(null); // admin user id (stephanie) for remove-bg
+  const fileInputs = useRef({}); // map fragranceId -> input
+  const [checks, setChecks] = useState({}); // id -> {ok, status, isImage, contentType}
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      // get admin (stephanie) user id for remove-bg
       const { data: prof } = await supabase.from('profiles').select('id').eq('username','stephanie').single();
       if (prof?.id) setUserId(prof.id);
 
-      // pull ALL relevant fragrances (limit to a sane number first, adjust if needed)
       const { data, error } = await supabase
         .from('fragrances')
         .select('id, name, brand, image_url, image_url_transparent, fragrantica_url, created_at')
@@ -47,10 +46,7 @@ export default function ImageFixer() {
   async function saveUrl(rowId, url) {
     if (!url) { setStatus('Enter an image URL first.'); return; }
     setWorking(true);
-    const { error } = await supabase
-      .from('fragrances')
-      .update({ image_url: url })
-      .eq('id', rowId);
+    const { error } = await supabase.from('fragrances').update({ image_url: url }).eq('id', rowId);
     setWorking(false);
     if (error) { setStatus(`❌ Save failed: ${error.message}`); return; }
     setRows(rs => rs.map(r => r.id === rowId ? { ...r, image_url: url } : r));
@@ -69,38 +65,24 @@ export default function ImageFixer() {
     setWorking(true);
     const { error: upErr } = await supabase
       .storage
-      .from('sources')              // <-- make sure you have a public bucket named "sources"
+      .from('sources') // public bucket required
       .upload(path, file, {
         cacheControl: '3600',
         upsert: false,
         contentType: file.type || undefined
       });
-
-    if (upErr) {
-      setWorking(false);
-      setStatus(`❌ Upload failed: ${upErr.message}`);
-      return;
-    }
+    if (upErr) { setWorking(false); setStatus(`❌ Upload failed: ${upErr.message}`); return; }
 
     const { data: pub } = supabase.storage.from('sources').getPublicUrl(path);
     const publicUrl = pub?.publicUrl;
-    if (!publicUrl) {
-      setWorking(false);
-      setStatus('❌ Could not get public URL after upload.');
-      return;
-    }
+    if (!publicUrl) { setWorking(false); setStatus('❌ Could not get public URL after upload.'); return; }
 
-    const { error: updErr } = await supabase
-      .from('fragrances')
-      .update({ image_url: publicUrl })
-      .eq('id', row.id);
-
+    const { error: updErr } = await supabase.from('fragrances').update({ image_url: publicUrl }).eq('id', row.id);
     setWorking(false);
     if (updErr) { setStatus(`❌ Save failed: ${updErr.message}`); return; }
 
     setRows(rs => rs.map(r => r.id === row.id ? { ...r, image_url: publicUrl } : r));
     setStatus('✅ Uploaded & saved image URL.');
-    // clear file input
     if (input) input.value = '';
   }
 
@@ -114,11 +96,7 @@ export default function ImageFixer() {
       const res = await fetch('/api/remove-bg', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          imageUrl: src,
-          fragranceId: row.id,
-          userId
-        })
+        body: JSON.stringify({ imageUrl: src, fragranceId: row.id, userId })
       });
       const j = await res.json();
       setWorking(false);
@@ -126,7 +104,6 @@ export default function ImageFixer() {
         setStatus(`❌ remove.bg failed: ${j?.error || res.statusText}`);
         return;
       }
-      // API updates the row itself (image_url_transparent), but we mirror it locally:
       setRows(rs => rs.map(r => r.id === row.id ? { ...r, image_url_transparent: j.publicUrl } : r));
       setStatus('✅ Background removed & saved.');
     } catch (e) {
@@ -164,9 +141,34 @@ export default function ImageFixer() {
     setStatus(`✅ Done: ${ok} converted, ${fail} failed.`);
   }
 
+  async function checkOne(row) {
+    if (!row.image_url) { setChecks(cs => ({ ...cs, [row.id]: { ok: false, status: 'no url' } })); return; }
+    try {
+      const res = await fetch('/api/check-image', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ url: row.image_url })
+      });
+      const j = await res.json();
+      setChecks(cs => ({ ...cs, [row.id]: j }));
+    } catch (e) {
+      setChecks(cs => ({ ...cs, [row.id]: { ok: false, status: e.message } }));
+    }
+  }
+
+  async function scanFiltered() {
+    setStatus('Scanning…');
+    for (const r of filtered) {
+      // eslint-disable-next-line no-await-in-loop
+      await checkOne(r);
+    }
+    setStatus('Scan complete.');
+  }
+
   function Row({ r }) {
     const hasSrc = !!r.image_url;
     const hasT   = !!r.image_url_transparent;
+    const chk    = checks[r.id];
 
     return (
       <div className="grid grid-cols-[80px_1fr_auto] gap-3 items-center border-b py-3">
@@ -181,7 +183,9 @@ export default function ImageFixer() {
         </div>
 
         <div className="min-w-0">
-          <div className="font-medium truncate">{r.brand ? `${r.brand} — ` : ''}{r.name || '(unnamed)'}</div>
+          <div className="font-medium truncate">
+            {r.brand ? `${r.brand} — ` : ''}{r.name || '(unnamed)'}
+          </div>
           {r.fragrantica_url && (
             <a href={r.fragrantica_url} target="_blank" className="text-xs text-blue-600 underline break-all">
               {r.fragrantica_url}
@@ -201,11 +205,9 @@ export default function ImageFixer() {
                 }
               }}
             />
+
             <button
-              onClick={(e)=>{
-                const input = fileInputs.current[r.id];
-                if (input) input.click();
-              }}
+              onClick={(e)=>{ const input = fileInputs.current[r.id]; if (input) input.click(); }}
               className="px-3 py-1 border rounded text-sm"
             >
               Upload file…
@@ -238,9 +240,19 @@ export default function ImageFixer() {
               Remove Background
             </button>
 
-            <span className="text-xs">
-              {hasSrc ? '🖼️ src' : '⚠ no src'} · {hasT ? '✅ transparent' : '○ no transparent'}
-            </span>
+            <button
+              onClick={()=>checkOne(r)}
+              className="px-3 py-1 border rounded text-sm"
+              title="Server checks the image URL (HEAD/GET)"
+            >
+              Check
+            </button>
+
+            {chk && (
+              <span className="text-xs">
+                {chk.ok ? '✅' : '❌'} {chk.status || ''} {chk.isImage ? '· image' : ''} {chk.contentType ? `· ${chk.contentType}` : ''}
+              </span>
+            )}
           </div>
         </div>
 
@@ -254,9 +266,12 @@ export default function ImageFixer() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-2">Admin · Image Fixer</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold">Admin · Image Fixer</h1>
+        <a href="/admin" className="text-sm underline opacity-70">← Admin Home</a>
+      </div>
       <p className="text-sm text-gray-600 mb-4">
-        Paste a direct image URL (jpg/png/webp), upload a file, or run background removal.
+        Paste or upload image URLs, remove backgrounds, and scan for broken links.
       </p>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -280,6 +295,15 @@ export default function ImageFixer() {
           Process All (transparent)
         </button>
 
+        <button
+          onClick={scanFiltered}
+          disabled={working}
+          className="px-3 py-1 border rounded text-sm"
+          title="Check each filtered row’s image URL on the server"
+        >
+          Scan Filtered
+        </button>
+
         {working && <span className="text-sm opacity-70">Working…</span>}
         {status && <span className="text-sm ml-2">{status}</span>}
       </div>
@@ -300,8 +324,8 @@ export default function ImageFixer() {
         <summary className="cursor-pointer text-sm underline">Setup notes</summary>
         <ul className="list-disc pl-5 text-sm mt-2 space-y-1">
           <li>Create a public storage bucket named <code>sources</code> in Supabase (Settings → Storage).</li>
-          <li>Ensure your Vercel env has <code>REMOVE_BG_API_KEY</code> and your API route <code>/api/remove-bg</code> is deployed (we added this earlier).</li>
-          <li>If a URL fails with “invalid file type”, replace it with a direct JPG/PNG/WebP link or upload a file.</li>
+          <li>Ensure Vercel env has <code>REMOVE_BG_API_KEY</code> and your API route <code>/api/remove-bg</code> is deployed.</li>
+          <li>Server link checks happen via <code>/api/check-image</code> to avoid CORS.</li>
         </ul>
       </details>
     </div>
