@@ -7,11 +7,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Upload transparent PNG to a PUBLIC "sources" bucket and return its public URL
+// ---------- Supabase upload ----------
 async function uploadToStorage(fragranceId, pngBuffer) {
   const path = `transparent/${fragranceId}-${Date.now()}.png`;
   const { error: upErr } = await supabase.storage
-    .from('sources')
+    .from('sources') // public bucket required
     .upload(path, pngBuffer, {
       contentType: 'image/png',
       cacheControl: '31536000',
@@ -24,7 +24,26 @@ async function uploadToStorage(fragranceId, pngBuffer) {
   return pub.publicUrl;
 }
 
-// Poll Replicate prediction
+// ---------- Replicate helpers ----------
+async function getLatestRembgVersion(token) {
+  // Ask Replicate which version is current to avoid stale hashes
+  const r = await fetch('https://api.replicate.com/v1/models/cjwbw/rembg', {
+    headers: {
+      Authorization: `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`version_lookup_failed:${r.status}:${t}`);
+  }
+  const j = await r.json();
+  const vid = j?.latest_version?.id;
+  if (!vid) throw new Error('version_missing_in_response');
+  return vid; // e.g. "fb8a...c003"
+}
+
 async function pollPrediction(id, token) {
   for (let i = 0; i < 60; i++) {
     const r = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
@@ -41,35 +60,39 @@ async function pollPrediction(id, token) {
     }
     await new Promise((res) => setTimeout(res, 1500));
   }
-  throw new Error('prediction timeout');
+  throw new Error('prediction_timeout');
 }
 
-// Run background removal via Replicate rembg
 async function removeBg_via_replicate(imageUrl) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
-    return {
-      ok: false,
-      reason: 'replicate_no_token',
-      detail: 'REPLICATE_API_TOKEN is not set',
-    };
+    return { ok: false, reason: 'replicate_no_token', detail: 'REPLICATE_API_TOKEN is not set' };
   }
 
-  // Current rembg version hash (update if Replicate rotates versions)
-  const version = 'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003';
+  let versionId;
+  try {
+    versionId = await getLatestRembgVersion(token);
+  } catch (e) {
+    // If the lookup fails (e.g., no billing), surface a precise error
+    return { ok: false, reason: 'replicate_version_lookup_failed', detail: String(e.message || e) };
+  }
 
+  // Start prediction
   const start = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
       Authorization: `Token ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ version, input: { image: imageUrl } }),
+    body: JSON.stringify({
+      version: versionId,          // dynamically discovered latest version
+      input: { image: imageUrl },  // direct JPG/PNG/WebP URL
+    }),
   });
 
   if (!start.ok) {
     const text = await start.text().catch(() => '');
-    return { ok: false, reason: 'replicate_start_error', status: start.status, detail: text || 'Replicate start failed' };
+    return { ok: false, reason: 'replicate_start_error', status: start.status, detail: text || 'start failed' };
   }
 
   const started = await start.json();
@@ -88,13 +111,14 @@ async function removeBg_via_replicate(imageUrl) {
   const resp = await fetch(outUrl);
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    return { ok: false, reason: 'replicate_fetch_output_failed', status: resp.status, detail: text || 'failed to fetch output' };
+    return { ok: false, reason: 'replicate_fetch_output_failed', status: resp.status, detail: text || 'fetch output failed' };
   }
 
   const buf = Buffer.from(await resp.arrayBuffer());
-  return { ok: true, png: buf, engine: 'replicate', version };
+  return { ok: true, png: buf, engine: 'replicate', version: versionId };
 }
 
+// ---------- Route ----------
 export async function POST(req) {
   try {
     const { imageUrl, fragranceId } = await req.json();
@@ -102,7 +126,7 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'fragranceId required' }, { status: 400 });
     }
 
-    // Load the fragrance to check current state
+    // Load fragrance to check current state
     const { data: frag, error: fErr } = await supabase
       .from('fragrances')
       .select('id, image_url, image_url_transparent')
@@ -113,7 +137,7 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'fragrance not found' }, { status: 404 });
     }
 
-    // SAFEGUARD: already has transparent → skip (no charges)
+    // Skip if already transparent (prevents recharges)
     if (frag.image_url_transparent) {
       return NextResponse.json({
         success: true,
@@ -123,13 +147,12 @@ export async function POST(req) {
       });
     }
 
-    // Use provided imageUrl (from the UI) or fallback to DB field
     const src = imageUrl || frag.image_url;
     if (!src) {
       return NextResponse.json({ success: false, error: 'no image_url set for this fragrance' }, { status: 400 });
     }
 
-    // Run Replicate removal
+    // Run Replicate (dynamic version)
     const step = await removeBg_via_replicate(src);
     if (!step.ok) {
       return NextResponse.json(
@@ -138,7 +161,7 @@ export async function POST(req) {
       );
     }
 
-    // Upload PNG to storage and update DB
+    // Upload to Supabase Storage and update DB
     const publicUrl = await uploadToStorage(fragranceId, step.png);
     const { error: updErr } = await supabase
       .from('fragrances')
