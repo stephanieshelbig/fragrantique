@@ -56,7 +56,7 @@ function bottleSrc(f) {
   return `${best}${best.includes('?') ? '&' : '?'}v=${encodeURIComponent(ver)}`;
 }
 
-/* One representative per brand: prefer transparent -> shortest name */
+/* Choose one representative per brand: prefer transparent → shortest name */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const withTransparent = list.filter(x => !!x?.image_url_transparent);
@@ -82,9 +82,16 @@ export default function StephanieBrandShelves() {
   const [bH, setBH] = useState(bottleH());
   const [showGuides, setShowGuides] = useState(false);
 
-  const [brandCount, setBrandCount] = useState(0);  // debug counter
-  const [brands, setBrands] = useState([]);         // [{brand, repFragrance}]
+  // Debug overlay info
+  const [dbg, setDbg] = useState({
+    foundProfile: 'no',
+    userId: null,
+    linkCount: 0,
+    brandCount: 0,
+    mode: 'user', // 'user' or 'global'
+  });
 
+  const [brands, setBrands] = useState([]); // [{brand, repFragrance}]
   const rootRef = useRef(null);
   const xCenters = useMemo(() => centers(cols), [cols]);
 
@@ -95,40 +102,63 @@ export default function StephanieBrandShelves() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Robust two-step load (avoids join issues):
-  // 1) links from user_fragrances (get fragrance_id)
-  // 2) fetch fragrances where id IN (...)
+  // Load data with fallbacks:
+  // 1) Try to find profile by username OR admin email
+  // 2) Try to load user_fragrances → fragrances for that user
+  // 3) If zero links/brands, fall back to global distinct brands from fragrances
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
 
-        // 1) profile id
-        const { data: prof, error: pErr } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('username', 'stephanie')
-          .single();
-        if (pErr || !prof) { setBrands([]); setBrandCount(0); setLoading(false); return; }
+        // 1) profile lookup
+        const adminEmail = 'stephanieshelbig@gmail.com';
+        let prof = null;
 
-        // 2) links (we only need fragrance_id)
-        const { data: links, error: lErr } = await supabase
+        const { data: byUser } = await supabase
+          .from('profiles')
+          .select('id, username, email')
+          .eq('username', 'stephanie')
+          .maybeSingle();
+
+        if (byUser && byUser.id) {
+          prof = byUser;
+        } else {
+          const { data: byEmail } = await supabase
+            .from('profiles')
+            .select('id, username, email')
+            .eq('email', adminEmail)
+            .maybeSingle();
+          if (byEmail && byEmail.id) prof = byEmail;
+        }
+
+        if (!prof?.id) {
+          // No profile found → global fallback mode
+          await loadGlobalBrands();
+          setDbg(d => ({ ...d, foundProfile: 'no', userId: null, mode: 'global' }));
+          return;
+        }
+
+        // 2) user links
+        const { data: links } = await supabase
           .from('user_fragrances')
-          .select('id, fragrance_id')
+          .select('fragrance_id')
           .eq('user_id', prof.id);
-        if (lErr) { console.error('user_fragrances error:', lErr.message); setBrands([]); setBrandCount(0); setLoading(false); return; }
 
         const ids = Array.from(new Set((links || []).map(l => l.fragrance_id).filter(Boolean)));
-        if (ids.length === 0) { setBrands([]); setBrandCount(0); setLoading(false); return; }
+        if (!ids.length) {
+          // No links → global fallback
+          await loadGlobalBrands();
+          setDbg(d => ({ ...d, foundProfile: 'yes', userId: prof.id, linkCount: 0, mode: 'global' }));
+          return;
+        }
 
-        // 3) fragrances
-        const { data: frags, error: fErr } = await supabase
+        // 3) fetch those fragrances
+        const { data: frags } = await supabase
           .from('fragrances')
           .select('id, brand, name, image_url, image_url_transparent, updated_at, created_at')
           .in('id', ids);
-        if (fErr) { console.error('fragrances error:', fErr.message); setBrands([]); setBrandCount(0); setLoading(false); return; }
 
-        // 4) group by brand -> choose representative -> sort A→Z
         const byBrand = new Map();
         for (const f of (frags || [])) {
           const b = (f?.brand || 'Unknown').trim();
@@ -136,22 +166,46 @@ export default function StephanieBrandShelves() {
           byBrand.get(b).push(f);
         }
 
-        const reps = Array.from(byBrand.entries()).map(([brand, list]) => ({
-          brand,
-          repFragrance: chooseRepForBrand(list),
-        })).filter(x => !!x.repFragrance);
+        let reps = Array.from(byBrand.entries())
+          .map(([brand, list]) => ({ brand, repFragrance: chooseRepForBrand(list) }))
+          .filter(x => !!x.repFragrance);
 
         reps.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
 
         setBrands(reps);
-        setBrandCount(reps.length);
+        setDbg(d => ({ ...d, foundProfile: 'yes', userId: prof.id, linkCount: ids.length, brandCount: reps.length, mode: 'user' }));
       } finally {
         setLoading(false);
       }
     })();
+
+    async function loadGlobalBrands() {
+      // Distinct brands from the global fragrances table
+      const { data: frags } = await supabase
+        .from('fragrances')
+        .select('id, brand, name, image_url, image_url_transparent, updated_at, created_at');
+
+      const byBrand = new Map();
+      for (const f of (frags || [])) {
+        const b = (f?.brand || 'Unknown').trim();
+        if (!byBrand.has(b)) byBrand.set(b, []);
+        byBrand.get(b).push(f);
+      }
+
+      let reps = Array.from(byBrand.entries())
+        .map(([brand, list]) => ({ brand, repFragrance: chooseRepForBrand(list) }))
+        .filter(x => !!x.repFragrance);
+
+      reps.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+
+      setBrands(reps);
+      setDbg(d => ({ ...d, brandCount: reps.length }));
+    }
   }, []);
 
-  const placed = useMemo(() => layoutBrandRepresentatives(brands, cols), [brands, cols]);
+  const placed = useMemo(() => {
+    return layoutBrandRepresentatives(brands, cols);
+  }, [brands, cols]);
 
   if (loading) return <div className="p-6">Loading your boutique…</div>;
 
@@ -166,9 +220,11 @@ export default function StephanieBrandShelves() {
           priority
         />
 
-        {/* Tiny debug pill so you can confirm data */}
-        <div className="absolute left-4 top-4 z-20 px-2 py-0.5 rounded bg-black/60 text-white text-xs">
-          {brandCount} brands · {cols} cols
+        {/* Debug pill so we can see what's happening */}
+        <div className="absolute left-4 top-4 z-20 px-2 py-1 rounded bg-black/70 text-white text-[11px] leading-tight">
+          <div>profile: {dbg.foundProfile}{dbg.userId ? ` (${dbg.userId.slice(0,8)}…)` : ''}</div>
+          <div>mode: {dbg.mode}</div>
+          <div>links: {dbg.linkCount} · brands: {dbg.brandCount} · cols: {cols}</div>
         </div>
 
         {/* Controls */}
@@ -200,7 +256,7 @@ export default function StephanieBrandShelves() {
           const yPct = yForShelfRow(b._display_shelf || 0);
           const to = `/brand/${slugifyBrand(b.brand)}`;
 
-          return (
+        return (
             <Link
               key={`${b.brand}-${frag.id}-${idx}`}
               href={to}
@@ -245,7 +301,7 @@ export default function StephanieBrandShelves() {
         {placed.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="px-4 py-2 rounded bg-black/60 text-white text-sm">
-              No brand representatives found. Check data & RLS or use the Brand index.
+              No brand representatives found. Use the Brand index or Import tools.
             </div>
           </div>
         )}
