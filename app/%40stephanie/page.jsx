@@ -4,19 +4,32 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-/* -----------------------------------------------
-   Shelf red-lines (percent from top) – tuned
------------------------------------------------- */
-const REDLINE_Y = [24.8, 35.8, 46.8, 57.8, 68.8, 79.8]; // top → bottom
-const ALCOVE_LEFT = 17;
-const ALCOVE_RIGHT = 83;
-const BASELINE_NUDGE_PCT = 0.9;
+/* -------------------------------------------------------------
+   SHELF LINES (percent from top of the background image)
+   These are tuned to your red guides and skip the chandelier row.
+   If a line is a hair off, nudge by ±0.3.
+------------------------------------------------------------- */
+const REDLINE_Y = [
+  // 24.8, // (old top line under chandelier — intentionally disabled)
+  35.8,
+  46.8,
+  57.8,
+  68.8,
+  79.8,
+];
 
-/* One row per shelf for clean brand tiles */
-const ROWS_PER_SHELF = 1;
+/* Keep bottles only in the center alcove so labels don’t collide
+   with the side niches or flowers. Tighten if you want more spacing. */
+const ALCOVE_LEFT = 22;   // %
+const ALCOVE_RIGHT = 78;  // %
 
-/* Bottle sizing & columns */
-const H_DESKTOP = 62, H_TABLET = 52, H_MOBILE = 42;
+/* Lift bottles a touch so their bottoms kiss the shelf lip */
+const BASELINE_NUDGE_PCT = 0.8;
+
+/* Bottle sizing & per-shelf column count (kept modest to avoid clutter) */
+const H_DESKTOP = 56, H_TABLET = 48, H_MOBILE = 40;
+const COLS_DESKTOP = 10, COLS_TABLET = 8, COLS_MOBILE = 6;
+
 function bottleH() {
   if (typeof window === 'undefined') return H_DESKTOP;
   const w = window.innerWidth;
@@ -25,11 +38,11 @@ function bottleH() {
   return H_DESKTOP;
 }
 function columnsForWidth() {
-  if (typeof window === 'undefined') return 14;
+  if (typeof window === 'undefined') return COLS_DESKTOP;
   const w = window.innerWidth;
-  if (w < 640) return 8;
-  if (w < 1024) return 11;
-  return 14;
+  if (w < 640) return COLS_MOBILE;
+  if (w < 1024) return COLS_TABLET;
+  return COLS_DESKTOP;
 }
 function centers(n) {
   const span = ALCOVE_RIGHT - ALCOVE_LEFT;
@@ -37,7 +50,8 @@ function centers(n) {
   return Array.from({ length: n }, (_, i) => ALCOVE_LEFT + step * (i + 1));
 }
 function yForShelf(shelfIdx) {
-  return REDLINE_Y[Math.max(0, Math.min(REDLINE_Y.length - 1, shelfIdx))] - BASELINE_NUDGE_PCT;
+  const i = Math.max(0, Math.min(REDLINE_Y.length - 1, shelfIdx));
+  return REDLINE_Y[i] - BASELINE_NUDGE_PCT;
 }
 function slugifyBrand(b) {
   return (b || 'unknown')
@@ -48,8 +62,7 @@ function slugifyBrand(b) {
 function bottleSrc(f) {
   const best = f?.image_url_transparent || f?.image_url;
   if (!best) return '/bottle-placeholder.png';
-  const ver = f?.updated_at || f?.created_at || '';
-  return `${best}${best.includes('?') ? '&' : '?'}v=${encodeURIComponent(ver)}`;
+  return best; // we removed updated_at dependency since your table may not have it
 }
 
 /* Lay out top shelves first, left→right (one bottle per brand) */
@@ -83,7 +96,7 @@ export default function StephanieBrandShelves() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // load server-computed reps (uses service role via API route)
+  // load server-computed reps (uses service-role via API route)
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -145,10 +158,11 @@ export default function StephanieBrandShelves() {
           <div key={`gy-${i}`} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
-        {/* One bottle per brand */}
+        {/* One bottle per brand — baseline snapped to shelf lines */}
         {placed.map((b, idx) => {
           const f = b.repFragrance;
           if (!f) return null;
+
           const xIdx = Math.max(0, Math.min(xCenters.length - 1, b._col || 0));
           const xPct = xCenters[xIdx];
           const yPct = yForShelf(b._shelf || 0);
@@ -162,7 +176,7 @@ export default function StephanieBrandShelves() {
               style={{
                 top: `${yPct}%`,
                 left: `${xPct}%`,
-                transform: 'translate(-50%, -100%)',
+                transform: 'translate(-50%, -100%)', // anchor bottom on the line
                 height: `${bH}px`,
               }}
               title={`${b.brand} — view collection`}
@@ -176,7 +190,7 @@ export default function StephanieBrandShelves() {
                   height: '100%',
                   width: 'auto',
                   mixBlendMode: 'multiply',
-                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
+                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.14))',
                 }}
                 draggable={false}
                 onError={(e) => {
