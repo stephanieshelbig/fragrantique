@@ -73,12 +73,12 @@ export default function UserBoutiquePage({ params }) {
   const [status, setStatus] = useState(null); // shows last save result
 
   const [profileId, setProfileId] = useState(null);
-  const [links, setLinks] = useState([]);          // user_fragrances + fragrance
+  const [links, setLinks] = useState([]);            // user_fragrances + fragrance
   const [dbPositions, setDbPositions] = useState({}); // {brandKey: {x_pct,y_pct}}
   const [localBrand, setLocalBrand] = useState({});   // fallback only
 
-  const rootRef = useRef(null);
-  const dragRef = useRef(null);
+  const rootRef = useRef(null);       // ← declared ONCE
+  const dragState = useRef(null);
   const lastSavedRef = useRef(null);
 
   // 1) Load data from DB (profile, links, brand positions)
@@ -209,9 +209,6 @@ export default function UserBoutiquePage({ params }) {
   }, [links, dbPositions, localBrand]);
 
   // 3) Drag logic — update UI immediately; persist on pointer up
-  const rootRef = useRef(null);
-  const dragState = useRef(null);
-
   function startDrag(e, itm) {
     if (!arrange) return;
     const container = rootRef.current;
