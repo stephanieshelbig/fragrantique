@@ -6,6 +6,26 @@ import { supabase } from '@/lib/supabase';
 
 const money = (cents) => `$${(cents / 100).toFixed(2)}`;
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
+const CART_KEY = 'fragrantique_cart_v1';
+
+function loadCart() {
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+function saveCart(items) {
+  try { localStorage.setItem(CART_KEY, JSON.stringify(items)); } catch {}
+}
+function addToCart(decantId) {
+  const items = loadCart();
+  const idx = items.findIndex(i => String(i.decantId) === String(decantId));
+  if (idx === -1) items.push({ decantId: String(decantId), qty: 1 });
+  else items[idx].qty = Math.max(1, parseInt(items[idx].qty || 1)) + 1;
+  saveCart(items);
+  return items;
+}
 
 export default function FragrancePage({ params }) {
   const id = decodeURIComponent(params.id);
@@ -21,6 +41,7 @@ export default function FragrancePage({ params }) {
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [cartCount, setCartCount] = useState(0);
 
   // Auth session
   useEffect(() => {
@@ -34,7 +55,6 @@ export default function FragrancePage({ params }) {
     (async () => {
       setLoading(true);
 
-      // 1) fragrance
       const { data: f } = await supabase
         .from('fragrances')
         .select('id, brand, name, image_url, image_url_transparent, accords, fragrantica_url')
@@ -42,7 +62,6 @@ export default function FragrancePage({ params }) {
         .maybeSingle();
       setFrag(f || null);
 
-      // 2) notes
       const { data: n } = await supabase
         .from('fragrance_notes')
         .select('id, user_id, rating, body, created_at')
@@ -50,7 +69,6 @@ export default function FragrancePage({ params }) {
         .order('created_at', { ascending: false });
       setNotes(n || []);
 
-      // 3) decants
       const { data: d } = await supabase
         .from('decants')
         .select('id, size_ml, price_cents, quantity, seller_user_id, is_active')
@@ -59,6 +77,7 @@ export default function FragrancePage({ params }) {
         .order('price_cents', { ascending: true });
       setDecants(d || []);
 
+      setCartCount(loadCart().reduce((acc, it) => acc + (parseInt(it.qty || 1)), 0));
       setLoading(false);
     })();
   }, [id]);
@@ -89,39 +108,10 @@ export default function FragrancePage({ params }) {
     setSubmitting(false);
   }
 
-  // Robust client → use res.clone() so we can safely fallback to text()
-  async function buyDecant(decantId) {
-    try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decantId, fragranceId: id })
-      });
-
-      // Try JSON first; if parsing fails, use a cloned response for text()
-      const resClone = res.clone();
-      let payload = null;
-      try {
-        payload = await res.json();
-      } catch {
-        const text = await resClone.text(); // safe fallback
-        alert(text || 'Checkout failed (non-JSON response).');
-        return;
-      }
-
-      if (!res.ok) {
-        alert(payload?.error || 'Checkout failed.');
-        return;
-      }
-
-      if (payload?.url) {
-        window.location.href = payload.url;
-      } else {
-        alert('Checkout response missing URL.');
-      }
-    } catch (e) {
-      alert(e.message || 'Checkout error');
-    }
+  function handleAddToCart(decantId) {
+    const items = addToCart(decantId);
+    const count = items.reduce((acc, it) => acc + (parseInt(it.qty || 1)), 0);
+    setCartCount(count);
   }
 
   if (loading) return <div className="p-6">Loading…</div>;
@@ -129,11 +119,18 @@ export default function FragrancePage({ params }) {
 
   return (
     <div className="mx-auto max-w-6xl p-4">
-      {/* Header back link */}
+      {/* Header with cart link */}
       <div className="flex items-center justify-between mb-4">
         <Link href="/" className="text-blue-600 hover:underline text-sm">← Back</Link>
         <div />
-        <div />
+        <Link href="/cart" className="relative text-sm text-blue-600 hover:underline">
+          Cart
+          {cartCount > 0 && (
+            <span className="ml-1 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-black text-white">
+              {cartCount}
+            </span>
+          )}
+        </Link>
       </div>
 
       {/* Hero “social card” */}
@@ -160,7 +157,6 @@ export default function FragrancePage({ params }) {
             <div className="text-sm uppercase tracking-wider text-zinc-500">{frag.brand}</div>
             <h1 className="text-3xl md:text-4xl font-semibold">{frag.name}</h1>
 
-            {/* Accord bars (optional if you store them as JSON) */}
             {Array.isArray(frag?.accords) && frag.accords.length > 0 && (
               <div className="mt-5 space-y-2">
                 {frag.accords.map((a, idx) => (
@@ -174,7 +170,6 @@ export default function FragrancePage({ params }) {
               </div>
             )}
 
-            {/* Fragrantica link if present */}
             {frag?.fragrantica_url && (
               <div className="mt-4">
                 <a href={frag.fragrantica_url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
@@ -209,15 +204,18 @@ export default function FragrancePage({ params }) {
                 {d.quantity === 0 ? (
                   <div className="mt-3 text-sm text-zinc-500">Out of stock</div>
                 ) : (
-                  <button
-                    onClick={() => buyDecant(d.id)}
-                    className="mt-3 px-3 py-2 rounded bg-black text-white text-sm hover:opacity-90"
-                  >
-                    Buy
-                  </button>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={() => handleAddToCart(d.id)}
+                      className="px-3 py-2 rounded bg-zinc-900 text-white text-sm hover:opacity-90"
+                    >
+                      Add to cart
+                    </button>
+                    <Link href="/cart" className="text-sm text-blue-600 hover:underline">Go to cart</Link>
+                  </div>
                 )}
                 <div className="mt-2 text-[11px] text-zinc-500">
-                  Includes platform fee at checkout.
+                  5% platform fee added at checkout.
                 </div>
               </div>
             ))}
