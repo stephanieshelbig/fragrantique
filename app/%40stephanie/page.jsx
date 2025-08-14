@@ -59,9 +59,9 @@ function bottleSrc(f) {
 /* One representative per brand: prefer transparent -> shortest name */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
-  const withTransparent = list.filter(x => !!x.fragrance?.image_url_transparent);
+  const withTransparent = list.filter(x => !!x?.image_url_transparent);
   const pool = withTransparent.length ? withTransparent : list;
-  return pool.sort((a, b) => (a.fragrance?.name || '').length - (b.fragrance?.name || '').length)[0];
+  return pool.sort((a, b) => (a?.name || '').length - (b?.name || '').length)[0];
 }
 
 /* Alphabetical brand layout: top shelves first, left→right */
@@ -81,7 +81,9 @@ export default function StephanieBrandShelves() {
   const [cols, setCols] = useState(columnsForWidth());
   const [bH, setBH] = useState(bottleH());
   const [showGuides, setShowGuides] = useState(false);
-  const [brandReps, setBrandReps] = useState([]); // [{brand, rep:{linkId, fragrance}}]
+
+  const [brandCount, setBrandCount] = useState(0);  // debug counter
+  const [brands, setBrands] = useState([]);         // [{brand, repFragrance}]
 
   const rootRef = useRef(null);
   const xCenters = useMemo(() => centers(cols), [cols]);
@@ -93,55 +95,63 @@ export default function StephanieBrandShelves() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // load your collection and collapse to one per brand
+  // Robust two-step load (avoids join issues):
+  // 1) links from user_fragrances (get fragrance_id)
+  // 2) fetch fragrances where id IN (...)
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      // 1) get Stephanie's profile id
-      const { data: prof, error: pErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', 'stephanie')
-        .single();
+        // 1) profile id
+        const { data: prof, error: pErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', 'stephanie')
+          .single();
+        if (pErr || !prof) { setBrands([]); setBrandCount(0); setLoading(false); return; }
 
-      if (pErr || !prof) { setBrandReps([]); setLoading(false); return; }
+        // 2) links (we only need fragrance_id)
+        const { data: links, error: lErr } = await supabase
+          .from('user_fragrances')
+          .select('id, fragrance_id')
+          .eq('user_id', prof.id);
+        if (lErr) { console.error('user_fragrances error:', lErr.message); setBrands([]); setBrandCount(0); setLoading(false); return; }
 
-      // 2) get her linked fragrances (JOIN)  🔧 FIXED: remove extra ")"
-      const { data, error } = await supabase
-        .from('user_fragrances')
-        .select('id, fragrance:fragrances(id, brand, name, image_url, image_url_transparent, updated_at, created_at)')
-        .eq('user_id', prof.id);
+        const ids = Array.from(new Set((links || []).map(l => l.fragrance_id).filter(Boolean)));
+        if (ids.length === 0) { setBrands([]); setBrandCount(0); setLoading(false); return; }
 
-      if (error) {
-        console.error('Supabase error loading user_fragrances:', error.message);
-        setBrandReps([]);
+        // 3) fragrances
+        const { data: frags, error: fErr } = await supabase
+          .from('fragrances')
+          .select('id, brand, name, image_url, image_url_transparent, updated_at, created_at')
+          .in('id', ids);
+        if (fErr) { console.error('fragrances error:', fErr.message); setBrands([]); setBrandCount(0); setLoading(false); return; }
+
+        // 4) group by brand -> choose representative -> sort A→Z
+        const byBrand = new Map();
+        for (const f of (frags || [])) {
+          const b = (f?.brand || 'Unknown').trim();
+          if (!byBrand.has(b)) byBrand.set(b, []);
+          byBrand.get(b).push(f);
+        }
+
+        const reps = Array.from(byBrand.entries()).map(([brand, list]) => ({
+          brand,
+          repFragrance: chooseRepForBrand(list),
+        })).filter(x => !!x.repFragrance);
+
+        reps.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+
+        setBrands(reps);
+        setBrandCount(reps.length);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      // 3) group by brand
-      const byBrand = new Map();
-      for (const row of (data || [])) {
-        const brand = (row?.fragrance?.brand || 'Unknown').trim();
-        if (!byBrand.has(brand)) byBrand.set(brand, []);
-        byBrand.get(brand).push(row);
-      }
-
-      // 4) pick a representative per brand
-      const reps = Array.from(byBrand.entries())
-        .map(([brand, list]) => ({ brand, rep: chooseRepForBrand(list) }))
-        .filter(x => !!x.rep);
-
-      // 5) sort A→Z by brand
-      reps.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-
-      setBrandReps(reps);
-      setLoading(false);
     })();
   }, []);
 
-  const placed = useMemo(() => layoutBrandRepresentatives(brandReps, cols), [brandReps, cols]);
+  const placed = useMemo(() => layoutBrandRepresentatives(brands, cols), [brands, cols]);
 
   if (loading) return <div className="p-6">Loading your boutique…</div>;
 
@@ -156,9 +166,9 @@ export default function StephanieBrandShelves() {
           priority
         />
 
-        {/* Small debug pill so you can see counts on the page */}
+        {/* Tiny debug pill so you can confirm data */}
         <div className="absolute left-4 top-4 z-20 px-2 py-0.5 rounded bg-black/60 text-white text-xs">
-          {brandReps.length} brands · {cols} cols
+          {brandCount} brands · {cols} cols
         </div>
 
         {/* Controls */}
@@ -175,26 +185,24 @@ export default function StephanieBrandShelves() {
           </button>
         </div>
 
-        {/* Guides at red lines */}
+        {/* Guides */}
         {showGuides && REDLINE_Y.map((y, i) => (
           <div key={`gy-${i}`} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
         {/* One bottle per brand */}
         {placed.map((b, idx) => {
-          const repFrag = b.rep?.fragrance;
-          const brand = b.brand;
-          if (!repFrag) return null;
+          const frag = b.repFragrance;
+          if (!frag) return null;
 
-          const xCentersIdx = Math.max(0, Math.min(xCenters.length - 1, b._display_col || 0));
-          const xPct = xCenters[xCentersIdx];
+          const xIdx = Math.max(0, Math.min(xCenters.length - 1, b._display_col || 0));
+          const xPct = xCenters[xIdx];
           const yPct = yForShelfRow(b._display_shelf || 0);
-
-          const to = `/brand/${slugifyBrand(brand)}`;
+          const to = `/brand/${slugifyBrand(b.brand)}`;
 
           return (
             <Link
-              key={`${brand}-${repFrag.id}-${idx}`}
+              key={`${b.brand}-${frag.id}-${idx}`}
               href={to}
               className="absolute"
               style={{
@@ -203,12 +211,12 @@ export default function StephanieBrandShelves() {
                 transform: 'translate(-50%, -100%)',
                 height: `${bH}px`,
               }}
-              title={`${brand} — view collection`}
+              title={`${b.brand} — view collection`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={bottleSrc(repFrag)}
-                alt={repFrag?.name || brand}
+                src={bottleSrc(frag)}
+                alt={frag?.name || b.brand}
                 className="object-contain"
                 style={{
                   height: '100%',
@@ -227,19 +235,17 @@ export default function StephanieBrandShelves() {
               />
               <div
                 className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur"
-                title={brand}
               >
-                {brand}
+                {b.brand}
               </div>
             </Link>
           );
         })}
 
-        {/* If nothing rendered, show a gentle prompt */}
         {placed.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="px-4 py-2 rounded bg-black/60 text-white text-sm">
-              No brand representatives found. Try the Brand index or the Import tools.
+              No brand representatives found. Check data & RLS or use the Brand index.
             </div>
           </div>
         )}
