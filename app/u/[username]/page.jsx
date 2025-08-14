@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
  * - Drag saves with is_public: true (publishes immediately).
  * - Robust brand-key matching (strict + canonical) and race-free save.
  * - Auto-publish effect: owner loads page -> all existing positions get marked public.
+ * - Controls (Arrange / Guides / Reload DB) are visible only to the owner.
  */
 
 const CANVAS_ASPECT = '3 / 2';
@@ -301,7 +302,8 @@ export default function UserBoutiquePage({ params }) {
 
   // Drag lifecycle (race-free save)
   function startDrag(e, itm) {
-    if (!arrange) return;
+    // Only owner can arrange
+    if (!arrange || !viewerId || viewerId !== profileId) return;
     const container = rootRef.current;
     if (!container) return;
     e.preventDefault(); e.stopPropagation();
@@ -374,14 +376,14 @@ export default function UserBoutiquePage({ params }) {
     lastSavedRef.current = { x, y };
 
     let err = null;
-    if (profileId) {
+    if (profileId && viewerId === profileId) {
       // Save under owner with is_public = true so everyone sees it
       const { error } = await supabase
         .from('user_brand_positions')
         .upsert({ user_id: profileId, brand_key: brandKeyCanon, x_pct: x, y_pct: y, is_public: true });
       if (error) err = error.message;
     } else {
-      err = 'no profile';
+      err = 'not owner';
     }
 
     try {
@@ -396,6 +398,8 @@ export default function UserBoutiquePage({ params }) {
   if (!authReady) return <div className="p-6">Starting session…</div>;
   if (loading)     return <div className="p-6">Loading boutique…</div>;
 
+  const isOwner = viewerId && profileId && viewerId === profileId;
+
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
       <div className="relative w-full" ref={rootRef} style={{ aspectRatio: CANVAS_ASPECT }}>
@@ -409,28 +413,37 @@ export default function UserBoutiquePage({ params }) {
 
         {/* Controls */}
         <div className="absolute right-4 top-4 z-20 flex gap-2 items-center">
-          <button
-            onClick={() => setArrange(a => !a)}
-            className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
-          >
-            {arrange ? 'Arranging… (drag)' : 'Arrange'}
-          </button>
+          {/* Always visible */}
           <Link href="/brand" className="px-3 py-1 rounded bg-black/70 text-white hover:opacity-90">
             Brand index
           </Link>
-          <button
-            onClick={() => setShowGuides(g => !g)}
-            className="px-3 py-1 rounded bg-black/50 text-white hover:opacity-90"
-          >
-            Guides
-          </button>
-          <button
-            onClick={() => loadData(viewerId)}
-            className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
-            title="Reload from DB"
-          >
-            Reload DB
-          </button>
+
+          {/* Owner-only controls */}
+          {isOwner && (
+            <>
+              <button
+                onClick={() => setArrange(a => !a)}
+                className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
+              >
+                {arrange ? 'Arranging… (drag)' : 'Arrange'}
+              </button>
+              <button
+                onClick={() => setShowGuides(g => !g)}
+                className="px-3 py-1 rounded bg-black/50 text-white hover:opacity-90"
+              >
+                Guides
+              </button>
+              <button
+                onClick={() => loadData(viewerId)}
+                className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
+                title="Reload from DB"
+              >
+                Reload DB
+              </button>
+            </>
+          )}
+
+          {/* Info chips (harmless for public view) */}
           <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
             DB pos: {dbPosCount}
             {lastSavedRef.current && (
@@ -442,8 +455,8 @@ export default function UserBoutiquePage({ params }) {
           )}
         </div>
 
-        {/* Optional shelf guides */}
-        {showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
+        {/* Optional shelf guides (owner-only toggle) */}
+        {isOwner && showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
@@ -461,7 +474,7 @@ export default function UserBoutiquePage({ params }) {
             touchAction: 'none',
           };
 
-          return arrange ? (
+          return isOwner && arrange ? (
             <div
               key={it.brandKeyStrict}
               className="group absolute select-none cursor-grab active:cursor-grabbing"
@@ -539,7 +552,7 @@ export default function UserBoutiquePage({ params }) {
 
       <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
         Viewing <span className="font-medium">@{username}</span> boutique — public layout
-        {arrange ? ' · arranging (publishes positions)' : ''}
+        {isOwner && arrange ? ' · arranging (publishes positions)' : ''}
       </div>
     </div>
   );
