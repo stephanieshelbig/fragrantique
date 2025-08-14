@@ -4,30 +4,36 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 
-/** ---- Shelf Geometry (tuned) ----------------------------------------- */
-/** Shelf lip Y positions in % (0 = top, 100 = bottom) */
+/* ------------------------------------------------------------------ */
+/*  Shelf geometry (tuned to your background)                         */
+/* ------------------------------------------------------------------ */
+/** Shelf lip Y positions in % (0 = top of image) — tuned for your bg */
 const SHELF_TOP_Y = [
-  33.6,  // Top shelf lip
+  33.6, // top
   44.3,
   55.1,
   65.8,
   76.6,
-  87.3,  // Bottom shelf lip
+  87.3, // bottom
 ];
 
-/** Inner alcove usable area (left/right) */
+/** Usable alcove bounds left/right (in %) */
 const SHELF_LEFT_PCT = 20;
 const SHELF_RIGHT_PCT = 80;
 
-/** Baseline nudge so bottle bottoms kiss the shelf lip */
-const BASELINE_NUDGE_PCT = 0.9;   // lift ~0.9% so varying crops still “sit” right
+/** Baseline micro-lift so bottoms kiss the lip even with crop variance */
+const BASELINE_NUDGE_PCT = 0.9;
 
-/** Optional second row per shelf and how high it stacks above the lip */
+/** Each shelf can have this many stacked rows (0 = on lip, 1 = a bit above) */
 const ROWS_PER_SHELF = 2;
-const ROW_OFFSET_PCT = 7.2;       // distance from shelf lip to the row above, in %
+/** Vertical distance from the shelf lip to the next stack row (in %) */
+const ROW_OFFSET_PCT = 7.2;
 
-/** ---- Responsive layout ---------------------------------------------- */
-const H_DESKTOP = 60, H_TABLET = 50, H_MOBILE = 42;
+/* ------------------------------------------------------------------ */
+/*  Responsive sizing & columns                                       */
+/* ------------------------------------------------------------------ */
+const H_DESKTOP = 60, H_TABLET = 50, H_MOBILE = 42; // bottle heights (px)
+
 function bottleH() {
   if (typeof window === 'undefined') return H_DESKTOP;
   const w = window.innerWidth;
@@ -35,6 +41,7 @@ function bottleH() {
   if (w < 1024) return H_TABLET;
   return H_DESKTOP;
 }
+
 function columnCount() {
   if (typeof window === 'undefined') return 9;
   const w = window.innerWidth;
@@ -42,30 +49,30 @@ function columnCount() {
   if (w < 1024) return 7;
   return 9;
 }
+
+/** Evenly spaced X centers (in %) across the alcove */
 function makeCenters(n) {
   const span = SHELF_RIGHT_PCT - SHELF_LEFT_PCT;
   const step = span / (n + 1);
   return Array.from({ length: n }, (_, i) => SHELF_LEFT_PCT + step * (i + 1));
 }
 
-/** Prefer transparent if present; supports direct public URLs */
+/* ------------------------------------------------------------------ */
+/*  Utilities                                                         */
+/* ------------------------------------------------------------------ */
 function bottleSrc(f) {
   const best = f?.image_url_transparent || f?.image_url;
   if (!best) return '/bottle-placeholder.png';
-  // cache-bust lightly on created_at
-  const ver = f?.created_at ? new Date(f.created_at).getTime() : Date.now();
-  return `${best}${best.includes('?') ? '&' : '?'}v=${ver}`;
+  const ver = f?.updated_at || f?.created_at || '';
+  return `${best}${best.includes('?') ? '&' : '?'}v=${encodeURIComponent(ver)}`;
 }
 
-/** Compute anchor Y (top of bottle container is at this Y; we translate upwards) */
 function shelfRowY(shelfIndex, rowIndex) {
   const shelfY = SHELF_TOP_Y[Math.max(0, Math.min(SHELF_TOP_Y.length - 1, shelfIndex))];
   const row = Math.max(0, Math.min(ROWS_PER_SHELF - 1, rowIndex || 0));
-  // Row 0 rests at lip (+ small nudge). Row 1 sits above by ROW_OFFSET.
   return shelfY - row * ROW_OFFSET_PCT - BASELINE_NUDGE_PCT;
 }
 
-/** Snap helpers */
 function nearestShelfRow(yPct) {
   let best = { shelf: 0, row: 0 }, dist = Infinity;
   for (let s = 0; s < SHELF_TOP_Y.length; s++) {
@@ -77,13 +84,17 @@ function nearestShelfRow(yPct) {
   }
   return best;
 }
+
 function nearestColumnIndex(leftPct, centers) {
   let best = 0, dist = Infinity;
-  centers.forEach((x, i) => { const d = Math.abs(leftPct - x); if (d < dist) { dist = d; best = i; } });
+  centers.forEach((x, i) => {
+    const d = Math.abs(leftPct - x);
+    if (d < dist) { dist = d; best = i; }
+  });
   return best;
 }
 
-/** Fill missing saved coordinates bottom→top, left→right (persist once) */
+/** When saved coordinates are missing, place bottom→top & left→right once */
 function applyBottomFirstDefaults(list, colsPerShelf) {
   if (!list?.length) return [];
   const out = [];
@@ -109,78 +120,72 @@ function applyBottomFirstDefaults(list, colsPerShelf) {
   return out;
 }
 
-/** Group-by-brand layout (display-only). Orders by admin brand_sort if present. */
-function layoutByBrand(items, colsPerShelf, brandOrder) {
-  // group
-  const groups = new Map();
-  for (const it of items) {
-    const brand = (it?.fragrance?.brand || 'Unknown').trim();
-    if (!groups.has(brand)) groups.set(brand, []);
-    groups.get(brand).push(it);
-  }
-
-  // brand order: admin preference first, then alpha
-  const brands = Array.from(groups.keys());
-  brands.sort((a, b) => {
-    const ia = brandOrder?.[a] ?? Number.MAX_SAFE_INTEGER;
-    const ib = brandOrder?.[b] ?? Number.MAX_SAFE_INTEGER;
-    if (ia !== ib) return ia - ib;
-    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+/* ------------------------------------------------------------------ */
+/*  Alphabetical layout (A→Z by Brand, then Name)                      */
+/*  Creates display-only positions left→right, bottom→top             */
+/* ------------------------------------------------------------------ */
+function layoutAlphabeticalByBrand(items, colsPerShelf) {
+  // 1) Flatten and sort by brand then name (case-insensitive)
+  const sorted = [...items].sort((a, b) => {
+    const ab = (a?.fragrance?.brand || 'Unknown').toLowerCase();
+    const bb = (b?.fragrance?.brand || 'Unknown').toLowerCase();
+    if (ab !== bb) return ab.localeCompare(bb);
+    const an = (a?.fragrance?.name || '').toLowerCase();
+    const bn = (b?.fragrance?.name || '').toLowerCase();
+    return an.localeCompare(bn);
   });
 
-  // sort inside brand by name
-  for (const b of brands) {
-    groups.get(b).sort((x, y) =>
-      (x?.fragrance?.name || '').localeCompare((y?.fragrance?.name || ''), undefined, { sensitivity: 'base' })
-    );
-  }
-
+  // 2) Fill positions left→right across the bottom shelf, then wrap
   const placed = [];
-  const labels = [];
+  const labels = []; // brand badges
   const bottom = SHELF_TOP_Y.length - 1;
   let s = bottom, r = 0, c = 0;
 
-  for (const brand of brands) {
-    const arr = groups.get(brand) || [];
-    if (!arr.length) continue;
+  let lastBrand = null;
+  let brandStart = null;
 
-    // if there is only 1 column left, bump to new row so brand blocks look tidy
-    if (colsPerShelf - c < 2 && c !== 0) {
-      c = 0; r++; if (r >= ROWS_PER_SHELF) { r = 0; s = Math.max(0, s - 1); }
+  for (const it of sorted) {
+    const brand = (it?.fragrance?.brand || 'Unknown').trim();
+
+    // record start of a brand block (for label)
+    if (brand !== lastBrand) {
+      brandStart = { brand, s, r, c };
+      lastBrand = brand;
     }
 
-    const startS = s, startR = r, startC = c;
+    placed.push({ ...it, _display_shelf: s, _display_row: r, _display_col: c });
 
-    for (const it of arr) {
-      placed.push({ ...it, _display_shelf: s, _display_row: r, _display_col: c });
-      c++;
-      if (c >= colsPerShelf) { c = 0; r++; if (r >= ROWS_PER_SHELF) { r = 0; s = Math.max(0, s - 1); } }
-    }
+    c++;
+    if (c >= colsPerShelf) { c = 0; r++; if (r >= ROWS_PER_SHELF) { r = 0; s = Math.max(0, s - 1); } }
 
-    labels.push({ brand, s: startS, r: startR, c: startC });
-
-    // gap between brands if space remains
-    if (c < colsPerShelf - 1) {
-      c++;
-      if (c >= colsPerShelf) { c = 0; r++; if (r >= ROWS_PER_SHELF) { r = 0; s = Math.max(0, s - 1); } }
+    // If next item is different brand, push a label where this brand began
+    const nextIdx = placed.length;
+    const nextBrand = sorted[nextIdx]?.fragrance?.brand;
+    if (nextBrand !== lastBrand && brandStart) {
+      labels.push(brandStart);
+      brandStart = null;
     }
   }
+  // push label for last brand
+  if (brandStart) labels.push(brandStart);
 
   return { placed, labels };
 }
 
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 export default function StephanieBoutique() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([]); // user_fragrances joined to fragrances
   const [bH, setBH] = useState(bottleH());
   const [cols, setCols] = useState(columnCount());
-  const [groupByBrand, setGroupByBrand] = useState(false);
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [drag, setDrag] = useState(null);
   const [dragPos, setDragPos] = useState(null);
-  const [brandOrder, setBrandOrder] = useState(null); // brand -> order index
+  const [alphaMode, setAlphaMode] = useState(true); // NEW: default to A→Z by brand
 
   const rootRef = useRef(null);
   const centers = useMemo(() => makeCenters(cols), [cols]);
@@ -192,31 +197,27 @@ export default function StephanieBoutique() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // responsive
+  // responsive sizing
   useEffect(() => {
     const onResize = () => { setBH(bottleH()); setCols(columnCount()); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // load profile + brand order + shelves
+  // load profile + shelves
   useEffect(() => {
     (async () => {
-      const { data: prof } = await supabase.from('profiles').select('id').eq('username','stephanie').single();
+      // profile
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', 'stephanie')
+        .single();
+
       if (!prof) { setLoading(false); return; }
       setUserId(prof.id);
 
-      // 1) brand order map
-      const { data: bo } = await supabase.from('brand_sort').select('brand, sort_order').order('sort_order',{ascending:true});
-      if (bo && bo.length) {
-        const map = {};
-        for (const row of bo) map[(row.brand || 'Unknown').trim()] = row.sort_order ?? 999999;
-        setBrandOrder(map);
-      } else {
-        setBrandOrder({});
-      }
-
-      // 2) shelves
+      // joined shelves
       const { data } = await supabase
         .from('user_fragrances')
         .select('id, position, shelf_index, row_index, column_index, column_key, fragrance:fragrances(*)')
@@ -234,30 +235,35 @@ export default function StephanieBoutique() {
         fragrance: row.fragrance,
       }));
 
+      // only persist defaults in manual (non-alpha) mode;
+      // but we still compute defaults so everything has coords if you switch
       const withDefaults = applyBottomFirstDefaults(mapped, cols);
-      for (const it of withDefaults) {
-        if (it._needsSave) {
-          await supabase
-            .from('user_fragrances')
-            .update({
-              shelf_index: it.shelf_index,
-              row_index: it.row_index,
-              column_index: it.column_index,
-              position: it.position,
-            })
-            .eq('id', it.linkId)
-            .eq('user_id', prof.id);
+      if (!alphaMode) {
+        for (const it of withDefaults) {
+          if (it._needsSave) {
+            await supabase
+              .from('user_fragrances')
+              .update({
+                shelf_index: it.shelf_index,
+                row_index: it.row_index,
+                column_index: it.column_index,
+                position: it.position,
+              })
+              .eq('id', it.linkId)
+              .eq('user_id', prof.id);
+          }
         }
       }
 
       setItems(withDefaults);
       setLoading(false);
     })();
-  }, [cols]);
+  // re-run when columns or alphaMode changes (affects default layout calc)
+  }, [cols, alphaMode]);
 
-  // drag handlers (disabled in group mode)
+  /* ------------------------ Drag (manual) --------------------------- */
   function onPointerDown(e, idx) {
-    if (groupByBrand) {
+    if (alphaMode) {
       const id = items[idx]?.fragrance?.id;
       if (id) window.location.href = `/fragrance/${id}`;
       return;
@@ -276,14 +282,14 @@ export default function StephanieBoutique() {
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
   function onPointerMove(e) {
-    if (groupByBrand || !arrange || !drag || !rootRef.current) return;
+    if (alphaMode || !arrange || !drag || !rootRef.current) return;
     const box = rootRef.current.getBoundingClientRect();
     const xPct = ((e.clientX - box.left) / box.width) * 100;
     const yPct = ((e.clientY - box.top) / box.height) * 100;
     setDragPos({ xPct, yPct });
   }
   async function onPointerUp() {
-    if (groupByBrand || !arrange || !drag || !dragPos) { setDrag(null); return; }
+    if (alphaMode || !arrange || !drag || !dragPos) { setDrag(null); return; }
     await placeAndSave(drag.idx, dragPos.xPct, dragPos.yPct);
     setDrag(null);
     setDragPos(null);
@@ -293,8 +299,12 @@ export default function StephanieBoutique() {
     const it = items[idx];
     const { shelf: s, row: r } = nearestShelfRow(yPct);
     const c = nearestColumnIndex(xPct, centers);
-    const next = items.map((x, i) => i === idx ? ({ ...x, shelf_index: s, row_index: r, column_index: c }) : x);
+
+    const next = items.map((x, i) =>
+      i === idx ? ({ ...x, shelf_index: s, row_index: r, column_index: c }) : x
+    );
     setItems(next);
+
     if (userId) {
       await supabase
         .from('user_fragrances')
@@ -304,15 +314,15 @@ export default function StephanieBoutique() {
     }
   }
 
-  // Grouped display
-  const groupedLayout = useMemo(() => {
-    if (!groupByBrand) return null;
-    return layoutByBrand(items, cols, brandOrder || {});
-  }, [groupByBrand, items, cols, brandOrder]);
+  /* ---------------------- Alphabetical layout ---------------------- */
+  const alphaLayout = useMemo(() => {
+    if (!alphaMode) return null;
+    return layoutAlphabeticalByBrand(items, cols);
+  }, [alphaMode, items, cols]);
 
   if (loading) return <div className="p-6">Loading your boutique…</div>;
 
-  const toRender = groupByBrand ? (groupedLayout?.placed || []) : items;
+  const toRender = alphaMode ? (alphaLayout?.placed || []) : items;
   const centersArr = centers;
 
   return (
@@ -324,16 +334,22 @@ export default function StephanieBoutique() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Image src="/Fragrantique_boutiqueBackground.png" alt="Boutique Background" fill style={{ objectFit: 'cover' }} priority />
+        <Image
+          src="/Fragrantique_boutiqueBackground.png"
+          alt="Boutique Background"
+          fill
+          style={{ objectFit: 'cover' }}
+          priority
+        />
 
         {/* Controls */}
         <div className="absolute right-4 top-4 z-20 pointer-events-auto flex flex-wrap gap-2">
           <button
-            onClick={() => setGroupByBrand(v => !v)}
-            className={`px-3 py-1 rounded text-white ${groupByBrand ? 'bg-pink-700' : 'bg-black/70'} hover:opacity-90`}
-            title="Toggle grouped-by-brand view"
+            onClick={() => setAlphaMode(v => !v)}
+            className={`px-3 py-1 rounded text-white ${alphaMode ? 'bg-pink-700' : 'bg-black/70'} hover:opacity-90`}
+            title="Toggle A→Z by Brand layout"
           >
-            {groupByBrand ? 'Grouped by Brand' : 'Group by Brand'}
+            {alphaMode ? 'A→Z by Brand' : 'Manual layout'}
           </button>
 
           <button
@@ -345,17 +361,17 @@ export default function StephanieBoutique() {
           </button>
 
           <button
-            onClick={() => !groupByBrand && setArrange(v => !v)}
-            className={`px-3 py-1 rounded text-white ${arrange && !groupByBrand ? 'bg-pink-700' : 'bg-black/70'} hover:opacity-90 ${groupByBrand ? 'opacity-40 cursor-not-allowed' : ''}`}
-            title={groupByBrand ? 'Disable Group by Brand to arrange manually' : 'Drag bottles to reposition'}
-            disabled={groupByBrand}
+            onClick={() => !alphaMode && setArrange(v => !v)}
+            className={`px-3 py-1 rounded text-white ${arrange && !alphaMode ? 'bg-pink-700' : 'bg-black/70'} hover:opacity-90 ${alphaMode ? 'opacity-40 cursor-not-allowed' : ''}`}
+            title={alphaMode ? 'Disable A→Z to arrange manually' : 'Drag bottles to reposition'}
+            disabled={alphaMode}
           >
-            {arrange && !groupByBrand ? 'Done' : 'Arrange shelves'}
+            {arrange && !alphaMode ? 'Done' : 'Arrange shelves'}
           </button>
         </div>
 
-        {/* Brand labels for grouped view */}
-        {groupByBrand && groupedLayout?.labels?.map((lab) => {
+        {/* Brand labels (alpha mode) */}
+        {alphaMode && alphaLayout?.labels?.map((lab) => {
           const xPct = centersArr[Math.max(0, Math.min(centersArr.length - 1, lab.c))];
           const yPct = shelfRowY(lab.s, lab.r) - 3.0;
           return (
@@ -369,11 +385,11 @@ export default function StephanieBoutique() {
           );
         })}
 
-        {/* Optional guides */}
+        {/* Guides */}
         {showGuides && (
           <>
             {SHELF_TOP_Y.map((y, i) => (
-              <div key={`gy-${i}`} className="absolute left-0 right-0 border-t-2 border-pink-500/60" style={{ top: `${y}%` }} />
+              <div key={`gy-${i}`} className="absolute left-0 right-0 border-top border-t-2 border-pink-500/60" style={{ top: `${y}%` }} />
             ))}
             {SHELF_TOP_Y.flatMap((_, s) =>
               Array.from({ length: ROWS_PER_SHELF }, (_, r) => (
@@ -388,9 +404,12 @@ export default function StephanieBoutique() {
 
         {/* Bottles */}
         {toRender.map((it, idx) => {
-          const colIdx = groupByBrand ? (it._display_col ?? 0) : Math.max(0, Math.min(centersArr.length - 1, it.column_index ?? 0));
-          const shelfIdx = groupByBrand ? (it._display_shelf ?? SHELF_TOP_Y.length - 1) : Math.max(0, Math.min(SHELF_TOP_Y.length - 1, it.shelf_index ?? SHELF_TOP_Y.length - 1));
-          const rowIdx = groupByBrand ? (it._display_row ?? 0) : Math.max(0, Math.min(ROWS_PER_SHELF - 1, it.row_index ?? 0));
+          const colIdx = alphaMode ? (it._display_col ?? 0)
+                                   : Math.max(0, Math.min(centersArr.length - 1, it.column_index ?? 0));
+          const shelfIdx = alphaMode ? (it._display_shelf ?? SHELF_TOP_Y.length - 1)
+                                     : Math.max(0, Math.min(SHELF_TOP_Y.length - 1, it.shelf_index ?? SHELF_TOP_Y.length - 1));
+          const rowIdx   = alphaMode ? (it._display_row ?? 0)
+                                     : Math.max(0, Math.min(ROWS_PER_SHELF - 1, it.row_index ?? 0));
 
           const xPct = centersArr[Math.max(0, Math.min(centersArr.length - 1, colIdx))];
           const yPct = shelfRowY(shelfIdx, rowIdx);
@@ -398,15 +417,15 @@ export default function StephanieBoutique() {
 
           return (
             <div
-              key={it.linkId + (groupByBrand ? '-g' : '')}
-              className={`absolute ${(!groupByBrand && arrange) ? 'ring-1 ring-pink-400/50 rounded-md' : ''}`}
+              key={it.linkId + (alphaMode ? '-az' : '')}
+              className={`absolute ${(!alphaMode && arrange) ? 'ring-1 ring-pink-400/50 rounded-md' : ''}`}
               style={{
                 top: `${yPct}%`,
                 left: `${xPct}%`,
                 transform: 'translate(-50%, -100%)',
                 height: `${bH}px`,
                 pointerEvents: 'auto',
-                cursor: (!groupByBrand && arrange) ? 'grab' : 'pointer',
+                cursor: (!alphaMode && arrange) ? 'grab' : 'pointer',
                 zIndex: draggingThis ? 30 : 'auto',
               }}
               title={`${it.fragrance?.brand || ''} — ${it.fragrance?.name || ''}`}
