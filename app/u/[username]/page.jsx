@@ -10,6 +10,8 @@ const DEFAULT_H = 54;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
+const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
+const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
 const brandKey = (b) =>
@@ -25,9 +27,24 @@ const BRAND_LAYOUT_KEY = (username) => `fragrantique_layout_by_brand_${username}
 
 function loadLocal(username) {
   try {
-    const a = JSON.parse(localStorage.getItem(LAYOUT_KEY(username)) || '{}'); // {linkId:{x_pct,y_pct}}
-    const b = JSON.parse(localStorage.getItem(BRAND_LAYOUT_KEY(username)) || '{}'); // {brandKey:{x_pct,y_pct}}
-    return { byLink: a, byBrand: b };
+    const byLinkRaw = localStorage.getItem(LAYOUT_KEY(username));
+    const byBrandRaw = localStorage.getItem(BRAND_LAYOUT_KEY(username));
+    const byLinkObj = byLinkRaw ? JSON.parse(byLinkRaw) : {};
+    const byBrandObj = byBrandRaw ? JSON.parse(byBrandRaw) : {};
+    // coerce to numbers
+    for (const k in byLinkObj) {
+      const o = byLinkObj[k] || {};
+      o.x_pct = toNum(o.x_pct);
+      o.y_pct = toNum(o.y_pct);
+      byLinkObj[k] = o;
+    }
+    for (const k in byBrandObj) {
+      const o = byBrandObj[k] || {};
+      o.x_pct = toNum(o.x_pct);
+      o.y_pct = toNum(o.y_pct);
+      byBrandObj[k] = o;
+    }
+    return { byLink: byLinkObj, byBrand: byBrandObj };
   } catch {
     return { byLink: {}, byBrand: {} };
   }
@@ -62,6 +79,7 @@ export default function UserBoutiquePage({ params }) {
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [toast, setToast] = useState(null);
+  const [debug, setDebug] = useState(false);
 
   const [links, setLinks] = useState([]); // all user_fragrances rows + frag
   const [reps, setReps] = useState([]);   // one rep per brand
@@ -104,17 +122,18 @@ export default function UserBoutiquePage({ params }) {
         linkId: row.id,
         user_id: row.user_id,
         fragId: row.fragrance_id,
-        x_pct: row.x_pct,
-        y_pct: row.y_pct,
-        manual: row.manual,
+        x_pct: toNum(row.x_pct), // ← force numeric
+        y_pct: toNum(row.y_pct), // ← force numeric
+        manual: !!row.manual,
         frag: row.fragrance
       }));
 
       setLinks(mapped);
 
-      // Auto-enable arrange mode if ?edit=1
+      // Auto flags via querystring
       const qs = new URLSearchParams(window.location.search);
       if (qs.get('edit') === '1') setArrange(true);
+      if (qs.get('debug') === '1') setDebug(true);
 
       setLoading(false);
     })();
@@ -140,9 +159,9 @@ export default function UserBoutiquePage({ params }) {
       for (const it of chosen) {
         const fromLink = byLink?.[it.linkId];
         const fromBrand = byBrand?.[it.brandKey];
-        if (fromLink && typeof fromLink.x_pct === 'number' && typeof fromLink.y_pct === 'number') {
+        if (fromLink && isNum(fromLink.x_pct) && isNum(fromLink.y_pct)) {
           it.x_pct = fromLink.x_pct; it.y_pct = fromLink.y_pct;
-        } else if (fromBrand && typeof fromBrand.x_pct === 'number' && typeof fromBrand.y_pct === 'number') {
+        } else if (fromBrand && isNum(fromBrand.x_pct) && isNum(fromBrand.y_pct)) {
           it.x_pct = fromBrand.x_pct; it.y_pct = fromBrand.y_pct;
         }
       }
@@ -173,8 +192,8 @@ export default function UserBoutiquePage({ params }) {
     const pointerX = (e.touches ? e.touches[0].clientX : e.clientX);
     const pointerY = (e.touches ? e.touches[0].clientY : e.clientY);
 
-    const currentXPct = (itm.x_pct ?? 50);
-    const currentYPct = (itm.y_pct ?? 80);
+    const currentXPct = isNum(itm.x_pct) ? itm.x_pct : 50;
+    const currentYPct = isNum(itm.y_pct) ? itm.y_pct : 80;
 
     dragRef.current = {
       id: itm.linkId,
@@ -234,20 +253,16 @@ export default function UserBoutiquePage({ params }) {
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
       .eq('id', id);
 
-    // 2) Always mirror to localStorage by linkId and by brandKey
+    // 2) Always mirror to localStorage by linkId and by brandKey (coerce to number)
     try {
       const { byLink, byBrand } = loadLocal(username);
-      const nextByLink = { ...byLink, [id]: { x_pct: itm.x_pct, y_pct: itm.y_pct } };
-      const nextByBrand = { ...byBrand, [bk]: { x_pct: itm.x_pct, y_pct: itm.y_pct } };
+      const nextByLink = { ...byLink, [id]: { x_pct: Number(itm.x_pct), y_pct: Number(itm.y_pct) } };
+      const nextByBrand = { ...byBrand, [bk]: { x_pct: Number(itm.x_pct), y_pct: Number(itm.y_pct) } };
       saveLocal(username, { byLink: nextByLink, byBrand: nextByBrand });
     } catch {}
 
     // Toast
-    if (error) {
-      setToast('Saved locally (not in database). Make sure you are signed in.');
-    } else {
-      setToast('Saved!');
-    }
+    setToast(error ? 'Saved locally (not in database).' : 'Saved!');
     setTimeout(() => setToast(null), 1600);
   }
 
@@ -257,7 +272,7 @@ export default function UserBoutiquePage({ params }) {
     const missing = [];
 
     for (const it of reps) {
-      if (typeof it.x_pct === 'number' && typeof it.y_pct === 'number') withPos.push(it);
+      if (isNum(it.x_pct) && isNum(it.y_pct)) withPos.push(it);
       else missing.push(it);
     }
 
@@ -309,6 +324,13 @@ export default function UserBoutiquePage({ params }) {
           >
             Guides
           </button>
+          <button
+            onClick={() => setDebug(d => !d)}
+            className="px-3 py-1 rounded bg-black/50 text-white hover:opacity-90"
+            title="Toggle debug labels"
+          >
+            Debug
+          </button>
         </div>
 
         {/* Toast */}
@@ -325,8 +347,8 @@ export default function UserBoutiquePage({ params }) {
 
         {/* One bottle per brand (drag in arrange mode; click in view mode) */}
         {placedReps.map((it) => {
-          const topPct = clamp(it.y_pct ?? 80, 0, 100);
-          const leftPct = clamp(it.x_pct ?? 50, 0, 100);
+          const topPct = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
+          const leftPct = clamp(isNum(it.x_pct) ? it.x_pct : 50, 0, 100);
           const href = `/u/${encodeURIComponent(username)}/brand/${brandKey(it.brand)}`;
 
           const wrapperStyle = {
@@ -380,6 +402,13 @@ export default function UserBoutiquePage({ params }) {
             </div>
           );
 
+          // Optional debug tag (linkId + coords)
+          const DebugTag = debug ? (
+            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] bg-pink-600 text-white px-1.5 py-0.5 rounded pointer-events-none">
+              {it.linkId.slice(0, 6)} · {Math.round((it.x_pct ?? 0) * 10) / 10}% , {Math.round((it.y_pct ?? 0) * 10) / 10}%
+            </div>
+          ) : null;
+
           return arrange ? (
             <div
               key={it.linkId}
@@ -391,6 +420,7 @@ export default function UserBoutiquePage({ params }) {
             >
               {Bottle}
               {HoverLabel}
+              {DebugTag}
             </div>
           ) : (
             <Link
@@ -403,6 +433,7 @@ export default function UserBoutiquePage({ params }) {
             >
               {Bottle}
               {HoverLabel}
+              {DebugTag}
             </Link>
           );
         })}
