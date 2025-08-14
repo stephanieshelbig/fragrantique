@@ -31,7 +31,6 @@ function loadLocal(username) {
     const byBrandRaw = localStorage.getItem(BRAND_LAYOUT_KEY(username));
     const byLinkObj = byLinkRaw ? JSON.parse(byLinkRaw) : {};
     const byBrandObj = byBrandRaw ? JSON.parse(byBrandRaw) : {};
-    // coerce to numbers
     for (const k in byLinkObj) {
       const o = byLinkObj[k] || {};
       o.x_pct = toNum(o.x_pct);
@@ -56,11 +55,6 @@ function saveLocal(username, { byLink, byBrand }) {
   } catch {}
 }
 
-/** Representative priority:
- *  1) manual=true (means you dragged it once)
- *  2) has transparent image
- *  3) shortest name
- */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const manual = list.filter(it => it.manual);
@@ -79,67 +73,66 @@ export default function UserBoutiquePage({ params }) {
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [toast, setToast] = useState(null);
-  const [debug, setDebug] = useState(false);
+  const [status, setStatus] = useState(null); // shows last DB save result
 
-  const [links, setLinks] = useState([]); // all user_fragrances rows + frag
-  const [reps, setReps] = useState([]);   // one rep per brand
+  const [links, setLinks] = useState([]);
+  const [reps, setReps] = useState([]);
 
   const rootRef = useRef(null);
+  const lastSavedRef = useRef(null); // remember last saved coords for status display
 
   // Load shelves
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
+  async function loadData() {
+    setLoading(true);
+    setStatus(null);
 
-      // find profile id by username
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .eq('username', username)
-        .maybeSingle();
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .eq('username', username)
+      .maybeSingle();
 
-      if (!prof?.id) {
-        setLinks([]);
-        setReps([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data } = await supabase
-        .from('user_fragrances')
-        .select(`
-          id,
-          user_id,
-          fragrance_id,
-          x_pct,
-          y_pct,
-          manual,
-          fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
-        `)
-        .eq('user_id', prof.id);
-
-      const mapped = (data || []).map(row => ({
-        linkId: row.id,
-        user_id: row.user_id,
-        fragId: row.fragrance_id,
-        x_pct: toNum(row.x_pct), // ← force numeric
-        y_pct: toNum(row.y_pct), // ← force numeric
-        manual: !!row.manual,
-        frag: row.fragrance
-      }));
-
-      setLinks(mapped);
-
-      // Auto flags via querystring
-      const qs = new URLSearchParams(window.location.search);
-      if (qs.get('edit') === '1') setArrange(true);
-      if (qs.get('debug') === '1') setDebug(true);
-
+    if (!prof?.id) {
+      setLinks([]);
+      setReps([]);
       setLoading(false);
-    })();
-  }, [username]);
+      return;
+    }
 
-  // Reduce to ONE representative per brand
+    const { data } = await supabase
+      .from('user_fragrances')
+      .select(`
+        id,
+        user_id,
+        fragrance_id,
+        x_pct,
+        y_pct,
+        manual,
+        fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
+      `)
+      .eq('user_id', prof.id);
+
+    const mapped = (data || []).map(row => ({
+      linkId: row.id,
+      user_id: row.user_id,
+      fragId: row.fragrance_id,
+      x_pct: toNum(row.x_pct),
+      y_pct: toNum(row.y_pct),
+      manual: !!row.manual,
+      frag: row.fragrance
+    }));
+
+    setLinks(mapped);
+
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.get('edit') === '1') setArrange(true);
+
+    setLoading(false);
+  }
+
+  useEffect(() => { loadData(); }, [username]);
+
+  // Reduce to one rep per brand and merge local saved coords
   useEffect(() => {
     const byBrand = new Map();
     for (const it of links) {
@@ -153,7 +146,6 @@ export default function UserBoutiquePage({ params }) {
       return rep ? { ...rep, brand: rep.frag?.brand || 'Unknown', brandKey: bk } : null;
     }).filter(Boolean);
 
-    // apply saved local positions (by link first; fallback by brand)
     try {
       const { byLink, byBrand } = loadLocal(username);
       for (const it of chosen) {
@@ -167,9 +159,7 @@ export default function UserBoutiquePage({ params }) {
       }
     } catch {}
 
-    // sort brands A→Z
     chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-
     setReps(chosen);
   }, [links, username]);
 
@@ -247,13 +237,16 @@ export default function UserBoutiquePage({ params }) {
     const itm = reps.find(i => i.linkId === id);
     if (!itm) return;
 
-    // 1) Try to persist in Supabase (requires being signed in + RLS allowing update)
+    setStatus('Saving…');
+    lastSavedRef.current = { id, x: Number(itm.x_pct), y: Number(itm.y_pct) };
+
+    // 1) Try to persist in Supabase
     const { error } = await supabase
       .from('user_fragrances')
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
       .eq('id', id);
 
-    // 2) Always mirror to localStorage by linkId and by brandKey (coerce to number)
+    // 2) Mirror to localStorage (always)
     try {
       const { byLink, byBrand } = loadLocal(username);
       const nextByLink = { ...byLink, [id]: { x_pct: Number(itm.x_pct), y_pct: Number(itm.y_pct) } };
@@ -261,9 +254,14 @@ export default function UserBoutiquePage({ params }) {
       saveLocal(username, { byLink: nextByLink, byBrand: nextByBrand });
     } catch {}
 
-    // Toast
-    setToast(error ? 'Saved locally (not in database).' : 'Saved!');
-    setTimeout(() => setToast(null), 1600);
+    if (error) {
+      setStatus(`DB blocked: ${error.message || 'RLS/permission'}. Saved locally.`);
+      setToast('Saved locally (not in database).');
+    } else {
+      setStatus('DB saved ✓');
+      setToast('Saved!');
+    }
+    setTimeout(() => setToast(null), 1500);
   }
 
   // Provide defaults for reps without any position
@@ -308,7 +306,7 @@ export default function UserBoutiquePage({ params }) {
         />
 
         {/* Controls */}
-        <div className="absolute right-4 top-4 z-20 flex gap-2">
+        <div className="absolute right-4 top-4 z-20 flex gap-2 items-center">
           <button
             onClick={() => setArrange(a => !a)}
             className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
@@ -324,13 +322,26 @@ export default function UserBoutiquePage({ params }) {
           >
             Guides
           </button>
-          <button
-            onClick={() => setDebug(d => !d)}
-            className="px-3 py-1 rounded bg-black/50 text-white hover:opacity-90"
-            title="Toggle debug labels"
-          >
-            Debug
-          </button>
+
+          {arrange && (
+            <>
+              <button
+                onClick={loadData}
+                className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
+                title="Reload from database"
+              >
+                Reload DB
+              </button>
+              {status && (
+                <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
+                  {status}
+                  {lastSavedRef.current && (
+                    <> · x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
+                  )}
+                </span>
+              )}
+            </>
+          )}
         </div>
 
         {/* Toast */}
@@ -340,12 +351,12 @@ export default function UserBoutiquePage({ params }) {
           </div>
         )}
 
-        {/* Optional shelf guides (toggle) */}
+        {/* Optional shelf guides */}
         {showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
-        {/* One bottle per brand (drag in arrange mode; click in view mode) */}
+        {/* One bottle per brand */}
         {placedReps.map((it) => {
           const topPct = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
           const leftPct = clamp(isNum(it.x_pct) ? it.x_pct : 50, 0, 100);
@@ -386,7 +397,6 @@ export default function UserBoutiquePage({ params }) {
             />
           );
 
-          // Hover-only brand label
           const HoverLabel = (
             <div
               className="
@@ -402,13 +412,6 @@ export default function UserBoutiquePage({ params }) {
             </div>
           );
 
-          // Optional debug tag (linkId + coords)
-          const DebugTag = debug ? (
-            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] bg-pink-600 text-white px-1.5 py-0.5 rounded pointer-events-none">
-              {it.linkId.slice(0, 6)} · {Math.round((it.x_pct ?? 0) * 10) / 10}% , {Math.round((it.y_pct ?? 0) * 10) / 10}%
-            </div>
-          ) : null;
-
           return arrange ? (
             <div
               key={it.linkId}
@@ -420,7 +423,6 @@ export default function UserBoutiquePage({ params }) {
             >
               {Bottle}
               {HoverLabel}
-              {DebugTag}
             </div>
           ) : (
             <Link
@@ -433,7 +435,6 @@ export default function UserBoutiquePage({ params }) {
             >
               {Bottle}
               {HoverLabel}
-              {DebugTag}
             </Link>
           );
         })}
