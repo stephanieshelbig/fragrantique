@@ -5,22 +5,25 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-/** Config **********************************************************/
-const CANVAS_ASPECT = '3 / 2';   // matches your background image
-const DEFAULT_H = 54;            // bottle height in pixels
+const CANVAS_ASPECT = '3 / 2';
+const DEFAULT_H = 54;
 const SHOW_LABELS = true;
 
-/* utils ************************************************************/
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
+const slugifyBrand = (b) =>
+  (b || 'unknown')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
-/** Choose ONE representative per brand *****************************
- * Priority:
- *  1) already placed manually (manual=true) → keeps your chosen rep
+/** Priority for brand representative:
+ *  1) already placed manually (manual=true)
  *  2) has transparent image
  *  3) shortest name
- ********************************************************************/
+ */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const manual = list.filter(it => it.manual);
@@ -33,29 +36,27 @@ function chooseRepForBrand(list) {
 }
 
 export default function UserBoutiquePage({ params }) {
-  const username = decodeURIComponent(params.username); // e.g., "stephanie"
+  const username = decodeURIComponent(params.username);
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
-  // Arrange is **always shown** now
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
-  const [toast, setToast] = useState(null); // small status message
+  const [toast, setToast] = useState(null);
 
-  // all links (user_fragrances joined with fragrances)
+  // all user links (we will reduce to one per brand)
   const [links, setLinks] = useState([]);
-  // representatives after grouping by brand (what we actually render)
+  // chosen representatives (one per brand)
   const [reps, setReps] = useState([]);
 
   const rootRef = useRef(null);
 
-  /** Load profile + links ****************************************************/
+  // Load profile + links
   useEffect(() => {
     (async () => {
       setLoading(true);
 
-      // 1) profile
       const { data: prof } = await supabase
         .from('profiles')
         .select('id, username, email')
@@ -65,7 +66,6 @@ export default function UserBoutiquePage({ params }) {
       if (!prof?.id) { setProfile(null); setLinks([]); setLoading(false); return; }
       setProfile(prof);
 
-      // 2) links + fragrance info
       const { data } = await supabase
         .from('user_fragrances')
         .select(`
@@ -81,10 +81,10 @@ export default function UserBoutiquePage({ params }) {
       const mapped = (data || []).map(row => ({
         linkId: row.id,
         fragId: row.fragrance_id,
-        x_pct: row.x_pct,       // may be null
+        x_pct: row.x_pct,
         y_pct: row.y_pct,
-        manual: row.manual,     // marks “chosen/placed”
-        frag: row.fragrance,    // {id, brand, name, ...}
+        manual: row.manual,
+        frag: row.fragrance,
       }));
 
       setLinks(mapped);
@@ -97,7 +97,7 @@ export default function UserBoutiquePage({ params }) {
     })();
   }, [username]);
 
-  /** Collapse to ONE rep per brand *******************************************/
+  // Reduce to ONE representative per brand
   useEffect(() => {
     const byBrand = new Map();
     for (const it of links) {
@@ -105,15 +105,16 @@ export default function UserBoutiquePage({ params }) {
       if (!byBrand.has(brand)) byBrand.set(brand, []);
       byBrand.get(brand).push(it);
     }
+
     const chosen = Array.from(byBrand.entries()).map(([brand, list]) => {
       const rep = chooseRepForBrand(list);
       return rep ? { ...rep, brand } : null;
     }).filter(Boolean);
 
-    // Sort alphabetically by brand
+    // sort A→Z by brand
     chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
 
-    // Apply any localStorage overrides (fallback if DB save is blocked)
+    // Merge any localStorage positions (fallback if DB update blocked)
     try {
       const key = `fragrantique_layout_${username}`;
       const raw = localStorage.getItem(key);
@@ -132,7 +133,7 @@ export default function UserBoutiquePage({ params }) {
     setReps(chosen);
   }, [links, username]);
 
-  /** Dragging ***************************************************************/
+  // drag support (Arrange mode)
   const dragRef = useRef(null);
 
   function startDrag(e, itm) {
@@ -140,7 +141,6 @@ export default function UserBoutiquePage({ params }) {
     const container = rootRef.current;
     if (!container) return;
 
-    // capture pointer for reliable dragging
     if (e.currentTarget.setPointerCapture && e.pointerId != null) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     }
@@ -203,41 +203,28 @@ export default function UserBoutiquePage({ params }) {
     const itm = reps.find(i => i.linkId === id);
     if (!itm) return;
 
-    // Try to save to Supabase
     const { error } = await supabase
       .from('user_fragrances')
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
       .eq('id', id);
 
-    // If DB blocked, persist to localStorage as a fallback
+    // localStorage mirror / fallback
+    try {
+      const key = `fragrantique_layout_${username}`;
+      const raw = localStorage.getItem(key);
+      const obj = raw ? JSON.parse(raw) : {};
+      obj[id] = { x_pct: itm.x_pct, y_pct: itm.y_pct };
+      localStorage.setItem(key, JSON.stringify(obj));
+    } catch {}
+
     if (error) {
-      try {
-        const key = `fragrantique_layout_${username}`;
-        const raw = localStorage.getItem(key);
-        const obj = raw ? JSON.parse(raw) : {};
-        obj[id] = { x_pct: itm.x_pct, y_pct: itm.y_pct };
-        localStorage.setItem(key, JSON.stringify(obj));
-        setToast('Saved locally (not in DB).');
-        setTimeout(() => setToast(null), 2000);
-      } catch {
-        setToast('Could not save.');
-        setTimeout(() => setToast(null), 2000);
-      }
+      setToast('Saved locally (DB blocked).'); setTimeout(() => setToast(null), 2000);
     } else {
-      // Also mirror to localStorage so it loads faster next time
-      try {
-        const key = `fragrantique_layout_${username}`;
-        const raw = localStorage.getItem(key);
-        const obj = raw ? JSON.parse(raw) : {};
-        obj[id] = { x_pct: itm.x_pct, y_pct: itm.y_pct };
-        localStorage.setItem(key, JSON.stringify(obj));
-      } catch {}
-      setToast('Saved!');
-      setTimeout(() => setToast(null), 1200);
+      setToast('Saved!'); setTimeout(() => setToast(null), 1200);
     }
   }
 
-  /** Provide default positions for reps missing coords ***********************/
+  // Provide temporary defaults for missing coords
   const placedReps = useMemo(() => {
     const withPos = [];
     const missing = [];
@@ -249,7 +236,7 @@ export default function UserBoutiquePage({ params }) {
 
     if (!missing.length) return withPos;
 
-    // Scatter missing reps along bottom rows (you can drag into place)
+    // scatter along bottom rows (you’ll drag into place)
     const cols = 14;
     const startY = 86;
     const rowPitch = 6;
@@ -308,21 +295,24 @@ export default function UserBoutiquePage({ params }) {
           </div>
         )}
 
-        {/* Optional guides: your shelf red-lines */}
+        {/* Optional shelf guides */}
         {showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
-        {/* ONE bottle per brand (draggable anytime when Arrange is on) */}
+        {/* ONE rep bottle per brand */}
         {placedReps.map((it) => {
           const topPct = clamp(it.y_pct ?? 80, 0, 100);
           const leftPct = clamp(it.x_pct ?? 50, 0, 100);
           const canDrag = arrange;
+          const brandSlug = slugifyBrand(it.brand);
 
           return (
-            <div
+            <Link
               key={it.linkId}
-              className={`absolute select-none ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+              prefetch={false}
+              href={canDrag ? '#' : `/u/${encodeURIComponent(username)}/brand/${brandSlug}`}
+              className={`absolute select-none ${canDrag ? 'pointer-events-none' : 'cursor-pointer'}`}
               style={{
                 top: `${topPct}%`,
                 left: `${leftPct}%`,
@@ -331,11 +321,7 @@ export default function UserBoutiquePage({ params }) {
               }}
               onPointerDown={(e) => startDrag(e, it)}
               onTouchStart={(e) => startDrag(e, it)}
-              title={`${it.frag?.brand || ''} ${it.frag?.name || ''}`}
-              onClick={() => {
-                if (canDrag) return; // don't navigate while arranging
-                if (it.fragId) window.location.href = `/fragrance/${it.fragId}`;
-              }}
+              title={`${it.frag?.brand || ''} — view all`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -347,7 +333,7 @@ export default function UserBoutiquePage({ params }) {
                   width: 'auto',
                   mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
-                  opacity: canDrag ? 0.95 : 1,
+                  opacity: canDrag ? 0.9 : 1,
                 }}
                 draggable={false}
                 onError={(e) => {
@@ -360,17 +346,17 @@ export default function UserBoutiquePage({ params }) {
               />
               {SHOW_LABELS && (
                 <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
-                  {it.brand || ''}{it.frag?.name ? ` — ${it.frag.name}` : ''}
+                  {it.brand}
                 </div>
               )}
-            </div>
+            </Link>
           );
         })}
       </div>
 
       <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
         Viewing <span className="font-medium">@{username}</span> boutique — one bottle per brand
-        {arrange ? ' · arranging (changes save to DB if allowed, else locally)' : ''}
+        {arrange ? ' · arranging (saves to DB if allowed, else locally)' : ''}
       </div>
     </div>
   );
