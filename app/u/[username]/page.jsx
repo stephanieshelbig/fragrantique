@@ -36,13 +36,12 @@ export default function UserBoutiquePage({ params }) {
   const username = decodeURIComponent(params.username); // e.g., "stephanie"
 
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
 
-  // 👇 Arrange is available for any signed-in user (no owner check)
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  // Arrange is **always shown** now
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
+  const [toast, setToast] = useState(null); // small status message
 
   // all links (user_fragrances joined with fragrances)
   const [links, setLinks] = useState([]);
@@ -50,19 +49,6 @@ export default function UserBoutiquePage({ params }) {
   const [reps, setReps] = useState([]);
 
   const rootRef = useRef(null);
-
-  /** Load session (decide if Arrange button should show) *********************/
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session || null);
-      setIsSignedIn(!!data.session?.user?.id);
-    });
-    const sub = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s?.session || null);
-      setIsSignedIn(!!s?.session?.user?.id);
-    });
-    return () => sub.data.subscription.unsubscribe();
-  }, []);
 
   /** Load profile + links ****************************************************/
   useEffect(() => {
@@ -103,13 +89,13 @@ export default function UserBoutiquePage({ params }) {
 
       setLinks(mapped);
 
-      // Auto-enable arrange if ?edit=1 AND you are signed in
+      // Auto-enable arrange if ?edit=1
       const qs = new URLSearchParams(window.location.search);
-      if (qs.get('edit') === '1' && isSignedIn) setArrange(true);
+      if (qs.get('edit') === '1') setArrange(true);
 
       setLoading(false);
     })();
-  }, [username, isSignedIn]);
+  }, [username]);
 
   /** Collapse to ONE rep per brand *******************************************/
   useEffect(() => {
@@ -126,14 +112,31 @@ export default function UserBoutiquePage({ params }) {
 
     // Sort alphabetically by brand
     chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+
+    // Apply any localStorage overrides (fallback if DB save is blocked)
+    try {
+      const key = `fragrantique_layout_${username}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const saved = JSON.parse(raw); // { [linkId]: {x_pct,y_pct} }
+        chosen.forEach(it => {
+          const ov = saved[it.linkId];
+          if (ov && typeof ov.x_pct === 'number' && typeof ov.y_pct === 'number') {
+            it.x_pct = ov.x_pct;
+            it.y_pct = ov.y_pct;
+          }
+        });
+      }
+    } catch {}
+
     setReps(chosen);
-  }, [links]);
+  }, [links, username]);
 
   /** Dragging ***************************************************************/
   const dragRef = useRef(null);
 
   function startDrag(e, itm) {
-    if (!arrange || !isSignedIn) return;
+    if (!arrange) return;
     const container = rootRef.current;
     if (!container) return;
 
@@ -200,11 +203,38 @@ export default function UserBoutiquePage({ params }) {
     const itm = reps.find(i => i.linkId === id);
     if (!itm) return;
 
-    // Save to Supabase — will succeed only if your RLS allows this user to update the row
-    await supabase
+    // Try to save to Supabase
+    const { error } = await supabase
       .from('user_fragrances')
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
       .eq('id', id);
+
+    // If DB blocked, persist to localStorage as a fallback
+    if (error) {
+      try {
+        const key = `fragrantique_layout_${username}`;
+        const raw = localStorage.getItem(key);
+        const obj = raw ? JSON.parse(raw) : {};
+        obj[id] = { x_pct: itm.x_pct, y_pct: itm.y_pct };
+        localStorage.setItem(key, JSON.stringify(obj));
+        setToast('Saved locally (not in DB).');
+        setTimeout(() => setToast(null), 2000);
+      } catch {
+        setToast('Could not save.');
+        setTimeout(() => setToast(null), 2000);
+      }
+    } else {
+      // Also mirror to localStorage so it loads faster next time
+      try {
+        const key = `fragrantique_layout_${username}`;
+        const raw = localStorage.getItem(key);
+        const obj = raw ? JSON.parse(raw) : {};
+        obj[id] = { x_pct: itm.x_pct, y_pct: itm.y_pct };
+        localStorage.setItem(key, JSON.stringify(obj));
+      } catch {}
+      setToast('Saved!');
+      setTimeout(() => setToast(null), 1200);
+    }
   }
 
   /** Provide default positions for reps missing coords ***********************/
@@ -253,15 +283,13 @@ export default function UserBoutiquePage({ params }) {
 
         {/* Controls */}
         <div className="absolute right-4 top-4 z-20 flex gap-2">
-          {isSignedIn && (
-            <button
-              onClick={() => setArrange(a => !a)}
-              className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
-              title="Toggle arrange mode"
-            >
-              {arrange ? 'Arranging… (drag)' : 'Arrange'}
-            </button>
-          )}
+          <button
+            onClick={() => setArrange(a => !a)}
+            className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
+            title="Toggle arrange mode"
+          >
+            {arrange ? 'Arranging… (drag)' : 'Arrange'}
+          </button>
           <Link href="/brand" className="px-3 py-1 rounded bg-black/70 text-white hover:opacity-90">
             Brand index
           </Link>
@@ -273,16 +301,23 @@ export default function UserBoutiquePage({ params }) {
           </button>
         </div>
 
+        {/* Toast */}
+        {toast && (
+          <div className="absolute left-1/2 top-4 -translate-x-1/2 z-20 px-3 py-1 rounded bg-black/70 text-white text-sm">
+            {toast}
+          </div>
+        )}
+
         {/* Optional guides: your shelf red-lines */}
         {showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
-        {/* ONE bottle per brand (draggable if signed in) */}
+        {/* ONE bottle per brand (draggable anytime when Arrange is on) */}
         {placedReps.map((it) => {
           const topPct = clamp(it.y_pct ?? 80, 0, 100);
           const leftPct = clamp(it.x_pct ?? 50, 0, 100);
-          const canDrag = arrange && isSignedIn;
+          const canDrag = arrange;
 
           return (
             <div
@@ -335,7 +370,7 @@ export default function UserBoutiquePage({ params }) {
 
       <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
         Viewing <span className="font-medium">@{username}</span> boutique — one bottle per brand
-        {isSignedIn ? ' · drag anywhere to arrange' : ''}
+        {arrange ? ' · arranging (changes save to DB if allowed, else locally)' : ''}
       </div>
     </div>
   );
