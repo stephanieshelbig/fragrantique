@@ -43,7 +43,11 @@ function yForShelfRow(shelfIdx) {
 
 /* Helpers */
 function slugifyBrand(b) {
-  return (b || 'unknown').toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  return (b || 'unknown')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 function bottleSrc(f) {
   const best = f?.image_url_transparent || f?.image_url;
@@ -57,7 +61,7 @@ function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const withTransparent = list.filter(x => !!x.fragrance?.image_url_transparent);
   const pool = withTransparent.length ? withTransparent : list;
-  return pool.sort((a,b) => (a.fragrance?.name||'').length - (b.fragrance?.name||'').length)[0];
+  return pool.sort((a, b) => (a.fragrance?.name || '').length - (b.fragrance?.name || '').length)[0];
 }
 
 /* Alphabetical brand layout: top shelves first, left→right */
@@ -92,43 +96,52 @@ export default function StephanieBrandShelves() {
   // load your collection and collapse to one per brand
   useEffect(() => {
     (async () => {
-      const { data: prof } = await supabase
+      setLoading(true);
+
+      // 1) get Stephanie's profile id
+      const { data: prof, error: pErr } = await supabase
         .from('profiles')
         .select('id')
         .eq('username', 'stephanie')
         .single();
-      if (!prof) { setLoading(false); return; }
 
-      const { data } = await supabase
+      if (pErr || !prof) { setBrandReps([]); setLoading(false); return; }
+
+      // 2) get her linked fragrances (JOIN)  🔧 FIXED: remove extra ")"
+      const { data, error } = await supabase
         .from('user_fragrances')
-        .select('id, fragrance:fragrances(id, brand, name, image_url, image_url_transparent, updated_at, created_at))')
+        .select('id, fragrance:fragrances(id, brand, name, image_url, image_url_transparent, updated_at, created_at)')
         .eq('user_id', prof.id);
 
-      // group by brand
+      if (error) {
+        console.error('Supabase error loading user_fragrances:', error.message);
+        setBrandReps([]);
+        setLoading(false);
+        return;
+      }
+
+      // 3) group by brand
       const byBrand = new Map();
       for (const row of (data || [])) {
-        const brand = (row.fragrance?.brand || 'Unknown').trim();
+        const brand = (row?.fragrance?.brand || 'Unknown').trim();
         if (!byBrand.has(brand)) byBrand.set(brand, []);
         byBrand.get(brand).push(row);
       }
 
-      // pick a representative per brand
-      const reps = Array.from(byBrand.entries()).map(([brand, list]) => ({
-        brand,
-        rep: chooseRepForBrand(list)
-      }));
+      // 4) pick a representative per brand
+      const reps = Array.from(byBrand.entries())
+        .map(([brand, list]) => ({ brand, rep: chooseRepForBrand(list) }))
+        .filter(x => !!x.rep);
 
-      // sort A→Z by brand
-      reps.sort((a,b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+      // 5) sort A→Z by brand
+      reps.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
 
       setBrandReps(reps);
       setLoading(false);
     })();
   }, []);
 
-  const placed = useMemo(() => {
-    return layoutBrandRepresentatives(brandReps, cols);
-  }, [brandReps, cols]);
+  const placed = useMemo(() => layoutBrandRepresentatives(brandReps, cols), [brandReps, cols]);
 
   if (loading) return <div className="p-6">Loading your boutique…</div>;
 
@@ -142,6 +155,11 @@ export default function StephanieBrandShelves() {
           style={{ objectFit: 'cover' }}
           priority
         />
+
+        {/* Small debug pill so you can see counts on the page */}
+        <div className="absolute left-4 top-4 z-20 px-2 py-0.5 rounded bg-black/60 text-white text-xs">
+          {brandReps.length} brands · {cols} cols
+        </div>
 
         {/* Controls */}
         <div className="absolute right-4 top-4 z-20 flex gap-2">
@@ -168,7 +186,8 @@ export default function StephanieBrandShelves() {
           const brand = b.brand;
           if (!repFrag) return null;
 
-          const xPct = xCenters[Math.max(0, Math.min(xCenters.length - 1, b._display_col || 0))];
+          const xCentersIdx = Math.max(0, Math.min(xCenters.length - 1, b._display_col || 0));
+          const xPct = xCenters[xCentersIdx];
           const yPct = yForShelfRow(b._display_shelf || 0);
 
           const to = `/brand/${slugifyBrand(brand)}`;
@@ -186,7 +205,6 @@ export default function StephanieBrandShelves() {
               }}
               title={`${brand} — view collection`}
             >
-              {/* Bottle */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bottleSrc(repFrag)}
@@ -207,7 +225,6 @@ export default function StephanieBrandShelves() {
                   }
                 }}
               />
-              {/* Brand label */}
               <div
                 className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur"
                 title={brand}
@@ -217,6 +234,15 @@ export default function StephanieBrandShelves() {
             </Link>
           );
         })}
+
+        {/* If nothing rendered, show a gentle prompt */}
+        {placed.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="px-4 py-2 rounded bg-black/60 text-white text-sm">
+              No brand representatives found. Try the Brand index or the Import tools.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
