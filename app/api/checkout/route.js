@@ -6,7 +6,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
-// tiny helper so we ALWAYS return JSON
 function json(data, status = 200) {
   return new NextResponse(JSON.stringify(data), {
     status,
@@ -14,7 +13,7 @@ function json(data, status = 200) {
   });
 }
 
-// Health-check / easy debugging in browser
+// Simple GET for sanity checking in the browser
 export async function GET() {
   return json({ ok: true, route: '/api/checkout', expect: 'POST with { decantId }' });
 }
@@ -41,7 +40,6 @@ export async function POST(req) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Load decant & fragrance
     const { data: d, error: dErr } = await supabase
       .from('decants')
       .select('id, fragrance_id, size_ml, price_cents, quantity, is_active, fragrance:fragrances(id, brand, name)')
@@ -53,7 +51,7 @@ export async function POST(req) {
     if (!d.is_active || d.quantity === 0) return json({ error: 'Out of stock' }, 400);
 
     const basePrice = d.price_cents;
-    const fee = Math.max(0, Math.round(basePrice * 0.05));
+    const fee = Math.max(0, Math.round(basePrice * 0.05)); // 5% fee
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
