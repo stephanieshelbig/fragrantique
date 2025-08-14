@@ -5,15 +5,25 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-const CANVAS_ASPECT = '3 / 2';
-const DEFAULT_H = 54;
+/**
+ * Brand-positioned boutique:
+ * - One bottle per brand, draggable anywhere.
+ * - Saves (user, brand_key) -> x_pct, y_pct to user_brand_positions.
+ * - On load, reads DB positions; if missing, falls back to localStorage.
+ * - Never overwrites DB values with older local values.
+ */
 
+const CANVAS_ASPECT = '3 / 2';   // matches your background aspect
+const DEFAULT_H = 54;            // bottle render height in px
+
+// Helpers
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
 const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
 const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
+// Normalize brand -> key (stable)
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -22,33 +32,26 @@ const brandKey = (b) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-const LS_LINK = (u) => `fragrantique_layout_${u}`;
+// LocalStorage (fallback only)
 const LS_BRAND = (u) => `fragrantique_layout_by_brand_${u}`;
-
-function loadLocal(username) {
+function loadLocalBrand(username) {
   try {
-    const byLink = JSON.parse(localStorage.getItem(LS_LINK(username)) || '{}');
-    const byBrand = JSON.parse(localStorage.getItem(LS_BRAND(username)) || '{}');
-    for (const k in byLink) {
-      byLink[k].x_pct = toNum(byLink[k].x_pct);
-      byLink[k].y_pct = toNum(byLink[k].y_pct);
+    const obj = JSON.parse(localStorage.getItem(LS_BRAND(username)) || '{}');
+    for (const k in obj) {
+      obj[k].x_pct = toNum(obj[k].x_pct);
+      obj[k].y_pct = toNum(obj[k].y_pct);
     }
-    for (const k in byBrand) {
-      byBrand[k].x_pct = toNum(byBrand[k].x_pct);
-      byBrand[k].y_pct = toNum(byBrand[k].y_pct);
-    }
-    return { byLink, byBrand };
-  } catch { return { byLink: {}, byBrand: {} }; }
+    return obj;
+  } catch {
+    return {};
+  }
 }
-function saveLocal(username, { byLink, byBrand }) {
-  try {
-    if (byLink) localStorage.setItem(LS_LINK(username), JSON.stringify(byLink));
-    if (byBrand) localStorage.setItem(LS_BRAND(username), JSON.stringify(byBrand));
-  } catch {}
+function saveLocalBrand(username, mapObj) {
+  try { localStorage.setItem(LS_BRAND(username), JSON.stringify(mapObj)); } catch {}
 }
 
-/** Choose which bottle represents a brand:
- * 1) manual=true   2) has transparent image   3) shortest name
+/** Choose brand representative:
+ *  1) manual=true   2) has transparent image   3) shortest name
  */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
@@ -67,24 +70,23 @@ export default function UserBoutiquePage({ params }) {
   const [loading, setLoading] = useState(true);
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
-  const [status, setStatus] = useState(null);
-  const [dbOnly, setDbOnly] = useState(false);
+  const [status, setStatus] = useState(null); // shows last save result
 
   const [profileId, setProfileId] = useState(null);
-  const [links, setLinks] = useState([]);  // user_fragrances + fragrance
-  const [brandPos, setBrandPos] = useState(new Map()); // brand_key -> {x_pct,y_pct}
-  const [reps, setReps] = useState([]);    // one per brand
+  const [links, setLinks] = useState([]);          // user_fragrances + fragrance
+  const [dbPositions, setDbPositions] = useState({}); // {brandKey: {x_pct,y_pct}}
+  const [localBrand, setLocalBrand] = useState({});   // fallback only
 
   const rootRef = useRef(null);
   const dragRef = useRef(null);
   const lastSavedRef = useRef(null);
 
-  async function loadData({ ignoreLocal = false } = {}) {
+  // 1) Load data from DB (profile, links, brand positions)
+  async function loadData() {
     setLoading(true);
     setStatus(null);
-    setDbOnly(ignoreLocal);
 
-    // 1) profile
+    // Profile
     const { data: prof } = await supabase
       .from('profiles')
       .select('id, username')
@@ -93,13 +95,13 @@ export default function UserBoutiquePage({ params }) {
 
     if (!prof?.id) {
       setProfileId(null);
-      setLinks([]); setReps([]); setBrandPos(new Map());
+      setLinks([]); setDbPositions({}); setLocalBrand({});
       setLoading(false);
       return;
     }
     setProfileId(prof.id);
 
-    // 2) all user_fragrances for this user
+    // All user_fragrances rows for this user
     const { data: rows } = await supabase
       .from('user_fragrances')
       .select(`
@@ -117,26 +119,29 @@ export default function UserBoutiquePage({ params }) {
       linkId: r.id,
       user_id: r.user_id,
       fragId: r.fragrance_id,
-      x_pct: toNum(r.x_pct),
+      x_pct: toNum(r.x_pct),          // unused now, but kept as fallback
       y_pct: toNum(r.y_pct),
       manual: !!r.manual,
       frag: r.fragrance
     }));
     setLinks(mapped);
 
-    // 3) brand-level positions (DB truth)
+    // Brand-level positions (DB truth)
     const { data: posRows } = await supabase
       .from('user_brand_positions')
       .select('brand_key, x_pct, y_pct')
       .eq('user_id', prof.id);
 
-    const map = new Map();
+    const dbMap = {};
     (posRows || []).forEach(p => {
-      map.set(p.brand_key, { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) });
+      dbMap[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) };
     });
-    setBrandPos(map);
+    setDbPositions(dbMap);
 
-    // flags
+    // Local fallback loaded once; used only if DB position missing
+    setLocalBrand(loadLocalBrand(username));
+
+    // Querystring flags
     const qs = new URLSearchParams(window.location.search);
     if (qs.get('edit') === '1') setArrange(true);
 
@@ -145,8 +150,9 @@ export default function UserBoutiquePage({ params }) {
 
   useEffect(() => { loadData(); }, [username]);
 
-  // Build one representative per brand; apply positions from DB brandPos, then (if not dbOnly) local fallback
-  useEffect(() => {
+  // 2) Build one representative per brand, merge with positions
+  const reps = useMemo(() => {
+    // Group all user bottles by brand
     const byBrand = new Map();
     for (const it of links) {
       const bk = brandKey(it.frag?.brand);
@@ -154,65 +160,83 @@ export default function UserBoutiquePage({ params }) {
       byBrand.get(bk).push(it);
     }
 
-    const chosen = Array.from(byBrand.entries())
-      .map(([bk, list]) => {
-        const rep = chooseRepForBrand(list);
-        if (!rep) return null;
-        const brand = rep.frag?.brand || 'Unknown';
-        const pos = brandPos.get(bk);
-        const out = {
-          ...rep,
-          brand,
-          brandKey: bk,
-          x_pct: isNum(pos?.x_pct) ? pos.x_pct : rep.x_pct, // DB brand pos first
-          y_pct: isNum(pos?.y_pct) ? pos.y_pct : rep.y_pct,
-        };
+    const chosen = Array.from(byBrand.entries()).map(([bk, list]) => {
+      const rep = chooseRepForBrand(list);
+      if (!rep) return null;
+      const brand = rep.frag?.brand || 'Unknown';
 
-        if (!dbOnly) {
-          // apply local overlay if present
-          try {
-            const { byLink, byBrand } = loadLocal(username);
-            const fromLink = byLink?.[rep.linkId];
-            const fromBrand = byBrand?.[bk];
-            if (fromLink && isNum(fromLink.x_pct) && isNum(fromLink.y_pct)) {
-              out.x_pct = fromLink.x_pct; out.y_pct = fromLink.y_pct;
-            } else if (fromBrand && isNum(fromBrand.x_pct) && isNum(fromBrand.y_pct)) {
-              out.x_pct = fromBrand.x_pct; out.y_pct = fromBrand.y_pct;
-            }
-          } catch {}
-        }
+      // DB brand position first; if missing, fallback to local; else scatter later
+      const dbPos = dbPositions[bk];
+      const locPos = localBrand[bk];
 
-        return out;
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+      const x = isNum(dbPos?.x_pct) ? dbPos.x_pct : (isNum(locPos?.x_pct) ? locPos.x_pct : undefined);
+      const y = isNum(dbPos?.y_pct) ? dbPos.y_pct : (isNum(locPos?.y_pct) ? locPos.y_pct : undefined);
 
-    setReps(chosen);
-  }, [links, brandPos, username, dbOnly]);
+      return {
+        ...rep,
+        brand,
+        brandKey: bk,
+        x_pct: x,
+        y_pct: y
+      };
+    }).filter(Boolean);
+
+    // Give defaults to any without a position yet (scattered along bottom)
+    const needDefaults = [];
+    const positioned = [];
+    for (const it of chosen) {
+      if (isNum(it.x_pct) && isNum(it.y_pct)) positioned.push(it);
+      else needDefaults.push(it);
+    }
+
+    if (needDefaults.length) {
+      const cols = 14, startY = 86, rowPitch = 6, pad = 4;
+      const span = 100 - pad * 2;
+      const step = span / (cols - 1);
+      needDefaults.forEach((it, i) => {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        it.x_pct = pad + col * step;
+        it.y_pct = startY - row * rowPitch;
+      });
+    }
+
+    // Sort A→Z
+    positioned.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+    needDefaults.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
+
+    return [...positioned, ...needDefaults];
+  }, [links, dbPositions, localBrand]);
+
+  // 3) Drag logic — update UI immediately; persist on pointer up
+  const rootRef = useRef(null);
+  const dragState = useRef(null);
 
   function startDrag(e, itm) {
     if (!arrange) return;
     const container = rootRef.current;
     if (!container) return;
-    e.preventDefault(); e.stopPropagation();
+
+    e.preventDefault();
+    e.stopPropagation();
 
     if (e.currentTarget.setPointerCapture && e.pointerId != null) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     }
 
     const rect = container.getBoundingClientRect();
-    const pointerX = (e.touches ? e.touches[0].clientX : e.clientX);
-    const pointerY = (e.touches ? e.touches[0].clientY : e.clientY);
+    const pointerX = e.touches ? e.touches[0].clientX : e.clientX;
+    const pointerY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    const currentXPct = isNum(itm.x_pct) ? itm.x_pct : 50;
-    const currentYPct = isNum(itm.y_pct) ? itm.y_pct : 80;
+    const startX = isNum(itm.x_pct) ? itm.x_pct : 50;
+    const startY = isNum(itm.y_pct) ? itm.y_pct : 80;
 
-    dragRef.current = {
+    dragState.current = {
       brandKey: itm.brandKey,
-      startXPct: currentXPct,
-      startYPct: currentYPct,
-      startX: pointerX,
-      startY: pointerY,
+      startXPct: startX,
+      startYPct: startY,
+      pointerX,
+      pointerY,
       rect
     };
 
@@ -223,27 +247,26 @@ export default function UserBoutiquePage({ params }) {
   }
 
   function onDragMove(e) {
-    if (!dragRef.current) return;
+    if (!dragState.current) return;
     e.preventDefault();
 
-    const { brandKey, startXPct, startYPct, startX, startY, rect } = dragRef.current;
-    const pointerX = (e.touches ? e.touches[0].clientX : e.clientX);
-    const pointerY = (e.touches ? e.touches[0].clientY : e.clientY);
+    const { brandKey: bk, startXPct, startYPct, pointerX, pointerY, rect } = dragState.current;
+    const nowX = e.touches ? e.touches[0].clientX : e.clientX;
+    const nowY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    const dxPct = pxToPct((pointerX - startX), rect.width);
-    const dyPct = pxToPct((pointerY - startY), rect.height);
+    const dxPct = pxToPct(nowX - pointerX, rect.width);
+    const dyPct = pxToPct(nowY - pointerY, rect.height);
 
-    const newXPct = clamp(startXPct + dxPct, 0, 100);
-    const newYPct = clamp(startYPct + dyPct, 0, 100);
+    const newX = clamp(startXPct + dxPct, 0, 100);
+    const newY = clamp(startYPct + dyPct, 0, 100);
 
-    setReps(prev => prev.map(it =>
-      it.brandKey === brandKey ? { ...it, x_pct: newXPct, y_pct: newYPct } : it
-    ));
+    // Update UI instantly by mutating dbPositions in memory (source of truth for rendering)
+    setDbPositions(prev => ({ ...prev, [bk]: { x_pct: newX, y_pct: newY } }));
   }
 
   async function onDragEnd() {
-    const snap = dragRef.current;
-    dragRef.current = null;
+    const snap = dragState.current;
+    dragState.current = null;
 
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup', onDragEnd);
@@ -252,75 +275,35 @@ export default function UserBoutiquePage({ params }) {
 
     if (!snap) return;
     const { brandKey: bk } = snap;
-    const itm = reps.find(i => i.brandKey === bk);
-    if (!itm) return;
+    const pos = dbPositions[bk];
+    if (!pos) return;
+
+    const x = Number(pos.x_pct);
+    const y = Number(pos.y_pct);
 
     setStatus('Saving…');
-    lastSavedRef.current = { x: Number(itm.x_pct), y: Number(itm.y_pct) };
+    lastSavedRef.current = { x, y };
 
-    // 1) Save to brand-level table (server truth)
-    let dbErr = null;
+    // Persist to DB (brand-level)
+    let err = null;
     if (profileId) {
       const { error } = await supabase
         .from('user_brand_positions')
-        .upsert({
-          user_id: profileId,
-          brand_key: bk,
-          x_pct: Number(itm.x_pct),
-          y_pct: Number(itm.y_pct),
-        });
-      if (error) dbErr = error.message;
+        .upsert({ user_id: profileId, brand_key: bk, x_pct: x, y_pct: y });
+      if (error) err = error.message;
     } else {
-      dbErr = 'no profile';
+      err = 'no profile';
     }
 
-    // 2) Mirror to localStorage as extra safety
+    // Mirror to local as fallback
     try {
-      const { byLink, byBrand } = loadLocal(username);
-      const nextByBrand = { ...byBrand, [bk]: { x_pct: Number(itm.x_pct), y_pct: Number(itm.y_pct) } };
-      saveLocal(username, { byLink, byBrand: nextByBrand });
+      const nextLocal = { ...localBrand, [bk]: { x_pct: x, y_pct: y } };
+      saveLocalBrand(username, nextLocal);
+      setLocalBrand(nextLocal);
     } catch {}
 
-    setStatus(dbErr ? `DB blocked: ${dbErr}. Saved locally.` : 'DB saved ✓');
-
-    // 3) Refresh DB positions so Reload DB will show the new spot
-    if (!dbErr) {
-      const { data: posRows } = await supabase
-        .from('user_brand_positions')
-        .select('brand_key, x_pct, y_pct')
-        .eq('user_id', profileId);
-      const map = new Map();
-      (posRows || []).forEach(p => map.set(p.brand_key, { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }));
-      setBrandPos(map);
-    }
+    setStatus(err ? `DB blocked: ${err}. Saved locally.` : 'DB saved ✓');
   }
-
-  // Defaults for any brand without a position yet
-  const placedReps = useMemo(() => {
-    const withPos = [];
-    const missing = [];
-
-    for (const it of reps) {
-      if (isNum(it.x_pct) && isNum(it.y_pct)) withPos.push(it);
-      else missing.push(it);
-    }
-
-    if (!missing.length) return withPos;
-
-    // scatter along bottom rows (you can drag them up)
-    const cols = 14, startY = 86, rowPitch = 6, pad = 4;
-    const span = 100 - pad * 2;
-    const step = span / (cols - 1);
-
-    missing.forEach((it, i) => {
-      const row = Math.floor(i / cols);
-      const col = i % cols;
-      it.x_pct = pad + col * step;
-      it.y_pct = startY - row * rowPitch;
-    });
-
-    return [...withPos, ...missing];
-  }, [reps]);
 
   if (loading) return <div className="p-6">Loading boutique…</div>;
 
@@ -352,40 +335,30 @@ export default function UserBoutiquePage({ params }) {
           >
             Guides
           </button>
-
-          {arrange && (
-            <>
-              <button
-                onClick={() => loadData({ ignoreLocal: true })}
-                className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
-                title="Reload from database (ignore local layout)"
-              >
-                Reload DB
-              </button>
-              {status && (
-                <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
-                  {status}
-                  {lastSavedRef.current && (
-                    <> · x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
-                  )}
-                </span>
+          <button
+            onClick={loadData}
+            className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
+            title="Reload from DB"
+          >
+            Reload DB
+          </button>
+          {status && (
+            <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
+              {status}
+              {lastSavedRef.current && (
+                <> · x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
               )}
-              {dbOnly && (
-                <span className="text-xs px-2 py-1 rounded bg-amber-200 border shadow">
-                  DB-only view
-                </span>
-              )}
-            </>
+            </span>
           )}
         </div>
 
-        {/* Guides (optional) */}
+        {/* Optional shelf guides */}
         {showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
         {/* One bottle per brand */}
-        {placedReps.map((it) => {
+        {reps.map((it) => {
           const topPct = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
           const leftPct = clamp(isNum(it.x_pct) ? it.x_pct : 50, 0, 100);
           const href = `/u/${encodeURIComponent(username)}/brand/${brandKey(it.brand)}`;
@@ -400,7 +373,7 @@ export default function UserBoutiquePage({ params }) {
 
           return arrange ? (
             <div
-              key={`${it.brandKey}`}
+              key={it.brandKey}
               className="group absolute select-none cursor-grab active:cursor-grabbing"
               style={wrapperStyle}
               onPointerDown={(e) => startDrag(e, it)}
@@ -437,7 +410,7 @@ export default function UserBoutiquePage({ params }) {
             </div>
           ) : (
             <Link
-              key={`${it.brandKey}`}
+              key={it.brandKey}
               href={href}
               prefetch={false}
               className="group absolute select-none cursor-pointer"
