@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 
 function Card({ href, title, desc, children }) {
   const core = (
@@ -67,17 +66,22 @@ export default function AdminHome() {
         <Card
           href="/admin/clean-images"
           title="Background Remover"
-          desc="Batch-create transparent PNGs (remove.bg)."
+          desc="Batch-create transparent PNGs."
         />
         <Card
           href="/admin/import-fragrantica"
           title="Import from Fragrantica"
-          desc="Bookmarklet importer."
+          desc="Use the bookmarklet importer."
         />
         <Card
           href="/admin/import-paste"
           title="Import (Paste JSON)"
           desc="Paste captured JSON from Fragrantica."
+        />
+        <Card
+          href="/admin/brands"
+          title="Brand Order"
+          desc="Choose the order used in Group by Brand."
         />
       </div>
 
@@ -108,7 +112,6 @@ export default function AdminHome() {
             {SHELVES.slice().reverse().map((s) => {
               const label = s === 6 ? 'Bottom' : s === 0 ? 'Top' : `Shelf ${s}`;
               const shelfRows = stats.byShelfRow?.[s] || {};
-              // compute max row count for simple bar scaling
               const maxCount = Math.max(1, ...Object.values(shelfRows), 1);
 
               return (
@@ -119,7 +122,7 @@ export default function AdminHome() {
                     const pct = Math.min(100, Math.round((c / maxCount) * 100));
                     return (
                       <div key={`${s}-${r}`} className="flex items-center gap-2">
-                        <div className="text-xs w-14 text-gray-600">Row {r+1}</div>
+                        <div className="text-xs w-14 text-gray-600">Row {r + 1}</div>
                         <div className="flex-1 h-3 bg-gray-100 rounded">
                           <div
                             className="h-3 bg-black rounded"
