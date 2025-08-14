@@ -9,21 +9,19 @@ import { supabase } from '@/lib/supabase';
  * Brand-positioned boutique:
  * - One bottle per brand, draggable anywhere.
  * - Saves (user, brand_key) -> x_pct, y_pct to user_brand_positions.
- * - On load, reads DB positions; if missing, falls back to localStorage.
- * - Never overwrites DB values with older local values.
+ * - Waits for Supabase auth before initial load; refetches on auth changes.
+ * - Reads DB positions first; falls back to localStorage only if missing.
  */
 
-const CANVAS_ASPECT = '3 / 2';   // matches your background aspect
-const DEFAULT_H = 54;            // bottle render height in px
+const CANVAS_ASPECT = '3 / 2';
+const DEFAULT_H = 54;
 
-// Helpers
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
 const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
 const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-// Normalize brand -> key (stable)
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -32,7 +30,6 @@ const brandKey = (b) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-// LocalStorage (fallback only)
 const LS_BRAND = (u) => `fragrantique_layout_by_brand_${u}`;
 function loadLocalBrand(username) {
   try {
@@ -50,9 +47,6 @@ function saveLocalBrand(username, mapObj) {
   try { localStorage.setItem(LS_BRAND(username), JSON.stringify(mapObj)); } catch {}
 }
 
-/** Choose brand representative:
- *  1) manual=true   2) has transparent image   3) shortest name
- */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const manual = list.filter(it => it.manual);
@@ -67,26 +61,48 @@ function chooseRepForBrand(list) {
 export default function UserBoutiquePage({ params }) {
   const username = decodeURIComponent(params.username);
 
+  const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
-  const [status, setStatus] = useState(null); // shows last save result
+  const [status, setStatus] = useState(null);
 
   const [profileId, setProfileId] = useState(null);
   const [links, setLinks] = useState([]);            // user_fragrances + fragrance
   const [dbPositions, setDbPositions] = useState({}); // {brandKey: {x_pct,y_pct}}
   const [localBrand, setLocalBrand] = useState({});   // fallback only
+  const [dbPosCount, setDbPosCount] = useState(0);    // debug chip
 
-  const rootRef = useRef(null);       // ← declared ONCE
+  const rootRef = useRef(null);
   const dragState = useRef(null);
   const lastSavedRef = useRef(null);
 
-  // 1) Load data from DB (profile, links, brand positions)
+  // Wait for auth to hydrate, then load; also react to auth changes
+  useEffect(() => {
+    let sub = null;
+
+    (async () => {
+      await supabase.auth.getSession(); // hydrate session (wait once)
+      setAuthReady(true);
+      await loadData(); // first load AFTER auth is ready
+
+      // If auth state changes (e.g., you log in), reload DB data
+      sub = supabase.auth.onAuthStateChange(async () => {
+        await loadData();
+      }).data?.subscription || null;
+    })();
+
+    return () => {
+      if (sub) sub.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username]);
+
   async function loadData() {
     setLoading(true);
     setStatus(null);
 
-    // Profile
+    // Profile for this username
     const { data: prof } = await supabase
       .from('profiles')
       .select('id, username')
@@ -95,13 +111,13 @@ export default function UserBoutiquePage({ params }) {
 
     if (!prof?.id) {
       setProfileId(null);
-      setLinks([]); setDbPositions({}); setLocalBrand({});
+      setLinks([]); setDbPositions({}); setLocalBrand({}); setDbPosCount(0);
       setLoading(false);
       return;
     }
     setProfileId(prof.id);
 
-    // All user_fragrances rows for this user
+    // All bottles for this user
     const { data: rows } = await supabase
       .from('user_fragrances')
       .select(`
@@ -119,14 +135,14 @@ export default function UserBoutiquePage({ params }) {
       linkId: r.id,
       user_id: r.user_id,
       fragId: r.fragrance_id,
-      x_pct: toNum(r.x_pct),          // unused now, but kept as fallback
+      x_pct: toNum(r.x_pct),
       y_pct: toNum(r.y_pct),
       manual: !!r.manual,
       frag: r.fragrance
     }));
     setLinks(mapped);
 
-    // Brand-level positions (DB truth)
+    // Brand positions from DB
     const { data: posRows } = await supabase
       .from('user_brand_positions')
       .select('brand_key, x_pct, y_pct')
@@ -137,22 +153,20 @@ export default function UserBoutiquePage({ params }) {
       dbMap[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) };
     });
     setDbPositions(dbMap);
+    setDbPosCount(posRows?.length || 0);
 
-    // Local fallback loaded once; used only if DB position missing
+    // Local fallback (used only when DB is missing a brand)
     setLocalBrand(loadLocalBrand(username));
 
-    // Querystring flags
+    // Query flags
     const qs = new URLSearchParams(window.location.search);
     if (qs.get('edit') === '1') setArrange(true);
 
     setLoading(false);
   }
 
-  useEffect(() => { loadData(); }, [username]);
-
-  // 2) Build one representative per brand, merge with positions
+  // Build one rep per brand, applying DB positions first, then local fallback
   const reps = useMemo(() => {
-    // Group all user bottles by brand
     const byBrand = new Map();
     for (const it of links) {
       const bk = brandKey(it.frag?.brand);
@@ -165,23 +179,16 @@ export default function UserBoutiquePage({ params }) {
       if (!rep) return null;
       const brand = rep.frag?.brand || 'Unknown';
 
-      // DB brand position first; if missing, fallback to local; else scatter later
       const dbPos = dbPositions[bk];
       const locPos = localBrand[bk];
 
       const x = isNum(dbPos?.x_pct) ? dbPos.x_pct : (isNum(locPos?.x_pct) ? locPos.x_pct : undefined);
       const y = isNum(dbPos?.y_pct) ? dbPos.y_pct : (isNum(locPos?.y_pct) ? locPos.y_pct : undefined);
 
-      return {
-        ...rep,
-        brand,
-        brandKey: bk,
-        x_pct: x,
-        y_pct: y
-      };
+      return { ...rep, brand, brandKey: bk, x_pct: x, y_pct: y };
     }).filter(Boolean);
 
-    // Give defaults to any without a position yet (scattered along bottom)
+    // Defaults for any without a position yet (bottom grid)
     const needDefaults = [];
     const positioned = [];
     for (const it of chosen) {
@@ -201,21 +208,17 @@ export default function UserBoutiquePage({ params }) {
       });
     }
 
-    // Sort A→Z
     positioned.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
     needDefaults.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-
     return [...positioned, ...needDefaults];
   }, [links, dbPositions, localBrand]);
 
-  // 3) Drag logic — update UI immediately; persist on pointer up
+  // Drag logic
   function startDrag(e, itm) {
     if (!arrange) return;
     const container = rootRef.current;
     if (!container) return;
-
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
 
     if (e.currentTarget.setPointerCapture && e.pointerId != null) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
@@ -257,7 +260,6 @@ export default function UserBoutiquePage({ params }) {
     const newX = clamp(startXPct + dxPct, 0, 100);
     const newY = clamp(startYPct + dyPct, 0, 100);
 
-    // Update UI instantly by mutating dbPositions in memory (source of truth for rendering)
     setDbPositions(prev => ({ ...prev, [bk]: { x_pct: newX, y_pct: newY } }));
   }
 
@@ -281,7 +283,6 @@ export default function UserBoutiquePage({ params }) {
     setStatus('Saving…');
     lastSavedRef.current = { x, y };
 
-    // Persist to DB (brand-level)
     let err = null;
     if (profileId) {
       const { error } = await supabase
@@ -292,7 +293,6 @@ export default function UserBoutiquePage({ params }) {
       err = 'no profile';
     }
 
-    // Mirror to local as fallback
     try {
       const nextLocal = { ...localBrand, [bk]: { x_pct: x, y_pct: y } };
       saveLocalBrand(username, nextLocal);
@@ -302,7 +302,12 @@ export default function UserBoutiquePage({ params }) {
     setStatus(err ? `DB blocked: ${err}. Saved locally.` : 'DB saved ✓');
   }
 
-  if (loading) return <div className="p-6">Loading boutique…</div>;
+  if (!authReady) {
+    return <div className="p-6">Starting session…</div>;
+  }
+  if (loading) {
+    return <div className="p-6">Loading boutique…</div>;
+  }
 
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
@@ -339,13 +344,15 @@ export default function UserBoutiquePage({ params }) {
           >
             Reload DB
           </button>
+          {/* Debug chip: how many DB positions were actually loaded */}
+          <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
+            DB pos: {dbPosCount}
+            {lastSavedRef.current && (
+              <> · last x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
+            )}
+          </span>
           {status && (
-            <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
-              {status}
-              {lastSavedRef.current && (
-                <> · x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
-              )}
-            </span>
+            <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">{status}</span>
           )}
         </div>
 
@@ -400,7 +407,6 @@ export default function UserBoutiquePage({ params }) {
                   }
                 }}
               />
-              {/* Hover label */}
               <div className="pointer-events-none absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity">
                 {it.brand}
               </div>
