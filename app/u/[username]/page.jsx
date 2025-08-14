@@ -55,6 +55,9 @@ function saveLocal(username, { byLink, byBrand }) {
   } catch {}
 }
 
+/** Which bottle becomes the brand's representative: 
+ *  1) manual=true   2) has transparent image   3) shortest name
+ */
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const manual = list.filter(it => it.manual);
@@ -73,18 +76,20 @@ export default function UserBoutiquePage({ params }) {
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [toast, setToast] = useState(null);
-  const [status, setStatus] = useState(null); // shows last DB save result
+  const [status, setStatus] = useState(null);     // last DB save result
+  const [dbOnly, setDbOnly] = useState(false);    // when true, ignore local overlay (after Reload DB)
 
-  const [links, setLinks] = useState([]);
-  const [reps, setReps] = useState([]);
+  const [links, setLinks] = useState([]);         // all user_fragrances(+frag)
+  const [reps, setReps] = useState([]);           // one per brand
 
   const rootRef = useRef(null);
-  const lastSavedRef = useRef(null); // remember last saved coords for status display
+  const lastSavedRef = useRef(null); // coords display
 
-  // Load shelves
-  async function loadData() {
+  // Fetch all rows for this username
+  async function loadData({ ignoreLocal = false } = {}) {
     setLoading(true);
     setStatus(null);
+    setDbOnly(ignoreLocal);
 
     const { data: prof } = await supabase
       .from('profiles')
@@ -99,7 +104,7 @@ export default function UserBoutiquePage({ params }) {
       return;
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_fragrances')
       .select(`
         id,
@@ -111,6 +116,13 @@ export default function UserBoutiquePage({ params }) {
         fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
       `)
       .eq('user_id', prof.id);
+
+    if (error) {
+      setToast(error.message);
+      setLinks([]);
+      setLoading(false);
+      return;
+    }
 
     const mapped = (data || []).map(row => ({
       linkId: row.id,
@@ -132,7 +144,7 @@ export default function UserBoutiquePage({ params }) {
 
   useEffect(() => { loadData(); }, [username]);
 
-  // Reduce to one rep per brand and merge local saved coords
+  // Build one representative per brand (+apply local overlay unless dbOnly)
   useEffect(() => {
     const byBrand = new Map();
     for (const it of links) {
@@ -146,22 +158,24 @@ export default function UserBoutiquePage({ params }) {
       return rep ? { ...rep, brand: rep.frag?.brand || 'Unknown', brandKey: bk } : null;
     }).filter(Boolean);
 
-    try {
-      const { byLink, byBrand } = loadLocal(username);
-      for (const it of chosen) {
-        const fromLink = byLink?.[it.linkId];
-        const fromBrand = byBrand?.[it.brandKey];
-        if (fromLink && isNum(fromLink.x_pct) && isNum(fromLink.y_pct)) {
-          it.x_pct = fromLink.x_pct; it.y_pct = fromLink.y_pct;
-        } else if (fromBrand && isNum(fromBrand.x_pct) && isNum(fromBrand.y_pct)) {
-          it.x_pct = fromBrand.x_pct; it.y_pct = fromBrand.y_pct;
+    if (!dbOnly) {
+      try {
+        const { byLink, byBrand } = loadLocal(username);
+        for (const it of chosen) {
+          const fromLink = byLink?.[it.linkId];
+          const fromBrand = byBrand?.[it.brandKey];
+          if (fromLink && isNum(fromLink.x_pct) && isNum(fromLink.y_pct)) {
+            it.x_pct = fromLink.x_pct; it.y_pct = fromLink.y_pct;
+          } else if (fromBrand && isNum(fromBrand.x_pct) && isNum(fromBrand.y_pct)) {
+            it.x_pct = fromBrand.x_pct; it.y_pct = fromBrand.y_pct;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
 
     chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
     setReps(chosen);
-  }, [links, username]);
+  }, [links, username, dbOnly]);
 
   // Dragging
   const dragRef = useRef(null);
@@ -187,7 +201,9 @@ export default function UserBoutiquePage({ params }) {
 
     dragRef.current = {
       id: itm.linkId,
+      brand: itm.brand,
       brandKey: itm.brandKey,
+      userId: itm.user_id,
       startXPct: currentXPct,
       startYPct: currentYPct,
       startX: pointerX,
@@ -233,20 +249,37 @@ export default function UserBoutiquePage({ params }) {
     window.removeEventListener('touchend', onDragEnd);
 
     if (!snap) return;
-    const { id, brandKey: bk } = snap;
+    const { id, brandKey: bk, brand, userId } = snap;
     const itm = reps.find(i => i.linkId === id);
     if (!itm) return;
 
     setStatus('Saving…');
     lastSavedRef.current = { id, x: Number(itm.x_pct), y: Number(itm.y_pct) };
 
-    // 1) Try to persist in Supabase
-    const { error } = await supabase
+    // Make THIS link the manual representative + save coords; confirm row actually updated
+    const { data: updated, error: upErr } = await supabase
       .from('user_fragrances')
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id')
+      .maybeSingle();
 
-    // 2) Mirror to localStorage (always)
+    if (upErr || !updated?.id) {
+      setStatus(`DB blocked: ${upErr?.message || 'no row updated'}. Saved locally.`);
+    } else {
+      // Demote other links of the same brand for this user so this stays the rep
+      const otherIds = links
+        .filter(l => brandKey(l.frag?.brand) === bk && l.linkId !== id && l.user_id === userId)
+        .map(l => l.linkId);
+
+      if (otherIds.length > 0) {
+        await supabase.from('user_fragrances').update({ manual: false }).in('id', otherIds);
+      }
+
+      setStatus('DB saved ✓');
+    }
+
+    // Always mirror to local
     try {
       const { byLink, byBrand } = loadLocal(username);
       const nextByLink = { ...byLink, [id]: { x_pct: Number(itm.x_pct), y_pct: Number(itm.y_pct) } };
@@ -254,14 +287,8 @@ export default function UserBoutiquePage({ params }) {
       saveLocal(username, { byLink: nextByLink, byBrand: nextByBrand });
     } catch {}
 
-    if (error) {
-      setStatus(`DB blocked: ${error.message || 'RLS/permission'}. Saved locally.`);
-      setToast('Saved locally (not in database).');
-    } else {
-      setStatus('DB saved ✓');
-      setToast('Saved!');
-    }
-    setTimeout(() => setToast(null), 1500);
+    setToast('Saved!');
+    setTimeout(() => setToast(null), 1200);
   }
 
   // Provide defaults for reps without any position
@@ -326,9 +353,9 @@ export default function UserBoutiquePage({ params }) {
           {arrange && (
             <>
               <button
-                onClick={loadData}
+                onClick={() => loadData({ ignoreLocal: true })}
                 className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
-                title="Reload from database"
+                title="Reload from database (ignore local layout)"
               >
                 Reload DB
               </button>
@@ -338,6 +365,11 @@ export default function UserBoutiquePage({ params }) {
                   {lastSavedRef.current && (
                     <> · x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
                   )}
+                </span>
+              )}
+              {dbOnly && (
+                <span className="text-xs px-2 py-1 rounded bg-amber-200 border shadow" title="Showing DB-only (no local overrides)">
+                  DB-only view
                 </span>
               )}
             </>
