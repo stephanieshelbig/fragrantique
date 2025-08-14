@@ -1,0 +1,5 @@
+{
+  "redirects": [
+    { "source": "https://fragrantique.net/(.*)", "destination": "https://www.fragrantique.net/$1", "permanent": true }
+  ]
+}
