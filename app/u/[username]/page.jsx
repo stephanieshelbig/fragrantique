@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 const CANVAS_ASPECT = '3 / 2';   // matches your background image
 const DEFAULT_H = 54;            // bottle height in pixels
 const SHOW_LABELS = true;
+const ADMIN_EMAIL = 'stephanieshelbig@gmail.com'; // treat this email as owner, too
 
 /* utils ************************************************************/
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -19,18 +20,16 @@ const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-pl
  * Priority:
  *  1) already placed manually (manual=true) → keeps your chosen rep
  *  2) has transparent image
- *  3) shortest name (a stable deterministic choice)
+ *  3) shortest name
  ********************************************************************/
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
   const manual = list.filter(it => it.manual);
   if (manual.length) return manual[0];
-
   const withTransparent = list.filter(it => !!it.frag?.image_url_transparent);
   if (withTransparent.length) {
     return withTransparent.sort((a, b) => (a.frag?.name || '').length - (b.frag?.name || '').length)[0];
   }
-
   return list.sort((a, b) => (a.frag?.name || '').length - (b.frag?.name || '').length)[0];
 }
 
@@ -74,8 +73,12 @@ export default function UserBoutiquePage({ params }) {
       if (!prof?.id) { setProfile(null); setLinks([]); setLoading(false); return; }
       setProfile(prof);
 
-      // owner?
-      setIsOwner(!!(session?.user?.id && session.user.id === prof.id));
+      // owner? allow either same user_id OR admin email match
+      const signedInEmail = session?.user?.email?.toLowerCase();
+      const owner =
+        !!session?.user?.id &&
+        (session.user.id === prof.id || signedInEmail === ADMIN_EMAIL.toLowerCase());
+      setIsOwner(owner);
 
       // 2) links + fragrance info
       const { data } = await supabase
@@ -100,9 +103,14 @@ export default function UserBoutiquePage({ params }) {
       }));
 
       setLinks(mapped);
+
+      // Auto-enable arrange if ?edit=1 and the viewer is owner/admin
+      const params = new URLSearchParams(window.location.search);
+      if (owner && params.get('edit') === '1') setArrange(true);
+
       setLoading(false);
     })();
-  }, [username, session?.user?.id]);
+  }, [username, session?.user?.id, session?.user?.email]);
 
   /** Collapse to ONE rep per brand *******************************************/
   useEffect(() => {
@@ -112,7 +120,6 @@ export default function UserBoutiquePage({ params }) {
       if (!byBrand.has(brand)) byBrand.set(brand, []);
       byBrand.get(brand).push(it);
     }
-
     const chosen = Array.from(byBrand.entries()).map(([brand, list]) => {
       const rep = chooseRepForBrand(list);
       return rep ? { ...rep, brand } : null;
@@ -120,7 +127,6 @@ export default function UserBoutiquePage({ params }) {
 
     // Sort alphabetically by brand
     chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-
     setReps(chosen);
   }, [links]);
 
@@ -131,6 +137,11 @@ export default function UserBoutiquePage({ params }) {
     if (!arrange || !isOwner) return;
     const container = rootRef.current;
     if (!container) return;
+
+    // ensure we capture the pointer so dragging doesn't drop if cursor leaves the element
+    if (e.currentTarget.setPointerCapture && e.pointerId != null) {
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    }
 
     const rect = container.getBoundingClientRect();
     const pointerX = (e.touches ? e.touches[0].clientX : e.clientX);
@@ -311,14 +322,14 @@ export default function UserBoutiquePage({ params }) {
                     img.src = '/bottle-placeholder.png';
                   }
                 }}
-              />
-              {SHOW_LABELS && (
-                <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
-                  {it.brand || ''}{it.frag?.name ? ` — ${it.frag.name}` : ''}
-                </div>
-              )}
-            </div>
-          );
+            />
+            {SHOW_LABELS && (
+              <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
+                {it.brand || ''}{it.frag?.name ? ` — ${it.frag.name}` : ''}
+              </div>
+            )}
+          </div>
+        );
         })}
       </div>
 
