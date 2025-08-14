@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabase';
 const CANVAS_ASPECT = '3 / 2';   // matches your background image
 const DEFAULT_H = 54;            // bottle height in pixels
 const SHOW_LABELS = true;
-const ADMIN_EMAIL = 'stephanieshelbig@gmail.com'; // treat this email as owner, too
 
 /* utils ************************************************************/
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -39,8 +38,9 @@ export default function UserBoutiquePage({ params }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [isOwner, setIsOwner] = useState(false);
 
+  // 👇 Arrange is available for any signed-in user (no owner check)
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
 
@@ -51,10 +51,16 @@ export default function UserBoutiquePage({ params }) {
 
   const rootRef = useRef(null);
 
-  /** Load session (owner check) **********************************************/
+  /** Load session (decide if Arrange button should show) *********************/
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const sub = supabase.auth.onAuthStateChange((_e, s) => setSession(s?.session || null));
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session || null);
+      setIsSignedIn(!!data.session?.user?.id);
+    });
+    const sub = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s?.session || null);
+      setIsSignedIn(!!s?.session?.user?.id);
+    });
     return () => sub.data.subscription.unsubscribe();
   }, []);
 
@@ -72,13 +78,6 @@ export default function UserBoutiquePage({ params }) {
 
       if (!prof?.id) { setProfile(null); setLinks([]); setLoading(false); return; }
       setProfile(prof);
-
-      // owner? allow either same user_id OR admin email match
-      const signedInEmail = session?.user?.email?.toLowerCase();
-      const owner =
-        !!session?.user?.id &&
-        (session.user.id === prof.id || signedInEmail === ADMIN_EMAIL.toLowerCase());
-      setIsOwner(owner);
 
       // 2) links + fragrance info
       const { data } = await supabase
@@ -104,13 +103,13 @@ export default function UserBoutiquePage({ params }) {
 
       setLinks(mapped);
 
-      // Auto-enable arrange if ?edit=1 and the viewer is owner/admin
-      const params = new URLSearchParams(window.location.search);
-      if (owner && params.get('edit') === '1') setArrange(true);
+      // Auto-enable arrange if ?edit=1 AND you are signed in
+      const qs = new URLSearchParams(window.location.search);
+      if (qs.get('edit') === '1' && isSignedIn) setArrange(true);
 
       setLoading(false);
     })();
-  }, [username, session?.user?.id, session?.user?.email]);
+  }, [username, isSignedIn]);
 
   /** Collapse to ONE rep per brand *******************************************/
   useEffect(() => {
@@ -134,11 +133,11 @@ export default function UserBoutiquePage({ params }) {
   const dragRef = useRef(null);
 
   function startDrag(e, itm) {
-    if (!arrange || !isOwner) return;
+    if (!arrange || !isSignedIn) return;
     const container = rootRef.current;
     if (!container) return;
 
-    // ensure we capture the pointer so dragging doesn't drop if cursor leaves the element
+    // capture pointer for reliable dragging
     if (e.currentTarget.setPointerCapture && e.pointerId != null) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     }
@@ -201,6 +200,7 @@ export default function UserBoutiquePage({ params }) {
     const itm = reps.find(i => i.linkId === id);
     if (!itm) return;
 
+    // Save to Supabase — will succeed only if your RLS allows this user to update the row
     await supabase
       .from('user_fragrances')
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
@@ -219,7 +219,7 @@ export default function UserBoutiquePage({ params }) {
 
     if (!missing.length) return withPos;
 
-    // Scatter missing reps along bottom rows (owner can drag into place)
+    // Scatter missing reps along bottom rows (you can drag into place)
     const cols = 14;
     const startY = 86;
     const rowPitch = 6;
@@ -253,7 +253,7 @@ export default function UserBoutiquePage({ params }) {
 
         {/* Controls */}
         <div className="absolute right-4 top-4 z-20 flex gap-2">
-          {isOwner && (
+          {isSignedIn && (
             <button
               onClick={() => setArrange(a => !a)}
               className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
@@ -278,11 +278,11 @@ export default function UserBoutiquePage({ params }) {
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
-        {/* ONE bottle per brand (draggable for owner) */}
+        {/* ONE bottle per brand (draggable if signed in) */}
         {placedReps.map((it) => {
           const topPct = clamp(it.y_pct ?? 80, 0, 100);
           const leftPct = clamp(it.x_pct ?? 50, 0, 100);
-          const canDrag = arrange && isOwner;
+          const canDrag = arrange && isSignedIn;
 
           return (
             <div
@@ -322,20 +322,20 @@ export default function UserBoutiquePage({ params }) {
                     img.src = '/bottle-placeholder.png';
                   }
                 }}
-            />
-            {SHOW_LABELS && (
-              <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
-                {it.brand || ''}{it.frag?.name ? ` — ${it.frag.name}` : ''}
-              </div>
-            )}
-          </div>
-        );
+              />
+              {SHOW_LABELS && (
+                <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
+                  {it.brand || ''}{it.frag?.name ? ` — ${it.frag.name}` : ''}
+                </div>
+              )}
+            </div>
+          );
         })}
       </div>
 
       <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
         Viewing <span className="font-medium">@{username}</span> boutique — one bottle per brand
-        {isOwner ? ' · drag anywhere to arrange' : ''}
+        {isSignedIn ? ' · drag anywhere to arrange' : ''}
       </div>
     </div>
   );
