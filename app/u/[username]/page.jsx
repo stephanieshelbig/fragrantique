@@ -6,13 +6,11 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Brand-positioned boutique with robust brand-key matching and race-free saving:
- * - One bottle per brand, draggable anywhere.
- * - Saves (user, canonical_brand_key) -> x_pct, y_pct to user_brand_positions.
- * - On load, tries strict key then canonical key (so older rows still match).
- * - Waits for Supabase auth before loading; refetches on auth changes.
- * - Uses a live ref for drag position so final save never reads stale state.
- * - Add ?debug=1 to show which key matched.
+ * Public brand-position layout:
+ * - Reads public positions for the viewed user (is_public=true).
+ * - If viewer is the same user, also reads private positions and overrides.
+ * - Drag saves with is_public: true (publishes immediately).
+ * - Robust brand-key matching + race-free save.
  */
 
 const CANVAS_ASPECT = '3 / 2';
@@ -77,44 +75,48 @@ function chooseRepForBrand(list) {
 export default function UserBoutiquePage({ params }) {
   const username = decodeURIComponent(params.username);
 
-  // ----- UI / state -----
+  // UI / state
   const [authReady, setAuthReady]   = useState(false);
   const [loading, setLoading]       = useState(true);
   const [arrange, setArrange]       = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [status, setStatus]         = useState(null);
-  const [debug, setDebug]           = useState(false);
+  const [viewerId, setViewerId]     = useState(null);  // current session's user id (or null)
+  const [dbPosCount, setDbPosCount] = useState(0);
 
-  // ----- data -----
-  const [profileId, setProfileId]     = useState(null);
-  const [links, setLinks]             = useState([]);    // user_fragrances + fragrance
-  const [dbPositions, setDbPositions] = useState({});    // {brandKey: {x_pct,y_pct}}
-  const [localBrand, setLocalBrand]   = useState({});    // fallback only
-  const [dbPosCount, setDbPosCount]   = useState(0);     // debug chip
+  // data
+  const [profileId, setProfileId]     = useState(null); // the boutique owner's profile id
+  const [links, setLinks]             = useState([]);   // user_fragrances + fragrance
+  const [dbPositions, setDbPositions] = useState({});   // merged: public + (own private)
+  const [localBrand, setLocalBrand]   = useState({});   // fallback only
 
-  // ----- refs -----
+  // refs
   const rootRef = useRef(null);
   const dragState = useRef(null);
   const lastSavedRef = useRef(null);
 
-  // Wait for auth, then load; also react to auth changes
+  // Wait for auth, get viewer id, then load
   useEffect(() => {
     let sub = null;
     (async () => {
-      await supabase.auth.getSession();
+      const { data: sess } = await supabase.auth.getSession();
+      setViewerId(sess?.session?.user?.id || null);
       setAuthReady(true);
-      await loadData();
-      sub = supabase.auth.onAuthStateChange(async () => { await loadData(); }).data?.subscription || null;
+      await loadData(sess?.session?.user?.id || null);
+      sub = supabase.auth.onAuthStateChange(async (_event, session) => {
+        setViewerId(session?.user?.id || null);
+        await loadData(session?.user?.id || null);
+      }).data?.subscription || null;
     })();
     return () => { if (sub) sub.unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
-  async function loadData() {
+  async function loadData(currentViewerId) {
     setLoading(true);
     setStatus(null);
 
-    // Profile for this username
+    // Who owns this boutique?
     const { data: prof } = await supabase
       .from('profiles')
       .select('id, username')
@@ -154,23 +156,36 @@ export default function UserBoutiquePage({ params }) {
     }));
     setLinks(mapped);
 
-    // Brand positions from DB
-    const { data: posRows } = await supabase
+    // Public positions (readable by anyone)
+    const { data: pubRows } = await supabase
       .from('user_brand_positions')
-      .select('brand_key, x_pct, y_pct')
-      .eq('user_id', prof.id);
+      .select('brand_key, x_pct, y_pct, is_public')
+      .eq('user_id', prof.id)
+      .eq('is_public', true);
 
-    const dbMap = {};
-    (posRows || []).forEach(p => { dbMap[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
-    setDbPositions(dbMap);
-    setDbPosCount(posRows?.length || 0);
+    // Private positions (viewer must be the owner)
+    let privRows = [];
+    if (currentViewerId && currentViewerId === prof.id) {
+      const { data: myRows } = await supabase
+        .from('user_brand_positions')
+        .select('brand_key, x_pct, y_pct, is_public')
+        .eq('user_id', prof.id);
+      privRows = myRows || [];
+    }
+
+    // Merge: start with public, then override with private (owner view)
+    const merged = {};
+    (pubRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
+    (privRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
+
+    setDbPositions(merged);
+    setDbPosCount((pubRows?.length || 0) + (privRows?.length || 0));
 
     // Local fallback (used only when DB missing)
     setLocalBrand(loadLocalBrand(username));
 
     const qs = new URLSearchParams(window.location.search);
     if (qs.get('edit') === '1') setArrange(true);
-    if (qs.get('debug') === '1') setDebug(true);
 
     setLoading(false);
   }
@@ -191,7 +206,7 @@ export default function UserBoutiquePage({ params }) {
       const brand = rep.frag?.brand || 'Unknown';
       const canon = canonicalBrandKey(brand);
 
-      // Try strict DB key, then canonical DB key, then local canonical
+      // Try strict from merged map, then canonical, then local canonical
       const dbStrict = dbPositions[strict];
       const dbCanon  = dbPositions[canon];
       const locCanon = localBrand[canon];
@@ -206,16 +221,11 @@ export default function UserBoutiquePage({ params }) {
               : isNum(locCanon?.y_pct) ? locCanon.y_pct
               : undefined;
 
-      const matchedKey = isNum(dbStrict?.x_pct) || isNum(dbStrict?.y_pct) ? strict
-                        : (isNum(dbCanon?.x_pct) || isNum(dbCanon?.y_pct)) ? canon
-                        : null;
-
       return {
         ...rep,
         brand,
         brandKeyStrict: strict,
         brandKeyCanon : canon,
-        matchedKey,
         x_pct: x,
         y_pct: y
       };
@@ -246,7 +256,7 @@ export default function UserBoutiquePage({ params }) {
     return [...positioned, ...needDefaults];
   }, [links, dbPositions, localBrand]);
 
-  // Drag lifecycle (race-free)
+  // Drag lifecycle (race-free save)
   function startDrag(e, itm) {
     if (!arrange) return;
     const container = rootRef.current;
@@ -265,14 +275,13 @@ export default function UserBoutiquePage({ params }) {
     const startY = isNum(itm.y_pct) ? itm.y_pct : 80;
 
     dragState.current = {
-      brandKeyStrict: itm.brandKeyStrict,
       brandKeyCanon : itm.brandKeyCanon,
       startXPct: startX,
       startYPct: startY,
       pointerX,
       pointerY,
       rect,
-      lastXPct: startX,  // live values updated during drag
+      lastXPct: startX,
       lastYPct: startY
     };
 
@@ -296,11 +305,9 @@ export default function UserBoutiquePage({ params }) {
     const newX = clamp(startXPct + dxPct, 0, 100);
     const newY = clamp(startYPct + dyPct, 0, 100);
 
-    // Update live ref FIRST (source of truth for saving on drop)
     dragState.current.lastXPct = newX;
     dragState.current.lastYPct = newY;
 
-    // Then update UI state so you see the bottle move
     setDbPositions(prev => ({ ...prev, [brandKeyCanon]: { x_pct: newX, y_pct: newY } }));
   }
 
@@ -314,7 +321,6 @@ export default function UserBoutiquePage({ params }) {
     window.removeEventListener('touchend', onDragEnd);
 
     if (!snap) return;
-
     const { brandKeyCanon, lastXPct, lastYPct } = snap;
     const x = Number(lastXPct);
     const y = Number(lastYPct);
@@ -324,23 +330,22 @@ export default function UserBoutiquePage({ params }) {
 
     let err = null;
     if (profileId) {
-      // Save under canonical key
+      // Save under owner with is_public = true so everyone sees it
       const { error } = await supabase
         .from('user_brand_positions')
-        .upsert({ user_id: profileId, brand_key: brandKeyCanon, x_pct: x, y_pct: y });
+        .upsert({ user_id: profileId, brand_key: brandKeyCanon, x_pct: x, y_pct: y, is_public: true });
       if (error) err = error.message;
     } else {
       err = 'no profile';
     }
 
-    // Mirror to local (canonical) as safety
     try {
       const nextLocal = { ...localBrand, [brandKeyCanon]: { x_pct: x, y_pct: y } };
       saveLocalBrand(username, nextLocal);
       setLocalBrand(nextLocal);
     } catch {}
 
-    setStatus(err ? `DB blocked: ${err}. Saved locally.` : 'DB saved ✓');
+    setStatus(err ? `DB blocked: ${err}. Saved locally.` : 'DB saved ✓ (public)');
   }
 
   if (!authReady) return <div className="p-6">Starting session…</div>;
@@ -375,7 +380,7 @@ export default function UserBoutiquePage({ params }) {
             Guides
           </button>
           <button
-            onClick={loadData}
+            onClick={() => loadData(viewerId)}
             className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
             title="Reload from DB"
           >
@@ -488,8 +493,8 @@ export default function UserBoutiquePage({ params }) {
       </div>
 
       <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
-        Viewing <span className="font-medium">@{username}</span> boutique — one bottle per brand
-        {arrange ? ' · arranging (brand-level save)' : ''}
+        Viewing <span className="font-medium">@{username}</span> boutique — public layout
+        {arrange ? ' · arranging (publishes positions)' : ''}
       </div>
     </div>
   );
