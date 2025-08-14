@@ -8,8 +8,9 @@ import { supabase } from '@/lib/supabase';
 const money = (cents) => `$${(cents / 100).toFixed(2)}`;
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-export default function FragrancePage({ params, searchParams }) {
+export default function FragrancePage({ params }) {
   const id = decodeURIComponent(params.id);
+
   const [session, setSession] = useState(null);
   const [frag, setFrag] = useState(null);
   const [notes, setNotes] = useState([]);
@@ -22,12 +23,14 @@ export default function FragrancePage({ params, searchParams }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // Auth session
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
     const sub = supabase.auth.onAuthStateChange((_e, s) => setSession(s?.session || null));
     return () => sub.data.subscription.unsubscribe();
   }, []);
 
+  // Load fragrance, notes, decants
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -87,6 +90,7 @@ export default function FragrancePage({ params, searchParams }) {
     setSubmitting(false);
   }
 
+  // Robust client → always handles non-JSON or empty responses gracefully
   async function buyDecant(decantId) {
     try {
       const res = await fetch('/api/checkout', {
@@ -94,11 +98,26 @@ export default function FragrancePage({ params, searchParams }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decantId, fragranceId: id })
       });
-      const j = await res.json();
-      if (res.ok && j?.url) {
-        window.location.href = j.url;
+
+      // Try JSON first; if it fails, read raw text
+      let payload = null;
+      try {
+        payload = await res.json();
+      } catch {
+        const text = await res.text();
+        alert(text || 'Checkout failed (non-JSON response).');
+        return;
+      }
+
+      if (!res.ok) {
+        alert(payload?.error || 'Checkout failed.');
+        return;
+      }
+
+      if (payload?.url) {
+        window.location.href = payload.url;
       } else {
-        alert(j?.error || 'Checkout failed.');
+        alert('Checkout response missing URL.');
       }
     } catch (e) {
       alert(e.message || 'Checkout error');
@@ -120,7 +139,7 @@ export default function FragrancePage({ params, searchParams }) {
       {/* Hero “social card” */}
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-zinc-100 to-white border shadow mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Left: image on soft gradient */}
+          {/* Left: image */}
           <div className="relative flex items-center justify-center p-6 md:p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-rose-50 via-white to-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -128,7 +147,12 @@ export default function FragrancePage({ params, searchParams }) {
               alt={`${frag.brand} ${frag.name}`}
               className="object-contain"
               style={{ height: '280px', width: 'auto', mixBlendMode: 'multiply', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.18))' }}
-              onError={(e) => { if (!e.currentTarget.dataset.fallback) { e.currentTarget.dataset.fallback='1'; e.currentTarget.src='/bottle-placeholder.png'; } }}
+              onError={(e) => {
+                if (!e.currentTarget.dataset.fallback) {
+                  e.currentTarget.dataset.fallback = '1';
+                  e.currentTarget.src = '/bottle-placeholder.png';
+                }
+              }}
             />
           </div>
           {/* Right: title + optional accords */}
@@ -136,7 +160,7 @@ export default function FragrancePage({ params, searchParams }) {
             <div className="text-sm uppercase tracking-wider text-zinc-500">{frag.brand}</div>
             <h1 className="text-3xl md:text-4xl font-semibold">{frag.name}</h1>
 
-            {/* Accord bars (if you decide to store them later as JSON) */}
+            {/* Accord bars (optional if you store them as JSON) */}
             {Array.isArray(frag?.accords) && frag.accords.length > 0 && (
               <div className="mt-5 space-y-2">
                 {frag.accords.map((a, idx) => (
