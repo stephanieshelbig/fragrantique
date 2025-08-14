@@ -6,12 +6,11 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Public brand-position layout:
+ * Public brand-position layout (no auto-publish):
  * - Reads public positions for the viewed user (is_public = true).
  * - If viewer is the same user, also reads private positions and overrides.
- * - Drag saves with is_public: true (publishes immediately).
+ * - Drag saves with is_public: true (owner only, explicit move).
  * - Robust brand-key matching (strict + canonical) and race-free save.
- * - Auto-publish effect: owner loads page -> all existing positions get marked public.
  * - Controls (Arrange / Guides / Reload DB) are visible only to the owner.
  */
 
@@ -257,48 +256,6 @@ export default function UserBoutiquePage({ params }) {
     needDefaults.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
     return [...positioned, ...needDefaults];
   }, [links, dbPositions, localBrand]);
-
-  // Auto-publish any positions the owner already has so public view stays in sync
-  useEffect(() => {
-    async function publishAll() {
-      if (!profileId || !viewerId || viewerId !== profileId) return;
-
-      // Build payload from current reps that have coordinates
-      const payload = [];
-      for (const it of reps) {
-        const x = Number(it.x_pct);
-        const y = Number(it.y_pct);
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-          const canonKey = canonicalBrandKey(it.brand);
-          payload.push({
-            user_id: profileId,
-            brand_key: canonKey,
-            x_pct: x,
-            y_pct: y,
-            is_public: true,
-          });
-        }
-      }
-      if (!payload.length) return;
-
-      const { error } = await supabase
-        .from('user_brand_positions')
-        .upsert(payload, { onConflict: 'user_id,brand_key' });
-      if (!error) {
-        // Refresh merged map so logged-in view reflects what the public sees
-        const { data: pubRows } = await supabase
-          .from('user_brand_positions')
-          .select('brand_key, x_pct, y_pct')
-          .eq('user_id', profileId)
-          .eq('is_public', true);
-        const merged = { ...dbPositions };
-        (pubRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
-        setDbPositions(merged);
-      }
-    }
-    publishAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reps, profileId, viewerId]);
 
   // Drag lifecycle (race-free save)
   function startDrag(e, itm) {
