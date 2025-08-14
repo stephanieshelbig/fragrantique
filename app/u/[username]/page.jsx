@@ -11,15 +11,36 @@ const DEFAULT_H = 54;
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
-const slugifyBrand = (b) =>
+
+const brandKey = (b) =>
   (b || 'unknown')
+    .trim()
     .toLowerCase()
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-/** Priority for brand representative:
- *  1) already placed manually (manual=true)
+const LAYOUT_KEY = (username) => `fragrantique_layout_${username}`;
+const BRAND_LAYOUT_KEY = (username) => `fragrantique_layout_by_brand_${username}`;
+
+function loadLocal(username) {
+  try {
+    const a = JSON.parse(localStorage.getItem(LAYOUT_KEY(username)) || '{}'); // {linkId:{x_pct,y_pct}}
+    const b = JSON.parse(localStorage.getItem(BRAND_LAYOUT_KEY(username)) || '{}'); // {brandKey:{x_pct,y_pct}}
+    return { byLink: a, byBrand: b };
+  } catch {
+    return { byLink: {}, byBrand: {} };
+  }
+}
+function saveLocal(username, { byLink, byBrand }) {
+  try {
+    if (byLink) localStorage.setItem(LAYOUT_KEY(username), JSON.stringify(byLink));
+    if (byBrand) localStorage.setItem(BRAND_LAYOUT_KEY(username), JSON.stringify(byBrand));
+  } catch {}
+}
+
+/** Representative priority:
+ *  1) manual=true (means you dragged it once)
  *  2) has transparent image
  *  3) shortest name
  */
@@ -38,35 +59,39 @@ export default function UserBoutiquePage({ params }) {
   const username = decodeURIComponent(params.username);
 
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
-
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const [links, setLinks] = useState([]);
-  const [reps, setReps] = useState([]);
+  const [links, setLinks] = useState([]); // all user_fragrances rows + frag
+  const [reps, setReps] = useState([]);   // one rep per brand
 
   const rootRef = useRef(null);
 
-  // Load profile + links
+  // Load shelves
   useEffect(() => {
     (async () => {
       setLoading(true);
 
+      // find profile id by username
       const { data: prof } = await supabase
         .from('profiles')
-        .select('id, username, email')
+        .select('id, username')
         .eq('username', username)
         .maybeSingle();
 
-      if (!prof?.id) { setProfile(null); setLinks([]); setLoading(false); return; }
-      setProfile(prof);
+      if (!prof?.id) {
+        setLinks([]);
+        setReps([]);
+        setLoading(false);
+        return;
+      }
 
       const { data } = await supabase
         .from('user_fragrances')
         .select(`
           id,
+          user_id,
           fragrance_id,
           x_pct,
           y_pct,
@@ -77,16 +102,17 @@ export default function UserBoutiquePage({ params }) {
 
       const mapped = (data || []).map(row => ({
         linkId: row.id,
+        user_id: row.user_id,
         fragId: row.fragrance_id,
         x_pct: row.x_pct,
         y_pct: row.y_pct,
         manual: row.manual,
-        frag: row.fragrance,
+        frag: row.fragrance
       }));
 
       setLinks(mapped);
 
-      // Auto-enable arrange if ?edit=1
+      // Auto-enable arrange mode if ?edit=1
       const qs = new URLSearchParams(window.location.search);
       if (qs.get('edit') === '1') setArrange(true);
 
@@ -98,39 +124,37 @@ export default function UserBoutiquePage({ params }) {
   useEffect(() => {
     const byBrand = new Map();
     for (const it of links) {
-      const brand = (it.frag?.brand || 'Unknown').trim();
-      if (!byBrand.has(brand)) byBrand.set(brand, []);
-      byBrand.get(brand).push(it);
+      const bk = brandKey(it.frag?.brand);
+      if (!byBrand.has(bk)) byBrand.set(bk, []);
+      byBrand.get(bk).push(it);
     }
 
-    const chosen = Array.from(byBrand.entries()).map(([brand, list]) => {
+    const chosen = Array.from(byBrand.entries()).map(([bk, list]) => {
       const rep = chooseRepForBrand(list);
-      return rep ? { ...rep, brand } : null;
+      return rep ? { ...rep, brand: rep.frag?.brand || 'Unknown', brandKey: bk } : null;
     }).filter(Boolean);
 
-    // sort A→Z by brand
-    chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-
-    // Merge any localStorage positions (fallback if DB update blocked)
+    // apply saved local positions (by link first; fallback by brand)
     try {
-      const key = `fragrantique_layout_${username}`;
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const saved = JSON.parse(raw); // { [linkId]: {x_pct,y_pct} }
-        chosen.forEach(it => {
-          const ov = saved[it.linkId];
-          if (ov && typeof ov.x_pct === 'number' && typeof ov.y_pct === 'number') {
-            it.x_pct = ov.x_pct;
-            it.y_pct = ov.y_pct;
-          }
-        });
+      const { byLink, byBrand } = loadLocal(username);
+      for (const it of chosen) {
+        const fromLink = byLink?.[it.linkId];
+        const fromBrand = byBrand?.[it.brandKey];
+        if (fromLink && typeof fromLink.x_pct === 'number' && typeof fromLink.y_pct === 'number') {
+          it.x_pct = fromLink.x_pct; it.y_pct = fromLink.y_pct;
+        } else if (fromBrand && typeof fromBrand.x_pct === 'number' && typeof fromBrand.y_pct === 'number') {
+          it.x_pct = fromBrand.x_pct; it.y_pct = fromBrand.y_pct;
+        }
       }
     } catch {}
+
+    // sort brands A→Z
+    chosen.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
 
     setReps(chosen);
   }, [links, username]);
 
-  // drag support (Arrange mode)
+  // Dragging
   const dragRef = useRef(null);
 
   function startDrag(e, itm) {
@@ -138,11 +162,9 @@ export default function UserBoutiquePage({ params }) {
     const container = rootRef.current;
     if (!container) return;
 
-    // Stop link navigation just in case
     e.preventDefault();
     e.stopPropagation();
 
-    // capture pointer for reliable dragging
     if (e.currentTarget.setPointerCapture && e.pointerId != null) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     }
@@ -156,6 +178,7 @@ export default function UserBoutiquePage({ params }) {
 
     dragRef.current = {
       id: itm.linkId,
+      brandKey: itm.brandKey,
       startXPct: currentXPct,
       startYPct: currentYPct,
       startX: pointerX,
@@ -201,32 +224,34 @@ export default function UserBoutiquePage({ params }) {
     window.removeEventListener('touchend', onDragEnd);
 
     if (!snap) return;
-    const { id } = snap;
+    const { id, brandKey: bk } = snap;
     const itm = reps.find(i => i.linkId === id);
     if (!itm) return;
 
+    // 1) Try to persist in Supabase (requires being signed in + RLS allowing update)
     const { error } = await supabase
       .from('user_fragrances')
       .update({ x_pct: itm.x_pct, y_pct: itm.y_pct, manual: true })
       .eq('id', id);
 
-    // localStorage mirror / fallback
+    // 2) Always mirror to localStorage by linkId and by brandKey
     try {
-      const key = `fragrantique_layout_${username}`;
-      const raw = localStorage.getItem(key);
-      const obj = raw ? JSON.parse(raw) : {};
-      obj[id] = { x_pct: itm.x_pct, y_pct: itm.y_pct };
-      localStorage.setItem(key, JSON.stringify(obj));
+      const { byLink, byBrand } = loadLocal(username);
+      const nextByLink = { ...byLink, [id]: { x_pct: itm.x_pct, y_pct: itm.y_pct } };
+      const nextByBrand = { ...byBrand, [bk]: { x_pct: itm.x_pct, y_pct: itm.y_pct } };
+      saveLocal(username, { byLink: nextByLink, byBrand: nextByBrand });
     } catch {}
 
+    // Toast
     if (error) {
-      setToast('Saved locally (DB blocked).'); setTimeout(() => setToast(null), 2000);
+      setToast('Saved locally (not in database). Make sure you are signed in.');
     } else {
-      setToast('Saved!'); setTimeout(() => setToast(null), 1200);
+      setToast('Saved!');
     }
+    setTimeout(() => setToast(null), 1600);
   }
 
-  // Provide temporary defaults for missing coords
+  // Provide defaults for reps without any position
   const placedReps = useMemo(() => {
     const withPos = [];
     const missing = [];
@@ -238,11 +263,8 @@ export default function UserBoutiquePage({ params }) {
 
     if (!missing.length) return withPos;
 
-    // scatter along bottom rows (you’ll drag into place)
-    const cols = 14;
-    const startY = 86;
-    const rowPitch = 6;
-    const pad = 4;
+    // scatter along bottom rows (you can drag them into place)
+    const cols = 14, startY = 86, rowPitch = 6, pad = 4;
     const span = 100 - pad * 2;
     const step = span / (cols - 1);
 
@@ -275,7 +297,6 @@ export default function UserBoutiquePage({ params }) {
           <button
             onClick={() => setArrange(a => !a)}
             className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
-            title="Toggle arrange mode"
           >
             {arrange ? 'Arranging… (drag)' : 'Arrange'}
           </button>
@@ -297,18 +318,17 @@ export default function UserBoutiquePage({ params }) {
           </div>
         )}
 
-        {/* Optional shelf guides */}
+        {/* Optional shelf guides (toggle) */}
         {showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
 
-        {/* ONE rep bottle per brand */}
+        {/* One bottle per brand (drag in arrange mode; click in view mode) */}
         {placedReps.map((it) => {
           const topPct = clamp(it.y_pct ?? 80, 0, 100);
           const leftPct = clamp(it.x_pct ?? 50, 0, 100);
-          const brandSlug = slugifyBrand(it.brand);
+          const href = `/u/${encodeURIComponent(username)}/brand/${brandKey(it.brand)}`;
 
-          // Common props for both modes
           const wrapperStyle = {
             top: `${topPct}%`,
             left: `${leftPct}%`,
@@ -317,7 +337,7 @@ export default function UserBoutiquePage({ params }) {
             touchAction: 'none',
           };
 
-          const BottleImg = (
+          const Bottle = (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={bottleSrc(it.frag)}
@@ -344,7 +364,7 @@ export default function UserBoutiquePage({ params }) {
             />
           );
 
-          // HOVER LABEL (hidden by default; appears on hover)
+          // Hover-only brand label
           const HoverLabel = (
             <div
               className="
@@ -360,7 +380,6 @@ export default function UserBoutiquePage({ params }) {
             </div>
           );
 
-          // Arrange mode → plain DIV for drag; View mode → Link to brand page
           return arrange ? (
             <div
               key={it.linkId}
@@ -368,21 +387,21 @@ export default function UserBoutiquePage({ params }) {
               style={wrapperStyle}
               onPointerDown={(e) => startDrag(e, it)}
               onTouchStart={(e) => startDrag(e, it)}
-              title={`${it.frag?.brand || ''}`}
+              title={`${it.brand}`}
             >
-              {BottleImg}
+              {Bottle}
               {HoverLabel}
             </div>
           ) : (
             <Link
               key={it.linkId}
-              href={`/u/${encodeURIComponent(username)}/brand/${brandSlug}`}
+              href={href}
               prefetch={false}
               className="group absolute select-none cursor-pointer"
               style={wrapperStyle}
-              title={`${it.frag?.brand || ''} — view all`}
+              title={`${it.brand} — view all`}
             >
-              {BottleImg}
+              {Bottle}
               {HoverLabel}
             </Link>
           );
