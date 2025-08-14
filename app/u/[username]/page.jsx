@@ -45,9 +45,7 @@ export default function UserBoutiquePage({ params }) {
   const [showGuides, setShowGuides] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // all user links (we will reduce to one per brand)
   const [links, setLinks] = useState([]);
-  // chosen representatives (one per brand)
   const [reps, setReps] = useState([]);
 
   const rootRef = useRef(null);
@@ -141,6 +139,11 @@ export default function UserBoutiquePage({ params }) {
     const container = rootRef.current;
     if (!container) return;
 
+    // Stop link navigation just in case
+    e.preventDefault();
+    e.stopPropagation();
+
+    // capture pointer for reliable dragging
     if (e.currentTarget.setPointerCapture && e.pointerId != null) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     }
@@ -304,51 +307,73 @@ export default function UserBoutiquePage({ params }) {
         {placedReps.map((it) => {
           const topPct = clamp(it.y_pct ?? 80, 0, 100);
           const leftPct = clamp(it.x_pct ?? 50, 0, 100);
-          const canDrag = arrange;
           const brandSlug = slugifyBrand(it.brand);
 
-          return (
-            <Link
-              key={it.linkId}
-              prefetch={false}
-              href={canDrag ? '#' : `/u/${encodeURIComponent(username)}/brand/${brandSlug}`}
-              className={`absolute select-none ${canDrag ? 'pointer-events-none' : 'cursor-pointer'}`}
+          // When arranging → render a DIV (draggable). When not arranging → render a LINK.
+          const commonProps = {
+            className: 'absolute select-none',
+            style: {
+              top: `${topPct}%`,
+              left: `${leftPct}%`,
+              transform: 'translate(-50%, -100%)',
+              height: `${DEFAULT_H}px`,
+              touchAction: 'none', // IMPORTANT for reliable drag on touch devices
+            },
+            title: `${it.frag?.brand || ''} — view all`,
+          };
+
+          const BottleImg = (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={bottleSrc(it.frag)}
+              alt={it.frag?.name || 'fragrance'}
+              className="object-contain"
               style={{
-                top: `${topPct}%`,
-                left: `${leftPct}%`,
-                transform: 'translate(-50%, -100%)',
-                height: `${DEFAULT_H}px`,
+                height: '100%',
+                width: 'auto',
+                mixBlendMode: 'multiply',
+                filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
+                opacity: arrange ? 0.9 : 1,
+                userSelect: 'none',
+                WebkitUserDrag: 'none',
               }}
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              onError={(e) => {
+                const img = e.currentTarget;
+                if (!img.dataset.fallback) {
+                  img.dataset.fallback = '1';
+                  img.src = '/bottle-placeholder.png';
+                }
+              }}
+            />
+          );
+
+          const Label = SHOW_LABELS ? (
+            <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
+              {it.brand}
+            </div>
+          ) : null;
+
+          return arrange ? (
+            <div
+              key={it.linkId}
+              {...commonProps}
               onPointerDown={(e) => startDrag(e, it)}
               onTouchStart={(e) => startDrag(e, it)}
-              title={`${it.frag?.brand || ''} — view all`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={bottleSrc(it.frag)}
-                alt={it.frag?.name || 'fragrance'}
-                className="object-contain"
-                style={{
-                  height: '100%',
-                  width: 'auto',
-                  mixBlendMode: 'multiply',
-                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
-                  opacity: canDrag ? 0.9 : 1,
-                }}
-                draggable={false}
-                onError={(e) => {
-                  const img = e.currentTarget;
-                  if (!img.dataset.fallback) {
-                    img.dataset.fallback = '1';
-                    img.src = '/bottle-placeholder.png';
-                  }
-                }}
-              />
-              {SHOW_LABELS && (
-                <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
-                  {it.brand}
-                </div>
-              )}
+              {BottleImg}
+              {Label}
+            </div>
+          ) : (
+            <Link
+              key={it.linkId}
+              href={`/u/${encodeURIComponent(username)}/brand/${brandSlug}`}
+              prefetch={false}
+              {...commonProps}
+            >
+              {BottleImg}
+              {Label}
             </Link>
           );
         })}
