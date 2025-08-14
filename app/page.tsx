@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-export default function HomePage() {
-  // Redirect to your boutique page
-  redirect('/%40stephanie');
+export default function Home() {
+  // Default landing = your boutique
+  redirect('/u/stephanie');
 }
