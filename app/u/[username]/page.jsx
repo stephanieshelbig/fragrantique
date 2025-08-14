@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase';
 
 const CANVAS_ASPECT = '3 / 2';
 const DEFAULT_H = 54;
-const SHOW_LABELS = true;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
@@ -309,17 +308,13 @@ export default function UserBoutiquePage({ params }) {
           const leftPct = clamp(it.x_pct ?? 50, 0, 100);
           const brandSlug = slugifyBrand(it.brand);
 
-          // When arranging → render a DIV (draggable). When not arranging → render a LINK.
-          const commonProps = {
-            className: 'absolute select-none',
-            style: {
-              top: `${topPct}%`,
-              left: `${leftPct}%`,
-              transform: 'translate(-50%, -100%)',
-              height: `${DEFAULT_H}px`,
-              touchAction: 'none', // IMPORTANT for reliable drag on touch devices
-            },
-            title: `${it.frag?.brand || ''} — view all`,
+          // Common props for both modes
+          const wrapperStyle = {
+            top: `${topPct}%`,
+            left: `${leftPct}%`,
+            transform: 'translate(-50%, -100%)',
+            height: `${DEFAULT_H}px`,
+            touchAction: 'none',
           };
 
           const BottleImg = (
@@ -349,31 +344,46 @@ export default function UserBoutiquePage({ params }) {
             />
           );
 
-          const Label = SHOW_LABELS ? (
-            <div className="absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white backdrop-blur">
+          // HOVER LABEL (hidden by default; appears on hover)
+          const HoverLabel = (
+            <div
+              className="
+                pointer-events-none
+                absolute left-1/2 -bottom-5 -translate-x-1/2
+                text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded
+                bg-black/55 text-white backdrop-blur
+                opacity-0 group-hover:opacity-100 transition-opacity duration-150
+              "
+              style={{ whiteSpace: 'nowrap' }}
+            >
               {it.brand}
             </div>
-          ) : null;
+          );
 
+          // Arrange mode → plain DIV for drag; View mode → Link to brand page
           return arrange ? (
             <div
               key={it.linkId}
-              {...commonProps}
+              className="group absolute select-none cursor-grab active:cursor-grabbing"
+              style={wrapperStyle}
               onPointerDown={(e) => startDrag(e, it)}
               onTouchStart={(e) => startDrag(e, it)}
+              title={`${it.frag?.brand || ''}`}
             >
               {BottleImg}
-              {Label}
+              {HoverLabel}
             </div>
           ) : (
             <Link
               key={it.linkId}
               href={`/u/${encodeURIComponent(username)}/brand/${brandSlug}`}
               prefetch={false}
-              {...commonProps}
+              className="group absolute select-none cursor-pointer"
+              style={wrapperStyle}
+              title={`${it.frag?.brand || ''} — view all`}
             >
               {BottleImg}
-              {Label}
+              {HoverLabel}
             </Link>
           );
         })}
