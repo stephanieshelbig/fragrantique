@@ -13,9 +13,9 @@ function json(data, status = 200) {
   });
 }
 
-// Simple GET for sanity checking in the browser
+// Health check
 export async function GET() {
-  return json({ ok: true, route: '/api/checkout', expect: 'POST with { decantId }' });
+  return json({ ok: true, route: '/api/checkout', expect: 'POST { items:[{decantId,qty}], fallbackDecantId? }' });
 }
 
 export async function POST(req) {
@@ -31,53 +31,76 @@ export async function POST(req) {
     }
 
     const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
-
-    const body = await req.json().catch(() => null);
-    if (!body || !body.decantId) {
-      return json({ error: 'Missing JSON body or decantId' }, 400);
-    }
-    const { decantId, fragranceId } = body;
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: d, error: dErr } = await supabase
-      .from('decants')
-      .select('id, fragrance_id, size_ml, price_cents, quantity, is_active, fragrance:fragrances(id, brand, name)')
-      .eq('id', decantId)
-      .maybeSingle();
+    const body = await req.json().catch(() => null);
+    if (!body) return json({ error: 'Missing JSON body' }, 400);
 
-    if (dErr) return json({ error: `DB error: ${dErr.message}` }, 500);
-    if (!d) return json({ error: 'Decant not found' }, 404);
-    if (!d.is_active || d.quantity === 0) return json({ error: 'Out of stock' }, 400);
+    // Accept either a single decantId (legacy) OR items array
+    let items = [];
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      items = body.items
+        .filter(it => it && it.decantId)
+        .map(it => ({ decantId: String(it.decantId), qty: Math.max(1, parseInt(it.qty || 1)) }));
+    } else if (body.decantId) {
+      items = [{ decantId: String(body.decantId), qty: 1 }];
+    } else {
+      return json({ error: 'Provide decantId or items[]' }, 400);
+    }
 
-    const basePrice = d.price_cents;
-    const fee = Math.max(0, Math.round(basePrice * 0.05)); // 5% fee
+    // Load each decant from DB to validate/price accurately
+    const lineItems = [];
+    let subtotal = 0;
+    let lastFragranceId = null;
+
+    for (const { decantId, qty } of items) {
+      const { data: d, error: dErr } = await supabase
+        .from('decants')
+        .select('id, fragrance_id, size_ml, price_cents, quantity, is_active, fragrance:fragrances(id, brand, name)')
+        .eq('id', decantId)
+        .maybeSingle();
+
+      if (dErr) return json({ error: `DB error: ${dErr.message}` }, 500);
+      if (!d) return json({ error: `Decant not found: ${decantId}` }, 404);
+      if (!d.is_active || d.quantity === 0) return json({ error: `Decant out of stock: ${decantId}` }, 400);
+
+      const amount = Math.max(0, parseInt(d.price_cents));
+      const quantity = Math.max(1, qty);
+
+      subtotal += amount * quantity;
+      lastFragranceId = d.fragrance_id || lastFragranceId;
+
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${d.fragrance?.brand || ''} ${d.fragrance?.name || ''} — ${d.size_ml} mL decant`
+          },
+          unit_amount: amount
+        },
+        quantity
+      });
+    }
+
+    // Add single 5% platform fee on subtotal
+    const fee = Math.max(0, Math.round(subtotal * 0.05));
+    if (fee > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: { name: 'Platform fee (5%)' },
+          unit_amount: fee
+        },
+        quantity: 1
+      });
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       allow_promotion_codes: true,
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `${d.fragrance?.brand || ''} ${d.fragrance?.name || ''} — ${d.size_ml} mL decant`
-            },
-            unit_amount: basePrice
-          },
-          quantity: 1
-        },
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: { name: 'Platform fee (5%)' },
-            unit_amount: fee
-          },
-          quantity: 1
-        }
-      ],
-      success_url: `${SITE_URL}/fragrance/${d.fragrance_id || fragranceId}?checkout=success`,
-      cancel_url: `${SITE_URL}/fragrance/${d.fragrance_id || fragranceId}?checkout=cancel`
+      line_items: lineItems,
+      success_url: `${SITE_URL}/cart?status=success`,
+      cancel_url: `${SITE_URL}/cart?status=cancel`
     });
 
     return json({ url: session.url });
