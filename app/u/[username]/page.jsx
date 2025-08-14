@@ -6,21 +6,22 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Brand-positioned boutique with robust brand-key matching:
+ * Brand-positioned boutique with robust brand-key matching and race-free saving:
  * - One bottle per brand, draggable anywhere.
  * - Saves (user, canonical_brand_key) -> x_pct, y_pct to user_brand_positions.
  * - On load, tries strict key then canonical key (so older rows still match).
  * - Waits for Supabase auth before loading; refetches on auth changes.
+ * - Uses a live ref for drag position so final save never reads stale state.
  * - Add ?debug=1 to show which key matched.
  */
 
 const CANVAS_ASPECT = '3 / 2';
-const DEFAULT_H   = 54;
+const DEFAULT_H = 54;
 
-const clamp   = (v, min, max) => Math.max(min, Math.min(max, v));
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
-const toNum   = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
-const isNum   = (v) => typeof v === 'number' && !Number.isNaN(v);
+const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
+const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
 /** Strict normalization (legacy) */
@@ -91,7 +92,7 @@ export default function UserBoutiquePage({ params }) {
   const [localBrand, setLocalBrand]   = useState({});    // fallback only
   const [dbPosCount, setDbPosCount]   = useState(0);     // debug chip
 
-  // ----- refs (declare ONCE) -----
+  // ----- refs -----
   const rootRef = useRef(null);
   const dragState = useRef(null);
   const lastSavedRef = useRef(null);
@@ -245,7 +246,7 @@ export default function UserBoutiquePage({ params }) {
     return [...positioned, ...needDefaults];
   }, [links, dbPositions, localBrand]);
 
-  // Drag lifecycle
+  // Drag lifecycle (race-free)
   function startDrag(e, itm) {
     if (!arrange) return;
     const container = rootRef.current;
@@ -270,7 +271,9 @@ export default function UserBoutiquePage({ params }) {
       startYPct: startY,
       pointerX,
       pointerY,
-      rect
+      rect,
+      lastXPct: startX,  // live values updated during drag
+      lastYPct: startY
     };
 
     window.addEventListener('pointermove', onDragMove, { passive: false });
@@ -293,7 +296,11 @@ export default function UserBoutiquePage({ params }) {
     const newX = clamp(startXPct + dxPct, 0, 100);
     const newY = clamp(startYPct + dyPct, 0, 100);
 
-    // Update UI immediately (canonical key in memory)
+    // Update live ref FIRST (source of truth for saving on drop)
+    dragState.current.lastXPct = newX;
+    dragState.current.lastYPct = newY;
+
+    // Then update UI state so you see the bottle move
     setDbPositions(prev => ({ ...prev, [brandKeyCanon]: { x_pct: newX, y_pct: newY } }));
   }
 
@@ -307,12 +314,10 @@ export default function UserBoutiquePage({ params }) {
     window.removeEventListener('touchend', onDragEnd);
 
     if (!snap) return;
-    const { brandKeyCanon } = snap;
-    const pos = dbPositions[brandKeyCanon];
-    if (!pos) return;
 
-    const x = Number(pos.x_pct);
-    const y = Number(pos.y_pct);
+    const { brandKeyCanon, lastXPct, lastYPct } = snap;
+    const x = Number(lastXPct);
+    const y = Number(lastYPct);
 
     setStatus('Saving…');
     lastSavedRef.current = { x, y };
@@ -376,13 +381,6 @@ export default function UserBoutiquePage({ params }) {
           >
             Reload DB
           </button>
-          <button
-            onClick={() => setDebug(d => !d)}
-            className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
-            title="Toggle debug labels"
-          >
-            {debug ? 'Debug ✓' : 'Debug'}
-          </button>
           <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
             DB pos: {dbPosCount}
             {lastSavedRef.current && (
@@ -413,13 +411,6 @@ export default function UserBoutiquePage({ params }) {
             touchAction: 'none',
           };
 
-          // Optional debug label to show which key matched after reload
-          const DebugTag = debug ? (
-            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] bg-pink-600 text-white px-1.5 py-0.5 rounded pointer-events-none">
-              {it.matchedKey ? `match:${it.matchedKey}` : `none (${it.brandKeyStrict} / ${it.brandKeyCanon})`}
-            </div>
-          ) : null;
-
           return arrange ? (
             <div
               key={it.brandKeyStrict}
@@ -429,7 +420,6 @@ export default function UserBoutiquePage({ params }) {
               onTouchStart={(e) => startDrag(e, it)}
               title={`${it.brand}`}
             >
-              {DebugTag}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bottleSrc(it.frag)}
@@ -466,7 +456,6 @@ export default function UserBoutiquePage({ params }) {
               style={wrapperStyle}
               title={`${it.brand} — view all`}
             >
-              {DebugTag}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bottleSrc(it.frag)}
