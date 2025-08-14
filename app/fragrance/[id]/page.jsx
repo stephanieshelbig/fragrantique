@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -90,7 +89,7 @@ export default function FragrancePage({ params }) {
     setSubmitting(false);
   }
 
-  // Robust client → always handles non-JSON or empty responses gracefully
+  // Robust client → use res.clone() so we can safely fallback to text()
   async function buyDecant(decantId) {
     try {
       const res = await fetch('/api/checkout', {
@@ -99,12 +98,13 @@ export default function FragrancePage({ params }) {
         body: JSON.stringify({ decantId, fragranceId: id })
       });
 
-      // Try JSON first; if it fails, read raw text
+      // Try JSON first; if parsing fails, use a cloned response for text()
+      const resClone = res.clone();
       let payload = null;
       try {
         payload = await res.json();
       } catch {
-        const text = await res.text();
+        const text = await resClone.text(); // safe fallback
         alert(text || 'Checkout failed (non-JSON response).');
         return;
       }
