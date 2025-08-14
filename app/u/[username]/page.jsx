@@ -6,22 +6,24 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Brand-positioned boutique:
+ * Brand-positioned boutique with robust brand-key matching:
  * - One bottle per brand, draggable anywhere.
- * - Saves (user, brand_key) -> x_pct, y_pct to user_brand_positions.
- * - Waits for Supabase auth before initial load; refetches on auth changes.
- * - Reads DB positions first; falls back to localStorage only if missing.
+ * - Saves (user, canonical_brand_key) -> x_pct, y_pct to user_brand_positions.
+ * - On load, looks up by strict key first, then canonical key (so older rows still match).
+ * - Waits for Supabase auth before loading; refetches on auth changes.
+ * - Add ?debug=1 to show which key matched.
  */
 
 const CANVAS_ASPECT = '3 / 2';
-const DEFAULT_H = 54;
+const DEFAULT_H   = 54;
 
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const clamp   = (v, min, max) => Math.max(min, Math.min(max, v));
 const pxToPct = (x, total) => (x / total) * 100;
-const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
-const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
+const toNum   = (v) => (v === null || v === undefined || v === '' ? undefined : Number(v));
+const isNum   = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
+/** Strict normalization (what we used before) */
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -29,6 +31,24 @@ const brandKey = (b) =>
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
+/** More aggressive canonicalization:
+ *  - removes common suffix words and corporate terms
+ *  - collapses doubled hyphens, trims hyphens
+ */
+const STOPWORDS = new Set([
+  'paris','london','milan','new','york','nyc','roma','roma','rome',
+  'perfume','perfumes','parfum','parfums','fragrance','fragrances',
+  'inc','ltd','llc','co','company','laboratories','lab','labs',
+  'edition','editions','house','maison','atelier','collection','collections'
+]);
+function canonicalBrandKey(b) {
+  const strict = brandKey(b);
+  const parts = strict.split('-').filter(Boolean);
+  const kept = parts.filter(p => !STOPWORDS.has(p));
+  const canon = kept.join('-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  return canon || strict;
+}
 
 const LS_BRAND = (u) => `fragrantique_layout_by_brand_${u}`;
 function loadLocalBrand(username) {
@@ -39,9 +59,7 @@ function loadLocalBrand(username) {
       obj[k].y_pct = toNum(obj[k].y_pct);
     }
     return obj;
-  } catch {
-    return {};
-  }
+  } catch { return {}; }
 }
 function saveLocalBrand(username, mapObj) {
   try { localStorage.setItem(LS_BRAND(username), JSON.stringify(mapObj)); } catch {}
@@ -66,35 +84,28 @@ export default function UserBoutiquePage({ params }) {
   const [arrange, setArrange] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [status, setStatus] = useState(null);
+  const [debug, setDebug] = useState(false);
 
   const [profileId, setProfileId] = useState(null);
-  const [links, setLinks] = useState([]);            // user_fragrances + fragrance
-  const [dbPositions, setDbPositions] = useState({}); // {brandKey: {x_pct,y_pct}}
-  const [localBrand, setLocalBrand] = useState({});   // fallback only
-  const [dbPosCount, setDbPosCount] = useState(0);    // debug chip
+  const [links, setLinks] = useState([]);              // user_fragrances + fragrance
+  const [dbPositions, setDbPositions] = useState({});  // {brandKey: {x_pct,y_pct}}
+  const [localBrand, setLocalBrand] = useState({});    // fallback only
+  const [dbPosCount, setDbPosCount] = useState(0);
 
   const rootRef = useRef(null);
   const dragState = useRef(null);
   const lastSavedRef = useRef(null);
 
-  // Wait for auth to hydrate, then load; also react to auth changes
+  // Wait for auth, then load; also react to auth changes
   useEffect(() => {
     let sub = null;
-
     (async () => {
-      await supabase.auth.getSession(); // hydrate session (wait once)
+      await supabase.auth.getSession();
       setAuthReady(true);
-      await loadData(); // first load AFTER auth is ready
-
-      // If auth state changes (e.g., you log in), reload DB data
-      sub = supabase.auth.onAuthStateChange(async () => {
-        await loadData();
-      }).data?.subscription || null;
+      await loadData();
+      sub = supabase.auth.onAuthStateChange(async () => { await loadData(); }).data?.subscription || null;
     })();
-
-    return () => {
-      if (sub) sub.unsubscribe();
-    };
+    return () => { if (sub) sub.unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
@@ -102,7 +113,6 @@ export default function UserBoutiquePage({ params }) {
     setLoading(true);
     setStatus(null);
 
-    // Profile for this username
     const { data: prof } = await supabase
       .from('profiles')
       .select('id, username')
@@ -117,7 +127,6 @@ export default function UserBoutiquePage({ params }) {
     }
     setProfileId(prof.id);
 
-    // All bottles for this user
     const { data: rows } = await supabase
       .from('user_fragrances')
       .select(`
@@ -142,7 +151,6 @@ export default function UserBoutiquePage({ params }) {
     }));
     setLinks(mapped);
 
-    // Brand positions from DB
     const { data: posRows } = await supabase
       .from('user_brand_positions')
       .select('brand_key, x_pct, y_pct')
@@ -155,40 +163,61 @@ export default function UserBoutiquePage({ params }) {
     setDbPositions(dbMap);
     setDbPosCount(posRows?.length || 0);
 
-    // Local fallback (used only when DB is missing a brand)
     setLocalBrand(loadLocalBrand(username));
 
-    // Query flags
     const qs = new URLSearchParams(window.location.search);
     if (qs.get('edit') === '1') setArrange(true);
+    if (qs.get('debug') === '1') setDebug(true);
 
     setLoading(false);
   }
 
-  // Build one rep per brand, applying DB positions first, then local fallback
+  // Build one rep per brand; pull positions by strict key THEN canonical key, else default
   const reps = useMemo(() => {
     const byBrand = new Map();
     for (const it of links) {
-      const bk = brandKey(it.frag?.brand);
-      if (!byBrand.has(bk)) byBrand.set(bk, []);
-      byBrand.get(bk).push(it);
+      const strict = brandKey(it.frag?.brand);
+      if (!byBrand.has(strict)) byBrand.set(strict, []);
+      byBrand.get(strict).push(it);
     }
 
-    const chosen = Array.from(byBrand.entries()).map(([bk, list]) => {
+    const chosen = Array.from(byBrand.entries()).map(([strict, list]) => {
       const rep = chooseRepForBrand(list);
       if (!rep) return null;
       const brand = rep.frag?.brand || 'Unknown';
+      const canon = canonicalBrandKey(brand);
 
-      const dbPos = dbPositions[bk];
-      const locPos = localBrand[bk];
+      // Try strict key from DB, then canonical, then local fallback
+      const dbStrict = dbPositions[strict];
+      const dbCanon  = dbPositions[canon];
+      const locCanon = localBrand[canon];
 
-      const x = isNum(dbPos?.x_pct) ? dbPos.x_pct : (isNum(locPos?.x_pct) ? locPos.x_pct : undefined);
-      const y = isNum(dbPos?.y_pct) ? dbPos.y_pct : (isNum(locPos?.y_pct) ? locPos.y_pct : undefined);
+      const x = isNum(dbStrict?.x_pct) ? dbStrict.x_pct
+              : isNum(dbCanon?.x_pct)  ? dbCanon.x_pct
+              : isNum(locCanon?.x_pct) ? locCanon.x_pct
+              : undefined;
 
-      return { ...rep, brand, brandKey: bk, x_pct: x, y_pct: y };
+      const y = isNum(dbStrict?.y_pct) ? dbStrict.y_pct
+              : isNum(dbCanon?.y_pct)  ? dbCanon.y_pct
+              : isNum(locCanon?.y_pct) ? locCanon.y_pct
+              : undefined;
+
+      const matchedKey = isNum(dbStrict?.x_pct) || isNum(dbStrict?.y_pct) ? strict
+                        : (isNum(dbCanon?.x_pct) || isNum(dbCanon?.y_pct)) ? canon
+                        : null;
+
+      return {
+        ...rep,
+        brand,
+        brandKeyStrict: strict,
+        brandKeyCanon: canon,
+        matchedKey,
+        x_pct: x,
+        y_pct: y,
+      };
     }).filter(Boolean);
 
-    // Defaults for any without a position yet (bottom grid)
+    // Defaults for any without a position yet
     const needDefaults = [];
     const positioned = [];
     for (const it of chosen) {
@@ -213,7 +242,7 @@ export default function UserBoutiquePage({ params }) {
     return [...positioned, ...needDefaults];
   }, [links, dbPositions, localBrand]);
 
-  // Drag logic
+  // Drag lifecycle
   function startDrag(e, itm) {
     if (!arrange) return;
     const container = rootRef.current;
@@ -232,7 +261,8 @@ export default function UserBoutiquePage({ params }) {
     const startY = isNum(itm.y_pct) ? itm.y_pct : 80;
 
     dragState.current = {
-      brandKey: itm.brandKey,
+      brandKeyStrict: itm.brandKeyStrict,
+      brandKeyCanon : itm.brandKeyCanon,
       startXPct: startX,
       startYPct: startY,
       pointerX,
@@ -250,7 +280,7 @@ export default function UserBoutiquePage({ params }) {
     if (!dragState.current) return;
     e.preventDefault();
 
-    const { brandKey: bk, startXPct, startYPct, pointerX, pointerY, rect } = dragState.current;
+    const { brandKeyCanon, startXPct, startYPct, pointerX, pointerY, rect } = dragState.current;
     const nowX = e.touches ? e.touches[0].clientX : e.clientX;
     const nowY = e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -260,7 +290,8 @@ export default function UserBoutiquePage({ params }) {
     const newX = clamp(startXPct + dxPct, 0, 100);
     const newY = clamp(startYPct + dyPct, 0, 100);
 
-    setDbPositions(prev => ({ ...prev, [bk]: { x_pct: newX, y_pct: newY } }));
+    // Update UI immediately by mutating the canonical key in memory
+    setDbPositions(prev => ({ ...prev, [brandKeyCanon]: { x_pct: newX, y_pct: newY } }));
   }
 
   async function onDragEnd() {
@@ -273,28 +304,29 @@ export default function UserBoutiquePage({ params }) {
     window.removeEventListener('touchend', onDragEnd);
 
     if (!snap) return;
-    const { brandKey: bk } = snap;
-    const pos = dbPositions[bk];
+    const { brandKeyCanon } = snap;
+    const pos = dbPositions[brandKeyCanon];
     if (!pos) return;
 
     const x = Number(pos.x_pct);
     const y = Number(pos.y_pct);
 
     setStatus('Saving…');
-    lastSavedRef.current = { x, y };
 
     let err = null;
     if (profileId) {
+      // Save under the CANONICAL key so reloads always find it
       const { error } = await supabase
         .from('user_brand_positions')
-        .upsert({ user_id: profileId, brand_key: bk, x_pct: x, y_pct: y });
+        .upsert({ user_id: profileId, brand_key: brandKeyCanon, x_pct: x, y_pct: y });
       if (error) err = error.message;
     } else {
       err = 'no profile';
     }
 
+    // Mirror to local (canonical) as safety
     try {
-      const nextLocal = { ...localBrand, [bk]: { x_pct: x, y_pct: y } };
+      const nextLocal = { ...localBrand, [brandKeyCanon]: { x_pct: x, y_pct: y } };
       saveLocalBrand(username, nextLocal);
       setLocalBrand(nextLocal);
     } catch {}
@@ -302,12 +334,10 @@ export default function UserBoutiquePage({ params }) {
     setStatus(err ? `DB blocked: ${err}. Saved locally.` : 'DB saved ✓');
   }
 
-  if (!authReady) {
-    return <div className="p-6">Starting session…</div>;
-  }
-  if (loading) {
-    return <div className="p-6">Loading boutique…</div>;
-  }
+  const rootRef = useRef(null);
+
+  if (!authReady) return <div className="p-6">Starting session…</div>;
+  if (loading)     return <div className="p-6">Loading boutique…</div>;
 
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
@@ -338,18 +368,21 @@ export default function UserBoutiquePage({ params }) {
             Guides
           </button>
           <button
+            onClick={() => setDebug(d => !d)}
+            className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
+            title="Toggle debug labels"
+          >
+            {debug ? 'Debug ✓' : 'Debug'}
+          </button>
+          <button
             onClick={loadData}
             className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
             title="Reload from DB"
           >
             Reload DB
           </button>
-          {/* Debug chip: how many DB positions were actually loaded */}
           <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
             DB pos: {dbPosCount}
-            {lastSavedRef.current && (
-              <> · last x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
-            )}
           </span>
           {status && (
             <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">{status}</span>
@@ -363,7 +396,7 @@ export default function UserBoutiquePage({ params }) {
 
         {/* One bottle per brand */}
         {reps.map((it) => {
-          const topPct = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
+          const topPct  = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
           const leftPct = clamp(isNum(it.x_pct) ? it.x_pct : 50, 0, 100);
           const href = `/u/${encodeURIComponent(username)}/brand/${brandKey(it.brand)}`;
 
@@ -375,15 +408,23 @@ export default function UserBoutiquePage({ params }) {
             touchAction: 'none',
           };
 
+          // Small hover label; debug tag shows which key matched
+          const DebugTag = debug ? (
+            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] bg-pink-600 text-white px-1.5 py-0.5 rounded pointer-events-none">
+              {it.matchedKey ? `match:${it.matchedKey}` : `none (${it.brandKeyStrict} / ${it.brandKeyCanon})`}
+            </div>
+          ) : null;
+
           return arrange ? (
             <div
-              key={it.brandKey}
+              key={it.brandKeyStrict}
               className="group absolute select-none cursor-grab active:cursor-grabbing"
               style={wrapperStyle}
               onPointerDown={(e) => startDrag(e, it)}
               onTouchStart={(e) => startDrag(e, it)}
               title={`${it.brand}`}
             >
+              {DebugTag}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bottleSrc(it.frag)}
@@ -413,13 +454,14 @@ export default function UserBoutiquePage({ params }) {
             </div>
           ) : (
             <Link
-              key={it.brandKey}
+              key={it.brandKeyStrict}
               href={href}
               prefetch={false}
               className="group absolute select-none cursor-pointer"
               style={wrapperStyle}
               title={`${it.brand} — view all`}
             >
+              {DebugTag}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bottleSrc(it.frag)}
