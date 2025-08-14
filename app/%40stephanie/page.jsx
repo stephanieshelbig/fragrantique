@@ -4,14 +4,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-/* Shelf red-lines (percent from top) – tuned to your image */
+/* -----------------------------------------------
+   Shelf red-lines (percent from top) – tuned
+------------------------------------------------ */
 const REDLINE_Y = [24.8, 35.8, 46.8, 57.8, 68.8, 79.8]; // top → bottom
 const ALCOVE_LEFT = 17;
 const ALCOVE_RIGHT = 83;
 const BASELINE_NUDGE_PCT = 0.9;
 
-const H_DESKTOP = 62, H_TABLET = 52, H_MOBILE = 42;
+/* One row per shelf for clean brand tiles */
+const ROWS_PER_SHELF = 1;
 
+/* Bottle sizing & columns */
+const H_DESKTOP = 62, H_TABLET = 52, H_MOBILE = 42;
 function bottleH() {
   if (typeof window === 'undefined') return H_DESKTOP;
   const w = window.innerWidth;
@@ -71,25 +76,33 @@ export default function StephanieBrandShelves() {
   const rootRef = useRef(null);
   const xCenters = useMemo(() => centers(cols), [cols]);
 
+  // responsiveness
   useEffect(() => {
     const onResize = () => { setCols(columnsForWidth()); setBH(bottleH()); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // load server-computed reps (uses service role via API route)
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const res = await fetch('/api/brand-reps?user=stephanie', { cache: 'no-store' });
-      const j = await res.json();
-      if (res.ok && j.ok) {
-        setInfo({ mode: j.mode, linkCount: j.linkCount, brandCount: j.brandCount });
-        setReps(j.reps || []);
-      } else {
-        setInfo({ mode: 'error', linkCount: 0, brandCount: 0 });
+      try {
+        const res = await fetch('/api/brand-reps?user=stephanie', { cache: 'no-store' });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok && j?.ok) {
+          setInfo({ mode: j.mode, linkCount: j.linkCount, brandCount: j.brandCount });
+          setReps(j.reps || []);
+        } else {
+          setInfo({ mode: `error: ${j?.error || res.status}`, linkCount: 0, brandCount: 0 });
+          setReps([]);
+        }
+      } catch (e) {
+        setInfo({ mode: `error: ${e?.message || 'fetch failed'}`, linkCount: 0, brandCount: 0 });
         setReps([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
