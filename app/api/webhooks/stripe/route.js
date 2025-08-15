@@ -7,8 +7,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const stripe = getStripeClient();
-
-// service-role client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -17,9 +15,7 @@ const supabase = createClient(
 export async function POST(req) {
   const sig = req.headers.get('stripe-signature');
   const webhookSecret = getWebhookSecret();
-  if (!sig) {
-    return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
-  }
+  if (!sig) return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
 
   const rawBody = await req.text();
 
@@ -34,7 +30,7 @@ export async function POST(req) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
 
-      // Try to obtain line items
+      // Line items (preferred)
       let lineItems = [];
       try {
         const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
@@ -45,73 +41,65 @@ export async function POST(req) {
           currency: x.currency || session.currency,
           fragrance_id: x.price?.metadata?.fragrance_id || null,
         }));
-      } catch {
-        lineItems = [];
-      }
+      } catch { lineItems = []; }
 
       // Fallback to metadata cart
       let metaItems = [];
-      try {
-        if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart);
-      } catch {}
+      try { if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart); } catch {}
 
       const items = lineItems.length ? lineItems : metaItems;
+
+      // Shipping/name from Stripe first, else metadata from cart form
+      const md = session.metadata || {};
+      const cd = session.customer_details || {};
+      const ship = session.shipping || {};
+      const addr = ship.address || cd.address || null;
+
+      const shipping = {
+        buyer_name: cd.name || md.shipping_name || null,
+        shipping_name: ship.name || md.shipping_name || null,
+        shipping_address1: addr?.line1 || md.shipping_address1 || null,
+        shipping_address2: addr?.line2 || md.shipping_address2 || null,
+        shipping_city: addr?.city || md.shipping_city || null,
+        shipping_state: addr?.state || md.shipping_state || null,
+        shipping_postal: addr?.postal_code || md.shipping_postal || null,
+        shipping_country: addr?.country || md.shipping_country || null,
+      };
 
       const payload = {
         stripe_session_id: session.id,
         stripe_payment_intent: session.payment_intent || null,
         amount_total: session.amount_total || null,
         currency: session.currency || 'usd',
-        buyer_email: session.customer_details?.email || session.customer_email || null,
-        user_id: session.metadata?.seller_user_id || null,
+        buyer_email: cd.email || session.customer_email || null,
+        user_id: md.seller_user_id || null,
         items: Array.isArray(items) ? items : [],
         status: 'paid',
+        buyer_name: shipping.buyer_name,
+        shipping_name: shipping.shipping_name,
+        shipping_address1: shipping.shipping_address1,
+        shipping_address2: shipping.shipping_address2,
+        shipping_city: shipping.shipping_city,
+        shipping_state: shipping.shipping_state,
+        shipping_postal: shipping.shipping_postal,
+        shipping_country: shipping.shipping_country,
       };
 
-      // Upsert order
-      const { error: upErr } = await supabase
-        .from('orders')
-        .upsert(payload, { onConflict: 'stripe_session_id' });
-      if (upErr) console.error('[orders upsert] error:', upErr.message);
+      await supabase.from('orders').upsert(payload, { onConflict: 'stripe_session_id' });
 
-      // Send email
       const html = renderOrderHtml({
         sessionId: session.id,
         buyerEmail: payload.buyer_email,
         amountTotal: payload.amount_total,
         currency: payload.currency,
-        items: payload.items
+        items: payload.items,
+        shipping,
       });
-
-      let emailOk = false;
-      let emailErr = null;
-      try {
-        const res = await sendOrderEmail({
-          to: process.env.ADMIN_EMAIL,
-          subject: 'Fragrantique — New order received',
-          html
-        });
-        emailOk = !!(res && (res.ok || res.accepted || res.messageId || res.id || res.skipped));
-        // Treat skipped (missing creds) as not sent but not fatal
-        if (res?.skipped) {
-          emailOk = false;
-          emailErr = 'skipped';
-        }
-      } catch (e) {
-        emailOk = false;
-        emailErr = e.message || 'send_failed';
-      }
-
-      // Persist email status
-      const upd = emailOk
-        ? { email_sent: true, email_error: null }
-        : { email_sent: false, email_error: emailErr || 'unknown' };
-
-      const { error: updErr } = await supabase
-        .from('orders')
-        .update(upd)
-        .eq('stripe_session_id', session.id);
-      if (updErr) console.error('[orders email status update] error:', updErr.message);
+      await sendOrderEmail({
+        to: process.env.ADMIN_EMAIL,
+        subject: 'Fragrantique — New order received',
+        html
+      });
     }
 
     return NextResponse.json({ received: true });
