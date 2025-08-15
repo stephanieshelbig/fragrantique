@@ -1,108 +1,155 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
+// Normalization helpers (match boutique page)
+const brandKey = (b) =>
+  (b || 'unknown')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
-function deslugifyBrand(slug) {
-  return decodeURIComponent(slug).replace(/-/g, ' ').replace(/\band\b/gi, '&').replace(/\s+/g, ' ').trim();
+const STOPWORDS = new Set([
+  'paris','london','milan','new','york','nyc','roma','rome',
+  'perfume','perfumes','parfum','parfums','fragrance','fragrances',
+  'inc','ltd','llc','co','company','laboratories','laboratory','lab','labs',
+  'edition','editions','house','maison','atelier','collection','collections'
+]);
+function canonicalBrandKey(b) {
+  const strict = brandKey(b);
+  const parts = strict.split('-').filter(Boolean);
+  const kept = parts.filter(p => !STOPWORDS.has(p));
+  const canon = kept.join('-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  return canon || strict;
 }
 
-export default function UserBrandPage({ params }) {
+export default function BrandPage({ params }) {
   const username = decodeURIComponent(params.username);
-  const brandSlug = params.brand;
-  const brandNameWanted = deslugifyBrand(brandSlug);
+  const urlStrictKey = decodeURIComponent(params.brand || ''); // <- use params.brand
 
+  const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
-  const [items, setItems] = useState([]); // all bottles in brand for this user
+  const [owner, setOwner] = useState({ id: null, username });
+  const [frags, setFrags] = useState([]);
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      await supabase.auth.getSession();
+      setAuthReady(true);
 
+      // 1) Find boutique owner
       const { data: prof } = await supabase
         .from('profiles')
         .select('id, username')
         .eq('username', username)
         .maybeSingle();
 
-      if (!prof?.id) { setProfile(null); setItems([]); setLoading(false); return; }
-      setProfile(prof);
+      if (!prof?.id) {
+        setOwner({ id: null, username });
+        setFrags([]);
+        setLoading(false);
+        return;
+      }
+      setOwner(prof);
 
-      // load all user bottles for this brand
-      const { data } = await supabase
+      // 2) Load all fragrances for that owner; filter in JS by normalized brand
+      const { data: rows } = await supabase
         .from('user_fragrances')
         .select(`
           id,
-          fragrance_id,
           fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
         `)
         .eq('user_id', prof.id);
 
-      const all = (data || []).filter(row => {
-        const b = (row.fragrance?.brand || '').trim().toLowerCase();
-        return b === brandNameWanted.toLowerCase();
-      });
-
-      // sort by name
-      all.sort((a, b) => (a.fragrance?.name || '').localeCompare(b.fragrance?.name || ''));
-
-      setItems(all);
+      const items = (rows || []).map(r => r.fragrance).filter(Boolean);
+      setFrags(items);
       setLoading(false);
     })();
-  }, [username, brandSlug, brandNameWanted]);
+  }, [username, urlStrictKey]);
+
+  // Normalize and match both strict + canonical keys
+  const filtered = useMemo(() => {
+    const wantStrict = (urlStrictKey || '').toLowerCase();
+    const wantCanon  = canonicalBrandKey(urlStrictKey);
+    return (frags || []).filter(f => {
+      const disp = f?.brand || 'unknown';
+      const fStrict = brandKey(disp);
+      const fCanon  = canonicalBrandKey(disp);
+      return fStrict === wantStrict || fCanon === wantCanon;
+    });
+  }, [frags, urlStrictKey]);
+
+  // Choose display brand
+  const displayBrand = useMemo(() => {
+    if (!filtered.length) {
+      const guess = urlStrictKey.replace(/-/g, ' ');
+      return guess ? guess.charAt(0).toUpperCase() + guess.slice(1) : 'Brand';
+    }
+    const counts = new Map();
+    for (const f of filtered) {
+      const b = f.brand || 'Unknown';
+      counts.set(b, (counts.get(b) || 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a,b)=>b[1]-a[1])[0][0];
+  }, [filtered, urlStrictKey]);
+
+  if (!authReady || loading) {
+    return <div className="max-w-5xl mx-auto p-6">Loading {displayBrand}…</div>;
+  }
 
   return (
-    <div className="mx-auto max-w-6xl w-full px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <Link href={`/u/${encodeURIComponent(username)}`} className="text-sm text-blue-600 hover:underline">← Back to @{username}</Link>
-        <h1 className="text-xl font-semibold">{brandNameWanted}</h1>
-        <div />
+    <div className="max-w-5xl mx-auto p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">
+          {displayBrand} — <span className="font-normal opacity-70">@{owner.username}</span>
+        </h1>
+        <Link href={`/u/${encodeURIComponent(owner.username)}`} className="text-sm underline">
+          ← Back to boutique
+        </Link>
       </div>
 
-      {loading ? (
-        <div>Loading…</div>
-      ) : items.length === 0 ? (
-        <div className="text-sm opacity-70">No fragrances found for this brand.</div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
-          {items.map((it) => {
-            const f = it.fragrance;
-            return (
-              <Link
-                key={it.id}
-                href={`/fragrance/${f?.id}`}
-                className="group block relative bg-white/40 rounded-xl p-3 hover:shadow-md transition"
-                title={f?.name || 'fragrance'}
-              >
-                <div className="relative w-full" style={{ aspectRatio: '2/3' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={bottleSrc(f)}
-                    alt={f?.name || 'fragrance'}
-                    className="object-contain mx-auto"
-                    style={{ height: '100%', width: 'auto', mixBlendMode: 'multiply' }}
-                    onError={(e) => {
-                      const img = e.currentTarget;
-                      if (!img.dataset.fallback) {
-                        img.dataset.fallback = '1';
-                        img.src = '/bottle-placeholder.png';
-                      }
-                    }}
-                  />
-                </div>
-                <div className="mt-2 text-xs font-medium line-clamp-2 text-center">
-                  {f?.name || 'Unnamed'}
-                </div>
-              </Link>
-            );
-          })}
+      {!filtered.length && (
+        <div className="p-4 border rounded bg-white">
+          No fragrances found for this brand in @{owner.username}’s boutique.
         </div>
       )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+        {filtered.map((f) => {
+          const img = f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+          return (
+            <Link
+              key={f.id}
+              href={`/fragrance/${f.id}`}
+              className="group block"
+              title={`${f.brand} — ${f.name}`}
+            >
+              <div className="relative w-full" style={{ aspectRatio: '3 / 4' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img}
+                  alt={f.name}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{ mixBlendMode: 'multiply', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.18))' }}
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (!el.dataset.fallback) {
+                      el.dataset.fallback = '1';
+                      el.src = '/bottle-placeholder.png';
+                    }
+                  }}
+                />
+              </div>
+              <div className="mt-2 text-xs opacity-80">{f.brand}</div>
+              <div className="text-sm font-medium">{f.name}</div>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }
