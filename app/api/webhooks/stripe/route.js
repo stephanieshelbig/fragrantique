@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 const stripe = getStripeClient();
 
-// service-role for DB writes
+// service-role client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -31,60 +31,87 @@ export async function POST(req) {
   }
 
   try {
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object;
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
 
-        let lineItems = [];
-        try {
-          const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
-          lineItems = li.data.map(x => ({
-            name: x.description || x.price?.product || 'Item',
-            quantity: x.quantity || 1,
-            unit_amount: x.price?.unit_amount ?? null,
-            currency: x.currency || session.currency,
-            fragrance_id: x.price?.metadata?.fragrance_id || null,
-          }));
-        } catch {
-          lineItems = [];
-        }
+      // Try to obtain line items
+      let lineItems = [];
+      try {
+        const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
+        lineItems = li.data.map(x => ({
+          name: x.description || x.price?.product || 'Item',
+          quantity: x.quantity || 1,
+          unit_amount: x.price?.unit_amount ?? null,
+          currency: x.currency || session.currency,
+          fragrance_id: x.price?.metadata?.fragrance_id || null,
+        }));
+      } catch {
+        lineItems = [];
+      }
 
-        let metaItems = [];
-        try {
-          if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart);
-        } catch {}
+      // Fallback to metadata cart
+      let metaItems = [];
+      try {
+        if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart);
+      } catch {}
 
-        const items = lineItems.length ? lineItems : metaItems;
+      const items = lineItems.length ? lineItems : metaItems;
 
-        const payload = {
-          stripe_session_id: session.id,
-          stripe_payment_intent: session.payment_intent || null,
-          amount_total: session.amount_total || null,
-          currency: session.currency || 'usd',
-          buyer_email: session.customer_details?.email || session.customer_email || null,
-          user_id: session.metadata?.seller_user_id || null,
-          items: Array.isArray(items) ? items : [],
-          status: 'paid'
-        };
+      const payload = {
+        stripe_session_id: session.id,
+        stripe_payment_intent: session.payment_intent || null,
+        amount_total: session.amount_total || null,
+        currency: session.currency || 'usd',
+        buyer_email: session.customer_details?.email || session.customer_email || null,
+        user_id: session.metadata?.seller_user_id || null,
+        items: Array.isArray(items) ? items : [],
+        status: 'paid',
+      };
 
-        await supabase.from('orders').upsert(payload, { onConflict: 'stripe_session_id' });
+      // Upsert order
+      const { error: upErr } = await supabase
+        .from('orders')
+        .upsert(payload, { onConflict: 'stripe_session_id' });
+      if (upErr) console.error('[orders upsert] error:', upErr.message);
 
-        const html = renderOrderHtml({
-          sessionId: session.id,
-          buyerEmail: payload.buyer_email,
-          amountTotal: payload.amount_total,
-          currency: payload.currency,
-          items: payload.items
-        });
-        await sendOrderEmail({
+      // Send email
+      const html = renderOrderHtml({
+        sessionId: session.id,
+        buyerEmail: payload.buyer_email,
+        amountTotal: payload.amount_total,
+        currency: payload.currency,
+        items: payload.items
+      });
+
+      let emailOk = false;
+      let emailErr = null;
+      try {
+        const res = await sendOrderEmail({
           to: process.env.ADMIN_EMAIL,
           subject: 'Fragrantique — New order received',
           html
         });
-
-        break;
+        emailOk = !!(res && (res.ok || res.accepted || res.messageId || res.id || res.skipped));
+        // Treat skipped (missing creds) as not sent but not fatal
+        if (res?.skipped) {
+          emailOk = false;
+          emailErr = 'skipped';
+        }
+      } catch (e) {
+        emailOk = false;
+        emailErr = e.message || 'send_failed';
       }
-      default: break;
+
+      // Persist email status
+      const upd = emailOk
+        ? { email_sent: true, email_error: null }
+        : { email_sent: false, email_error: emailErr || 'unknown' };
+
+      const { error: updErr } = await supabase
+        .from('orders')
+        .update(upd)
+        .eq('stripe_session_id', session.id);
+      if (updErr) console.error('[orders email status update] error:', updErr.message);
     }
 
     return NextResponse.json({ received: true });
