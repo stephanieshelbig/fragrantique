@@ -3,7 +3,10 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { sendOrderEmail, renderOrderHtml } from '@/lib/email';
 
-export const runtime = 'nodejs'; // ensure Node runtime for webhooks
+// Ensure Node.js runtime (recommended for Stripe webhooks)
+export const runtime = 'nodejs';
+// Optional: make sure this route is always dynamic
+export const dynamic = 'force-dynamic';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
@@ -14,14 +17,17 @@ const supabase = createClient(
 );
 
 export async function POST(req) {
+  // Stripe signature from headers
   const sig = req.headers.get('stripe-signature');
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!sig || !webhookSecret) {
     return NextResponse.json({ error: 'Missing signature or secret' }, { status: 400 });
   }
 
+  // IMPORTANT: raw body (no JSON parsing). App Router gives raw text via req.text()
+  const rawBody = await req.text();
+
   let event;
-  const rawBody = await req.text(); // IMPORTANT: raw body
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
@@ -33,7 +39,7 @@ export async function POST(req) {
       case 'checkout.session.completed': {
         const session = event.data.object;
 
-        // Optionally pull line items (more reliable than only metadata)
+        // Prefer line items from Stripe
         let lineItems = [];
         try {
           const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
@@ -42,20 +48,17 @@ export async function POST(req) {
             quantity: x.quantity || 1,
             unit_amount: x.price?.unit_amount ?? null,
             currency: x.currency || session.currency,
-            // Optionally include metadata if you set it on the Price
             fragrance_id: x.price?.metadata?.fragrance_id || null,
           }));
         } catch {
           lineItems = [];
         }
 
-        // Fallback to metadata cart if provided by /api/checkout
+        // Fallback to metadata cart (set in /api/checkout)
         let metaItems = [];
         try {
-          if (session.metadata?.cart) {
-            metaItems = JSON.parse(session.metadata.cart);
-          }
-        } catch { /* ignore */ }
+          if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart);
+        } catch {}
 
         const items = lineItems.length ? lineItems : metaItems;
 
@@ -65,8 +68,8 @@ export async function POST(req) {
           amount_total: session.amount_total || null,
           currency: session.currency || 'usd',
           buyer_email: session.customer_details?.email || session.customer_email || null,
-          user_id: session.metadata?.seller_user_id || null, // you can set this in /api/checkout
-          items: items && Array.isArray(items) ? items : [],
+          user_id: session.metadata?.seller_user_id || null, // your admin profile id passed from /api/checkout
+          items: Array.isArray(items) ? items : [],
           status: 'paid'
         };
 
@@ -90,25 +93,16 @@ export async function POST(req) {
         break;
       }
 
-      // You can handle refunds or payment_intent.* if desired:
-      case 'payment_intent.succeeded': {
-        // No-op: checkout.session.completed already handles success
-        break;
-      }
       default:
-        // ignore other events
+        // Ignore other events for now
         break;
     }
 
+    // Stripe expects a 2xx quickly
     return NextResponse.json({ received: true });
   } catch (e) {
-    return NextResponse.json({ error: e.message || 'Webhook handler error' }, { status: 500 });
+    // Log server error but respond 200 so Stripe doesn't retry infinitely (you can choose 500 if you want retries)
+    console.error('Webhook error:', e);
+    return NextResponse.json({ error: e.message || 'handler error' }, { status: 500 });
   }
 }
-
-// Stripe needs the raw body, so disable Next’s default body parsing
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
