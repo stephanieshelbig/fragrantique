@@ -10,7 +10,6 @@ function dollarsToCents(v) {
   if (Number.isNaN(n)) return null;
   return Math.round(n * 100);
 }
-
 function centsToDollars(c) {
   if (c == null) return '';
   return (Number(c) / 100).toFixed(2);
@@ -20,11 +19,11 @@ export default function FragranceDetail({ params }) {
   const id = decodeURIComponent(params.id || '');
 
   const [viewer, setViewer] = useState(null);
-  const [owner, setOwner] = useState(null); // @stephanie profile (owner/admin)
+  const [owner, setOwner] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
 
-  const [frag, setFrag] = useState(null);       // fragrances.*
-  const [options, setOptions] = useState([]);   // decants rows
+  const [frag, setFrag] = useState(null);
+  const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
 
@@ -35,8 +34,8 @@ export default function FragranceDetail({ params }) {
 
   // Admin add/edit option
   const [newLabel, setNewLabel] = useState('');
-  const [newPrice, setNewPrice] = useState(''); // dollars
-  const [newSize, setNewSize] = useState('');   // optional ml number
+  const [newPrice, setNewPrice] = useState('');
+  const [newSize, setNewSize] = useState('');
   const [newCurrency, setNewCurrency] = useState('usd');
 
   useEffect(() => {
@@ -44,48 +43,43 @@ export default function FragranceDetail({ params }) {
       setLoading(true);
       setMsg('');
 
-      // Who’s logged in?
+      // Auth user
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user || null;
-      setViewer(user || null);
+      setViewer(user);
 
-      // Boutique owner (stephanie)
+      // Owner = @stephanie
       const { data: ownerProf } = await supabase
         .from('profiles')
         .select('id, username, is_admin')
         .eq('username', 'stephanie')
         .maybeSingle();
-
       setOwner(ownerProf || null);
       setIsOwner(!!(user && ownerProf && user.id === ownerProf.id));
 
-      // Fragrance + notes (from fragrances.notes)
+      // Fragrance with notes
       const { data: f } = await supabase
         .from('fragrances')
         .select('id, brand, name, image_url, image_url_transparent, fragrantica_url, notes')
         .eq('id', id)
         .maybeSingle();
-
       setFrag(f || null);
 
-      // Options (decants): label, price_cents, size_ml, currency, in_stock
-      // Table may already exist from earlier steps
+      // Decant/options
       try {
         const { data: ds, error: de } = await supabase
           .from('decants')
           .select('id, label, price_cents, size_ml, currency, in_stock')
           .eq('fragrance_id', id)
           .order('size_ml', { ascending: true });
-
         if (!de && Array.isArray(ds)) {
-          setOptions(
-            ds.map((d) => ({
-              ...d,
-              currency: (d.currency || 'usd').toLowerCase(),
-              in_stock: d.in_stock ?? true,
-            }))
-          );
-          if (!selectedId && ds.length) setSelectedId(String(ds[0].id));
+          const mapped = ds.map((d) => ({
+            ...d,
+            currency: (d.currency || 'usd').toLowerCase(),
+            in_stock: d.in_stock ?? true,
+          }));
+          setOptions(mapped);
+          if (!selectedId && mapped.length) setSelectedId(String(mapped[0].id));
         } else {
           setOptions([]);
         }
@@ -107,53 +101,37 @@ export default function FragranceDetail({ params }) {
 
   // ---------- CART ----------
   function loadCart() {
-    try {
-      return JSON.parse(localStorage.getItem('cart_v1') || '[]');
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem('cart_v1') || '[]'); } catch { return []; }
   }
   function saveCart(arr) {
     localStorage.setItem('cart_v1', JSON.stringify(arr));
   }
-
   function handleAddToCart() {
-    setMsg('');
-    setAdded(false);
-
+    setMsg(''); setAdded(false);
     const opt = selectedOpt || options.find((o) => o.in_stock) || null;
-    if (!opt) {
-      setMsg('Please select an option that is in stock.');
-      return;
-    }
+    if (!opt) { setMsg('Please select an option that is in stock.'); return; }
     if (!opt.price_cents || opt.price_cents <= 0) {
-      // price is hidden to visitors, but must exist in DB to calculate checkout later
-      setMsg('This option is not available for purchase right now.');
-      return;
+      setMsg('This option is not available for purchase right now.'); return;
     }
     const q = Math.max(1, parseInt(qty, 10) || 1);
-
     const item = {
       name: `${displayName} (${opt.label})`,
       quantity: q,
-      unit_amount: opt.price_cents,             // cents (hidden on this page for visitors)
+      unit_amount: opt.price_cents,
       currency: opt.currency || 'usd',
       fragrance_id: frag?.id,
       option_id: opt.id,
     };
-
-    const cart = loadCart();
-    cart.push(item);
-    saveCart(cart);
-    setAdded(true);
+    const cart = loadCart(); cart.push(item); saveCart(cart); setAdded(true);
   }
 
-  // ---------- ADMIN: manage options inline ----------
+  // ---------- ADMIN: manage options ----------
   async function saveOption(row) {
-    // Upsert single option
+    if (!isOwner || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
     const up = {
       id: row.id || undefined,
       fragrance_id: frag.id,
+      seller_user_id: owner.id,               // <<< IMPORTANT
       label: row.label?.trim() || 'Option',
       price_cents:
         typeof row.price_cents === 'number'
@@ -163,28 +141,22 @@ export default function FragranceDetail({ params }) {
       currency: (row.currency || 'usd').toLowerCase(),
       in_stock: !!row.in_stock,
     };
-
     const { data, error } = await supabase
       .from('decants')
       .upsert(up)
       .select('id, label, price_cents, size_ml, currency, in_stock')
       .maybeSingle();
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-    // refresh list
-    const next = options.map((o) => (o.id === row.id ? { ...o, ...data } : o));
-    setOptions(next);
+    if (error) { setMsg(error.message); return; }
+    setOptions((prev) => prev.map((o) => (o.id === row.id ? { ...o, ...data } : o)));
     if (!selectedId) setSelectedId(String(data.id));
     setMsg('Option saved ✓');
   }
 
   async function addNewOption() {
-    if (!frag?.id) return;
+    if (!isOwner || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
     const payload = {
       fragrance_id: frag.id,
+      seller_user_id: owner.id,               // <<< IMPORTANT
       label: newLabel?.trim() || 'Option',
       price_cents: dollarsToCents(newPrice),
       size_ml: newSize ? Number(newSize) : null,
@@ -196,30 +168,20 @@ export default function FragranceDetail({ params }) {
       .insert(payload)
       .select('id, label, price_cents, size_ml, currency, in_stock')
       .maybeSingle();
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-    setOptions([...options, data]);
+    if (error) { setMsg(error.message); return; }
+    setOptions((prev) => [...prev, data]);
     setSelectedId(String(data.id));
-    setNewLabel('');
-    setNewPrice('');
-    setNewSize('');
-    setNewCurrency('usd');
+    setNewLabel(''); setNewPrice(''); setNewSize(''); setNewCurrency('usd');
     setMsg('Added option ✓');
   }
 
   async function deleteOption(idToDelete) {
+    if (!isOwner) return;
     const { error } = await supabase.from('decants').delete().eq('id', idToDelete);
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-    const next = options.filter((o) => o.id !== idToDelete);
-    setOptions(next);
+    if (error) { setMsg(error.message); return; }
+    setOptions((prev) => prev.filter((o) => o.id !== idToDelete));
     if (String(selectedId) === String(idToDelete)) {
-      setSelectedId(next.length ? String(next[0].id) : '');
+      setSelectedId(options.length ? String(options[0].id) : '');
     }
     setMsg('Deleted option ✓');
   }
@@ -239,19 +201,13 @@ export default function FragranceDetail({ params }) {
       <div className="flex items-center justify-between">
         <Link href="/u/stephanie" className="underline text-sm">← Back to boutique</Link>
         {frag.fragrantica_url && (
-          <a
-            href={frag.fragrantica_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm underline"
-          >
+          <a href={frag.fragrantica_url} target="_blank" rel="noreferrer" className="text-sm underline">
             View on Fragrantica ↗
           </a>
         )}
       </div>
 
       <div className="flex gap-6">
-        {/* Bottle */}
         <div className="relative w-44 sm:w-52 md:w-56 aspect-[3/5]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -261,22 +217,18 @@ export default function FragranceDetail({ params }) {
             style={{ mixBlendMode: 'multiply', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.18))' }}
             onError={(e) => {
               const el = e.currentTarget;
-              if (!el.dataset.fallback) {
-                el.dataset.fallback = '1';
-                el.src = '/bottle-placeholder.png';
-              }
+              if (!el.dataset.fallback) { el.dataset.fallback = '1'; el.src = '/bottle-placeholder.png'; }
             }}
           />
         </div>
 
-        {/* Details */}
         <div className="flex-1 space-y-4">
           <div>
             <h1 className="text-2xl font-bold leading-tight">{frag.brand}</h1>
             <div className="text-lg">{frag.name}</div>
           </div>
 
-          {/* Fragrance Notes (from fragrances.notes) */}
+          {/* Notes from fragrances.notes */}
           <div className="p-3 rounded border bg-white">
             <div className="font-medium">Fragrance Notes</div>
             <div className={`mt-1 text-sm whitespace-pre-wrap ${frag.notes ? '' : 'opacity-60'}`}>
@@ -284,11 +236,11 @@ export default function FragranceDetail({ params }) {
             </div>
           </div>
 
-          {/* Purchase panel */}
+          {/* Purchase panel (no prices for visitors) */}
           <div className="p-3 rounded border bg-white space-y-3">
             <div className="font-medium">Choose an option</div>
 
-            {/* Visitor / buyer view: NO prices, just label + quantity + Add to cart */}
+            {/* Visitor view */}
             {!isOwner && (
               <>
                 <div>
@@ -320,10 +272,7 @@ export default function FragranceDetail({ params }) {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleAddToCart}
-                  className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90"
-                >
+                <button onClick={handleAddToCart} className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90">
                   Add to cart
                 </button>
 
@@ -337,12 +286,10 @@ export default function FragranceDetail({ params }) {
               </>
             )}
 
-            {/* Admin/Owner view: manage options with price */}
+            {/* Admin view (with prices & stock) */}
             {isOwner && (
               <div className="space-y-4">
-                <div className="text-sm opacity-70">
-                  You can create multiple options like <b>5mL decant</b>, <b>10mL decant</b>, or <b>Full Bottle</b>.
-                </div>
+                <div className="text-sm opacity-70">Create options like <b>5 mL decant</b>, <b>10 mL decant</b>, or <b>Full Bottle</b>.</div>
 
                 <div className="border rounded divide-y">
                   {options.map((o) => (
@@ -353,9 +300,7 @@ export default function FragranceDetail({ params }) {
                           className="border rounded px-2 py-1 w-full"
                           value={o.label || ''}
                           onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) => x.id === o.id ? { ...x, label: e.target.value } : x)
-                            )
+                            setOptions((prev) => prev.map((x) => x.id === o.id ? { ...x, label: e.target.value } : x))
                           }
                         />
                       </div>
@@ -366,9 +311,7 @@ export default function FragranceDetail({ params }) {
                           className="border rounded px-2 py-1 w-full"
                           value={o.size_ml ?? ''}
                           onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) => x.id === o.id ? { ...x, size_ml: e.target.value } : x)
-                            )
+                            setOptions((prev) => prev.map((x) => x.id === o.id ? { ...x, size_ml: e.target.value } : x))
                           }
                         />
                       </div>
@@ -396,9 +339,7 @@ export default function FragranceDetail({ params }) {
                           className="border rounded px-2 py-1 w-full"
                           value={o.currency || 'usd'}
                           onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) => x.id === o.id ? { ...x, currency: e.target.value } : x)
-                            )
+                            setOptions((prev) => prev.map((x) => x.id === o.id ? { ...x, currency: e.target.value } : x))
                           }
                         >
                           <option value="usd">USD</option>
@@ -413,9 +354,7 @@ export default function FragranceDetail({ params }) {
                           checked={!!o.in_stock}
                           onChange={(e) =>
                             setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, in_stock: e.target.checked } : x
-                              )
+                              prev.map((x) => x.id === o.id ? { ...x, in_stock: e.target.checked } : x)
                             )
                           }
                         />
@@ -423,25 +362,17 @@ export default function FragranceDetail({ params }) {
                       </div>
 
                       <div className="flex gap-2 sm:justify-end">
-                        <button
-                          onClick={() => saveOption(o)}
-                          className="px-3 py-1.5 rounded bg-black text-white text-xs"
-                        >
+                        <button onClick={() => saveOption(o)} className="px-3 py-1.5 rounded bg-black text-white text-xs">
                           Save
                         </button>
-                        <button
-                          onClick={() => deleteOption(o.id)}
-                          className="px-3 py-1.5 rounded border text-xs"
-                        >
+                        <button onClick={() => deleteOption(o.id)} className="px-3 py-1.5 rounded border text-xs">
                           Delete
                         </button>
                       </div>
                     </div>
                   ))}
 
-                  {!options.length && (
-                    <div className="p-3 text-sm opacity-70">No options yet.</div>
-                  )}
+                  {!options.length && <div className="p-3 text-sm opacity-70">No options yet.</div>}
                 </div>
 
                 <div className="p-3 border rounded space-y-2">
@@ -451,7 +382,7 @@ export default function FragranceDetail({ params }) {
                       <label className="block text-xs font-medium mb-1">Label</label>
                       <input
                         className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 5mL decant / Full Bottle"
+                        placeholder="e.g., 5 mL decant / Full Bottle"
                         value={newLabel}
                         onChange={(e) => setNewLabel(e.target.value)}
                       />
@@ -489,10 +420,7 @@ export default function FragranceDetail({ params }) {
                       </select>
                     </div>
                     <div className="sm:col-span-2 flex sm:justify-end">
-                      <button
-                        onClick={addNewOption}
-                        className="px-3 py-2 rounded bg-black text-white text-xs"
-                      >
+                      <button onClick={addNewOption} className="px-3 py-2 rounded bg-black text-white text-xs">
                         Add option
                       </button>
                     </div>
@@ -510,12 +438,7 @@ export default function FragranceDetail({ params }) {
         </div>
       </div>
 
-      {/* Quick link to cart for buyers */}
-      {!isOwner && (
-        <div className="text-sm">
-          <Link className="underline" href="/cart">Go to cart →</Link>
-        </div>
-      )}
+      {!isOwner && <div className="text-sm"><Link className="underline" href="/cart">Go to cart →</Link></div>}
     </div>
   );
 }
