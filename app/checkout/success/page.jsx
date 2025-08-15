@@ -1,11 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function CheckoutSuccess() {
+// Outer wrapper provides the required Suspense boundary
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="max-w-3xl mx-auto p-6">Loading…</div>}>
+      <CheckoutSuccessInner />
+    </Suspense>
+  );
+}
+
+function CheckoutSuccessInner() {
   const params = useSearchParams();
   const sid = params.get('session_id') || '';
 
@@ -14,7 +23,7 @@ export default function CheckoutSuccess() {
   const [tries, setTries] = useState(0);
   const [msg, setMsg] = useState('');
 
-  // Poll for the order because Stripe’s webhook may arrive a second after redirect
+  // Poll for order since webhook may arrive a bit after redirect
   useEffect(() => {
     let cancelled = false;
 
@@ -47,12 +56,9 @@ export default function CheckoutSuccess() {
       }
     }
 
-    // first fetch now
     fetchOnce();
 
-    // schedule retries while loading and not found
     const t = setInterval(() => {
-      // try up to ~10 times (about 20s total)
       if (order || tries >= 10) {
         clearInterval(t);
         setLoading(false);
