@@ -5,19 +5,37 @@ import Link from 'next/link';
 
 export default function CartPage() {
   const [items, setItems] = useState([]);
+  const [buyer, setBuyer] = useState({
+    name: '',
+    address1: '',
+    address2: '',
+    city: '',
+    state: '',
+    postal: '',
+    country: 'US',
+  });
+  const [msg, setMsg] = useState('');
 
+  // Load cart + buyer on mount
   useEffect(() => {
     try {
       const arr = JSON.parse(localStorage.getItem('cart_v1') || '[]');
       setItems(Array.isArray(arr) ? arr : []);
-    } catch {
-      setItems([]);
-    }
+    } catch { setItems([]); }
+    try {
+      const b = JSON.parse(localStorage.getItem('cart_contact_v1') || '{}');
+      setBuyer((prev) => ({ ...prev, ...b }));
+    } catch {}
   }, []);
 
   function persist(next) {
     localStorage.setItem('cart_v1', JSON.stringify(next));
     setItems(next);
+  }
+
+  function saveBuyer(next) {
+    localStorage.setItem('cart_contact_v1', JSON.stringify(next));
+    setBuyer(next);
   }
 
   function updateQty(i, q) {
@@ -41,22 +59,32 @@ export default function CartPage() {
     [items]
   );
 
+  function validateBuyer() {
+    if (!buyer.name || !buyer.address1 || !buyer.city || !buyer.state || !buyer.postal || !buyer.country) {
+      setMsg('Please fill in name, address, city, state, postal code, and country.');
+      return false;
+    }
+    return true;
+  }
+
   async function checkout() {
+    setMsg('');
     if (!items.length) return;
+    if (!validateBuyer()) return;
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, buyer }),
       });
       const j = await res.json();
       if (!res.ok || !j?.url) {
-        alert(j?.error || 'Checkout failed');
+        setMsg(j?.error || 'Checkout failed');
         return;
       }
       window.location.href = j.url;
     } catch (e) {
-      alert(e.message || 'Checkout failed');
+      setMsg(e.message || 'Checkout failed');
     }
   }
 
@@ -90,30 +118,95 @@ export default function CartPage() {
                     value={it.quantity}
                     onChange={(e) => updateQty(i, e.target.value)}
                   />
-                  <button
-                    onClick={() => removeItem(i)}
-                    className="px-3 py-1.5 rounded border text-xs"
-                  >
-                    Remove
-                  </button>
+                  <button onClick={() => removeItem(i)} className="px-3 py-1.5 rounded border text-xs">Remove</button>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="p-4 border rounded bg-white flex items-center justify-between">
-            <div className="font-medium">
-              Subtotal: {(subtotalCents/100).toFixed(2)} {currency}
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={clearCart} className="px-3 py-2 rounded border text-sm">
-                Clear
-              </button>
-              <button onClick={checkout} className="px-4 py-2 rounded bg-black text-white text-sm">
-                Checkout
-              </button>
+          {/* Buyer name + address */}
+          <div className="p-4 border rounded bg-white space-y-3">
+            <div className="font-medium">Shipping details</div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1">Full name</label>
+                <input
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.name}
+                  onChange={(e) => saveBuyer({ ...buyer, name: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1">Address line 1</label>
+                <input
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.address1}
+                  onChange={(e) => saveBuyer({ ...buyer, address1: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1">Address line 2 (optional)</label>
+                <input
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.address2}
+                  onChange={(e) => saveBuyer({ ...buyer, address2: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">City</label>
+                <input
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.city}
+                  onChange={(e) => saveBuyer({ ...buyer, city: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">State/Province</label>
+                <input
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.state}
+                  onChange={(e) => saveBuyer({ ...buyer, state: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Postal code</label>
+                <input
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.postal}
+                  onChange={(e) => saveBuyer({ ...buyer, postal: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Country</label>
+                <select
+                  className="border rounded px-3 py-2 w-full"
+                  value={buyer.country}
+                  onChange={(e) => saveBuyer({ ...buyer, country: e.target.value })}
+                >
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="AU">Australia</option>
+                  <option value="DE">Germany</option>
+                  <option value="FR">France</option>
+                  <option value="NL">Netherlands</option>
+                  <option value="SE">Sweden</option>
+                  <option value="IT">Italy</option>
+                  <option value="ES">Spain</option>
+                </select>
+              </div>
             </div>
           </div>
+
+          <div className="p-4 border rounded bg-white flex items-center justify-between">
+            <div className="font-medium">Subtotal: {(subtotalCents/100).toFixed(2)} {currency}</div>
+            <div className="flex items-center gap-2">
+              <button onClick={clearCart} className="px-3 py-2 rounded border text-sm">Clear</button>
+              <button onClick={checkout} className="px-4 py-2 rounded bg-black text-white text-sm">Checkout</button>
+            </div>
+          </div>
+
+          {msg && <div className="p-3 border rounded bg-white">{msg}</div>}
         </>
       )}
     </div>
