@@ -1,281 +1,230 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-const money = (cents) => `$${(cents / 100).toFixed(2)}`;
-const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
-const CART_KEY = 'fragrantique_cart_v1';
-
-function loadCart() {
-  try {
-    const raw = localStorage.getItem(CART_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
-}
-function saveCart(items) {
-  try { localStorage.setItem(CART_KEY, JSON.stringify(items)); } catch {}
-}
-function addToCart(decantId) {
-  const items = loadCart();
-  const idx = items.findIndex(i => String(i.decantId) === String(decantId));
-  if (idx === -1) items.push({ decantId: String(decantId), qty: 1 });
-  else items[idx].qty = Math.max(1, parseInt(items[idx].qty || 1)) + 1;
-  saveCart(items);
-  return items;
+function dollarsToCents(v) {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).replace(/[^0-9.]/g, ''));
+  if (Number.isNaN(n)) return null;
+  return Math.round(n * 100);
 }
 
-export default function FragrancePage({ params }) {
-  const id = decodeURIComponent(params.id);
+export default function FragranceDetail({ params }) {
+  const id = decodeURIComponent(params.id || '');
 
-  const [session, setSession] = useState(null);
-  const [frag, setFrag] = useState(null);
-  const [notes, setNotes] = useState([]);
-  const [decants, setDecants] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [frag, setFrag] = useState(null);
+  const [decants, setDecants] = useState([]); // optional
+  const [qty, setQty] = useState(1);
+  const [selectedDecantId, setSelectedDecantId] = useState('');
+  const [manualPrice, setManualPrice] = useState(''); // dollars
+  const [currency, setCurrency] = useState('usd');
+  const [msg, setMsg] = useState('');
 
-  // add note state
-  const [rating, setRating] = useState(5);
-  const [body, setBody] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-  const [cartCount, setCartCount] = useState(0);
-
-  // Auth session
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const sub = supabase.auth.onAuthStateChange((_e, s) => setSession(s?.session || null));
-    return () => sub.data.subscription.unsubscribe();
-  }, []);
-
-  // Load fragrance, notes, decants
   useEffect(() => {
     (async () => {
       setLoading(true);
+      setMsg('');
 
+      // Load fragrance
       const { data: f } = await supabase
         .from('fragrances')
-        .select('id, brand, name, image_url, image_url_transparent, accords, fragrantica_url')
+        .select('id, brand, name, image_url, image_url_transparent')
         .eq('id', id)
         .maybeSingle();
+
       setFrag(f || null);
 
-      const { data: n } = await supabase
-        .from('fragrance_notes')
-        .select('id, user_id, rating, body, created_at')
-        .eq('fragrance_id', id)
-        .order('created_at', { ascending: false });
-      setNotes(n || []);
+      // Try to load decants (if table exists)
+      try {
+        const { data: ds, error } = await supabase
+          .from('decants')
+          .select('id, size_ml, label, price_cents, price_usd, currency')
+          .eq('fragrance_id', id)
+          .order('size_ml', { ascending: true });
 
-      const { data: d } = await supabase
-        .from('decants')
-        .select('id, size_ml, price_cents, quantity, seller_user_id, is_active')
-        .eq('fragrance_id', id)
-        .eq('is_active', true)
-        .order('price_cents', { ascending: true });
-      setDecants(d || []);
+        if (!error && Array.isArray(ds)) {
+          setDecants(
+            ds.map((d) => ({
+              id: d.id,
+              label:
+                d.label ||
+                (d.size_ml ? `${d.size_ml} ml` : 'Decant'),
+              // Prefer price_cents; fallback to price_usd*100
+              price_cents:
+                typeof d.price_cents === 'number' && d.price_cents > 0
+                  ? d.price_cents
+                  : dollarsToCents(d.price_usd),
+              currency: (d.currency || 'usd').toLowerCase(),
+            }))
+          );
+          if (ds.length) setCurrency((ds[0].currency || 'usd').toLowerCase());
+        }
+      } catch {
+        // Table might not exist; ignore
+      }
 
-      setCartCount(loadCart().reduce((acc, it) => acc + (parseInt(it.qty || 1)), 0));
       setLoading(false);
     })();
   }, [id]);
 
-  const canPost = !!session?.user?.id;
-
-  async function handleAddNote(e) {
-    e.preventDefault();
-    if (!canPost) return;
-    setSubmitting(true);
-    setError(null);
-    const { error: err, data } = await supabase
-      .from('fragrance_notes')
-      .insert({
-        fragrance_id: id,
-        user_id: session.user.id,
-        rating,
-        body
-      })
-      .select()
-      .maybeSingle();
-    if (err) setError(err.message);
-    else {
-      setBody('');
-      setRating(5);
-      setNotes(prev => [data, ...prev]);
+  const chosenPriceCents = useMemo(() => {
+    if (selectedDecantId) {
+      const d = decants.find((x) => String(x.id) === String(selectedDecantId));
+      if (d?.price_cents) return d.price_cents;
     }
-    setSubmitting(false);
-  }
+    const manual = dollarsToCents(manualPrice);
+    return manual && manual > 0 ? manual : null;
+  }, [selectedDecantId, decants, manualPrice]);
 
-  function handleAddToCart(decantId) {
-    const items = addToCart(decantId);
-    const count = items.reduce((acc, it) => acc + (parseInt(it.qty || 1)), 0);
-    setCartCount(count);
+  const img = frag?.image_url_transparent || frag?.image_url || '/bottle-placeholder.png';
+  const displayName = frag ? `${frag.brand || ''} — ${frag.name || ''}`.trim() : 'Fragrance';
+
+  async function onCheckout() {
+    setMsg('');
+    const cents = chosenPriceCents;
+    if (!cents || cents <= 0) {
+      setMsg('Please select a decant or enter a valid price.');
+      return;
+    }
+    const q = Math.max(1, parseInt(qty, 10) || 1);
+
+    const label = selectedDecantId
+      ? (() => {
+          const d = decants.find((x) => String(x.id) === String(selectedDecantId));
+          return d ? ` (${d.label})` : '';
+        })()
+      : manualPrice
+        ? ` (${Number(manualPrice)} ${currency.toUpperCase()})`
+        : '';
+
+    const item = {
+      name: `${displayName}${label}`,
+      quantity: q,
+      unit_amount: cents, // <— IMPORTANT: cents
+      currency,
+      fragrance_id: frag?.id,
+    };
+
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [item] }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.url) {
+        setMsg(j?.error || 'Checkout failed.');
+        return;
+      }
+      window.location.href = j.url;
+    } catch (e) {
+      setMsg(e.message || 'Checkout failed.');
+    }
   }
 
   if (loading) return <div className="p-6">Loading…</div>;
-  if (!frag) return <div className="p-6">Fragrance not found.</div>;
+  if (!frag) {
+    return (
+      <div className="p-6">
+        <div className="mb-3">Fragrance not found.</div>
+        <Link href="/brand" className="underline">← Back to Brand index</Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-6xl p-4">
-      {/* Header with cart link */}
-      <div className="flex items-center justify-between mb-4">
-        <Link href="/" className="text-blue-600 hover:underline text-sm">← Back</Link>
-        <div />
-        <Link href="/cart" className="relative text-sm text-blue-600 hover:underline">
-          Cart
-          {cartCount > 0 && (
-            <span className="ml-1 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-black text-white">
-              {cartCount}
-            </span>
-          )}
-        </Link>
-      </div>
+    <div className="max-w-3xl mx-auto p-6 space-y-4">
+      <Link href={`/u/stephanie`} className="underline text-sm">← Back to boutique</Link>
 
-      {/* Hero “social card” */}
-      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-zinc-100 to-white border shadow mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Left: image */}
-          <div className="relative flex items-center justify-center p-6 md:p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-rose-50 via-white to-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={bottleSrc(frag)}
-              alt={`${frag.brand} ${frag.name}`}
-              className="object-contain"
-              style={{ height: '280px', width: 'auto', mixBlendMode: 'multiply', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.18))' }}
-              onError={(e) => {
-                if (!e.currentTarget.dataset.fallback) {
-                  e.currentTarget.dataset.fallback = '1';
-                  e.currentTarget.src = '/bottle-placeholder.png';
-                }
-              }}
-            />
-          </div>
-          {/* Right: title + optional accords */}
-          <div className="p-6 md:p-8">
-            <div className="text-sm uppercase tracking-wider text-zinc-500">{frag.brand}</div>
-            <h1 className="text-3xl md:text-4xl font-semibold">{frag.name}</h1>
+      <div className="flex gap-6">
+        <div className="relative w-48 h-64">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={img}
+            alt={frag.name}
+            className="absolute inset-0 w-full h-full object-contain"
+            style={{ mixBlendMode: 'multiply', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.18))' }}
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (!el.dataset.fallback) {
+                el.dataset.fallback = '1';
+                el.src = '/bottle-placeholder.png';
+              }
+            }}
+          />
+        </div>
 
-            {Array.isArray(frag?.accords) && frag.accords.length > 0 && (
-              <div className="mt-5 space-y-2">
-                {frag.accords.map((a, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className="w-28 text-xs text-zinc-600">{a.name}</div>
-                    <div className="flex-1 h-2 rounded-full bg-zinc-200 overflow-hidden">
-                      <div className="h-2 bg-black/70" style={{ width: `${Math.max(0, Math.min(100, a.strength || 0))}%` }} />
-                    </div>
-                  </div>
-                ))}
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">{frag.brand}</h1>
+          <div className="text-lg">{frag.name}</div>
+
+          <div className="mt-4 space-y-3">
+            {decants.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Decant</label>
+                <select
+                  className="border rounded px-3 py-2 w-full"
+                  value={selectedDecantId}
+                  onChange={(e) => setSelectedDecantId(e.target.value)}
+                >
+                  <option value="">— Choose a decant —</option>
+                  {decants.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.label} — {(d.price_cents / 100).toFixed(2)} {d.currency.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
-            {frag?.fragrantica_url && (
-              <div className="mt-4">
-                <a href={frag.fragrantica_url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
-                  View on Fragrantica →
-                </a>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Or enter price</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="border rounded px-3 py-2 w-full"
+                  placeholder="e.g. 24.00"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                />
               </div>
-            )}
+              <div>
+                <label className="block text-sm font-medium mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="border rounded px-3 py-2 w-full"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="text-sm opacity-70">
+              Currency: <span className="font-mono">{currency.toUpperCase()}</span>
+              {chosenPriceCents ? (
+                <> · Total: <b>{((chosenPriceCents * Math.max(1, parseInt(qty,10)||1))/100).toFixed(2)} {currency.toUpperCase()}</b></>
+              ) : null}
+            </div>
+
+            <button
+              onClick={onCheckout}
+              className="mt-2 px-4 py-2 rounded bg-black text-white hover:opacity-90"
+            >
+              Checkout
+            </button>
+
+            {msg && <div className="mt-2 text-sm p-2 rounded bg-white border">{msg}</div>}
           </div>
         </div>
       </div>
-
-      {/* Decants */}
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">Decants</h2>
-          <Link
-            href={`/sell/decant?fragrance=${encodeURIComponent(id)}`}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            List a decant
-          </Link>
-        </div>
-
-        {decants.length === 0 ? (
-          <div className="text-sm text-zinc-600">No decants yet.</div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {decants.map(d => (
-              <div key={d.id} className="rounded-xl border bg-white p-4 shadow-sm">
-                <div className="text-sm">{d.size_ml} mL</div>
-                <div className="text-lg font-semibold">{money(d.price_cents)}</div>
-                {d.quantity === 0 ? (
-                  <div className="mt-3 text-sm text-zinc-500">Out of stock</div>
-                ) : (
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      onClick={() => handleAddToCart(d.id)}
-                      className="px-3 py-2 rounded bg-zinc-900 text-white text-sm hover:opacity-90"
-                    >
-                      Add to cart
-                    </button>
-                    <Link href="/cart" className="text-sm text-blue-600 hover:underline">Go to cart</Link>
-                  </div>
-                )}
-                <div className="mt-2 text-[11px] text-zinc-500">
-                  5% platform fee added at checkout.
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Notes */}
-      <section className="mb-16">
-        <h2 className="text-xl font-semibold mb-3">Notes from users</h2>
-
-        {canPost ? (
-          <form onSubmit={handleAddNote} className="mb-6 rounded-xl border bg-white p-4 shadow-sm">
-            {error && <div className="mb-2 text-sm text-red-600">{error}</div>}
-            <div className="flex items-center gap-3 mb-3">
-              <label className="text-sm">Rating</label>
-              <select
-                value={rating}
-                onChange={(e) => setRating(parseInt(e.target.value))}
-                className="border rounded px-2 py-1 text-sm"
-              >
-                {[5,4,3,2,1].map(v => <option key={v} value={v}>{v} ⭐</option>)}
-              </select>
-            </div>
-            <textarea
-              className="w-full border rounded p-3 text-sm"
-              rows={3}
-              placeholder="What do you think about this fragrance?"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            <div className="mt-3">
-              <button
-                disabled={submitting || body.trim().length === 0}
-                className="px-4 py-2 rounded bg-black text-white text-sm disabled:opacity-40"
-              >
-                {submitting ? 'Posting…' : 'Post note'}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="mb-4 text-sm text-zinc-600">Sign in to add your note.</div>
-        )}
-
-        {notes.length === 0 ? (
-          <div className="text-sm text-zinc-600">No notes yet.</div>
-        ) : (
-          <div className="space-y-4">
-            {notes.map(n => (
-              <div key={n.id} className="rounded-xl border bg-white p-4 shadow-sm">
-                <div className="text-sm mb-1">{'⭐'.repeat(n.rating || 0)}</div>
-                <div className="text-sm">{n.body}</div>
-                <div className="text-[11px] text-zinc-500 mt-2">
-                  {new Date(n.created_at).toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
