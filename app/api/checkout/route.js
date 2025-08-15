@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { getStripeClient } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const stripe = getStripeClient();
 
-// Client for reading session user (anon OK)
+// anon supabase client for reading session
 const supabaseClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -18,14 +18,11 @@ function toInt(v) {
 function sanitizeItem(it) {
   const qty = Math.max(1, parseInt(it.quantity ?? 1, 10) || 1);
   const currency = (it.currency || 'usd').toLowerCase();
-  // Accept either unit_amount (cents) or unit_price (dollars) from older UIs.
   let unit_amount = it.unit_amount;
   if (unit_amount == null && it.unit_price != null) {
-    // Convert dollars → cents
     unit_amount = Math.round(parseFloat(String(it.unit_price)) * 100);
   }
   unit_amount = toInt(unit_amount);
-
   return {
     name: it.name || 'Fragrance',
     quantity: qty,
@@ -47,7 +44,6 @@ export async function POST(req) {
     const { data: session } = await supabase.auth.getSession();
     const user = session?.session?.user || null;
 
-    // Normalize each item and validate
     const clean = items.map(sanitizeItem);
     for (const it of clean) {
       if (it.unit_amount == null || Number.isNaN(it.unit_amount) || it.unit_amount <= 0) {
@@ -58,7 +54,7 @@ export async function POST(req) {
       }
     }
 
-    // Default seller = your admin profile (stephanie)
+    // default seller = @stephanie
     let seller_user_id = null;
     const { data: prof } = await supabase
       .from('profiles')
@@ -91,11 +87,7 @@ export async function POST(req) {
         seller_user_id: seller_user_id || '',
         cart: JSON.stringify(
           clean.map(({ name, quantity, unit_amount, currency, fragrance_id }) => ({
-            name,
-            quantity,
-            unit_amount,
-            currency,
-            fragrance_id,
+            name, quantity, unit_amount, currency, fragrance_id,
           }))
         ),
       },
