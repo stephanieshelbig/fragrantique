@@ -22,8 +22,8 @@ function CheckoutSuccessInner() {
   const [order, setOrder] = useState(null);
   const [tries, setTries] = useState(0);
   const [msg, setMsg] = useState('');
+  const [forced, setForced] = useState(false);
 
-  // Poll for order since webhook may arrive a bit after redirect
   useEffect(() => {
     let cancelled = false;
 
@@ -51,19 +51,55 @@ function CheckoutSuccessInner() {
         setOrder(data);
         setLoading(false);
       } else {
-        // Not in DB yet; try again shortly (webhook still processing)
         setTries((t) => t + 1);
       }
     }
 
     fetchOnce();
 
-    const t = setInterval(() => {
-      if (order || tries >= 10) {
+    const t = setInterval(async () => {
+      if (order) {
         clearInterval(t);
         setLoading(false);
         return;
       }
+
+      // After ~5 tries (~10s), call the fallback API to ensure the order
+      if (tries >= 5 && !forced) {
+        try {
+          const res = await fetch('/api/orders/ensure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+          });
+          const j = await res.json().catch(() => ({}));
+          if (j?.ok) {
+            // Re-fetch from DB
+            const { data } = await supabase
+              .from('orders')
+              .select('*')
+              .eq('stripe_session_id', sid)
+              .maybeSingle();
+            if (data) {
+              setOrder(data);
+              setLoading(false);
+              clearInterval(t);
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore; will keep trying a bit more
+        } finally {
+          setForced(true);
+        }
+      }
+
+      if (tries >= 10) {
+        clearInterval(t);
+        setLoading(false);
+        return;
+      }
+
       fetchOnce();
     }, 2000);
 
@@ -93,15 +129,15 @@ function CheckoutSuccessInner() {
 
       {loading && sid && (
         <div className="p-4 border rounded bg-white">
-          Processing your payment… If this takes more than a few seconds, it’s just waiting for
-          Stripe to notify us. This page will auto-refresh.
+          Processing your payment… If this takes more than a few seconds, it’s either waiting for
+          Stripe to notify us or we’re confirming it directly. This page will auto-refresh.
         </div>
       )}
 
       {!loading && sid && !order && (
         <div className="p-4 border rounded bg-white">
-          We haven’t received the Stripe confirmation yet.
-          <div className="mt-2 text-sm opacity-70">Session: {sid}</div>
+          We couldn’t confirm your order yet. If you were charged, you’ll receive an email shortly.
+          (Session: <span className="font-mono">{sid}</span>)
         </div>
       )}
 
