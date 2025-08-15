@@ -54,7 +54,7 @@ export default function AdminFragranceList() {
     setLoading(true);
     setMsg('');
 
-    // full catalog (you can filter later with search)
+    // full catalog
     const { data: allFrags } = await supabase
       .from('fragrances')
       .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
@@ -106,17 +106,29 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Adding to shelves…');
 
-    // upsert link (avoid dup)
-    const { error } = await supabase
+    await supabase
       .from('user_fragrances')
-      .insert({ user_id: owner.id, fragrance_id: fragranceId, manual: true })
-      .select('id')
-      .single();
+      .insert({ user_id: owner.id, fragrance_id: fragranceId, manual: true });
 
-    // If policy blocks duplicates, ignore error 23505 etc. We just refresh linked state.
     await load(owner.id);
     setBusy(false);
-    setMsg(error ? `Add error: ${error.message}` : 'Added to shelves ✓');
+    setMsg('Added to shelves ✓');
+  }
+
+  async function removeOneFromShelves(fragranceId) {
+    if (!owner.id) return;
+    setBusy(true);
+    setMsg('Removing from shelves…');
+
+    await supabase
+      .from('user_fragrances')
+      .delete()
+      .eq('user_id', owner.id)
+      .eq('fragrance_id', fragranceId);
+
+    await load(owner.id);
+    setBusy(false);
+    setMsg('Removed from shelves ✓');
   }
 
   async function addAllMissingToShelves() {
@@ -124,7 +136,6 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Adding ALL missing to shelves…');
 
-    // fetch ids not linked yet
     const missing = rows.filter(r => !linkedIds.has(r.id)).map(r => r.id);
     if (!missing.length) {
       setMsg('Everything is already on your shelves.');
@@ -132,15 +143,14 @@ export default function AdminFragranceList() {
       return;
     }
 
-    // insert in chunks to avoid payload limits
     const chunk = 200;
     let inserted = 0;
     for (let i = 0; i < missing.length; i += chunk) {
       const batch = missing.slice(i, i + chunk).map(fid => ({
         user_id: owner.id, fragrance_id: fid, manual: true
       }));
-      const { error } = await supabase.from('user_fragrances').insert(batch);
-      if (!error) inserted += batch.length;
+      await supabase.from('user_fragrances').insert(batch);
+      inserted += batch.length;
     }
 
     await load(owner.id);
@@ -198,6 +208,40 @@ export default function AdminFragranceList() {
     setMsg(`Transparent done: ${ok} ok, ${fail} failed`);
     setBusy(false);
     await load(owner.id);
+  }
+
+  async function deleteFragrance(fragrance) {
+    if (!isAdmin) return;
+    const ok = window.confirm(
+      `Delete "${fragrance.brand} — ${fragrance.name}" from the catalog?\n` +
+      `This will also remove it from your shelves.\n\nThis cannot be undone.`
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    setMsg('Deleting fragrance…');
+
+    try {
+      const res = await fetch('/api/admin-delete-fragrance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fragranceId: fragrance.id,
+          deleteFromShelves: true,
+          deleteStorage: true
+        })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || 'delete failed');
+      }
+      setMsg('Fragrance deleted ✓');
+      await load(owner.id);
+    } catch (e) {
+      setMsg(`Delete error: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -271,6 +315,7 @@ export default function AdminFragranceList() {
               <div className="flex-1">
                 <div className="text-xs opacity-70">{f.brand}</div>
                 <div className="font-medium">{f.name}</div>
+
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Link
                     href={`/fragrance/${f.id}/edit`}
@@ -278,14 +323,27 @@ export default function AdminFragranceList() {
                   >
                     Edit
                   </Link>
-                  <button
-                    disabled={busy || onShelves}
-                    onClick={() => addOneToShelves(f.id)}
-                    className={`px-2 py-1 rounded text-xs ${onShelves ? 'bg-green-100 text-green-700' : 'bg-black text-white hover:opacity-90 disabled:opacity-60'}`}
-                    title={onShelves ? 'Already on shelves' : 'Add this to your shelves'}
-                  >
-                    {onShelves ? 'On shelves ✓' : 'Add to shelves'}
-                  </button>
+
+                  {!onShelves ? (
+                    <button
+                      disabled={busy}
+                      onClick={() => addOneToShelves(f.id)}
+                      className="px-2 py-1 rounded bg-black text-white text-xs hover:opacity-90 disabled:opacity-60"
+                      title="Add this to your shelves"
+                    >
+                      Add to shelves
+                    </button>
+                  ) : (
+                    <button
+                      disabled={busy}
+                      onClick={() => removeOneFromShelves(f.id)}
+                      className="px-2 py-1 rounded bg-amber-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                      title="Remove this from your shelves"
+                    >
+                      Remove from shelves
+                    </button>
+                  )}
+
                   <button
                     disabled={busy || !f.image_url}
                     onClick={() => makeTransparent(f)}
@@ -294,6 +352,16 @@ export default function AdminFragranceList() {
                   >
                     Transparent
                   </button>
+
+                  <button
+                    disabled={busy}
+                    onClick={() => deleteFragrance(f)}
+                    className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                    title="Delete this fragrance from the catalog (admin only)"
+                  >
+                    Delete fragrance
+                  </button>
+
                   {f.fragrantica_url && (
                     <a
                       href={f.fragrantica_url}
