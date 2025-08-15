@@ -11,36 +11,45 @@ function dollarsToCents(v) {
   return Math.round(n * 100);
 }
 
+function centsToDollars(c) {
+  if (c == null) return '';
+  return (Number(c) / 100).toFixed(2);
+}
+
 export default function FragranceDetail({ params }) {
   const id = decodeURIComponent(params.id || '');
 
   const [viewer, setViewer] = useState(null);
-  const [owner, setOwner] = useState(null); // @stephanie profile
-  const [frag, setFrag] = useState(null);
-  const [decants, setDecants] = useState([]);
-  const [ownerNote, setOwnerNote] = useState(''); // stephanie's note (from user_fragrances.note)
-  const [editingNote, setEditingNote] = useState(false);
-  const [savingNote, setSavingNote] = useState(false);
+  const [owner, setOwner] = useState(null); // @stephanie profile (owner/admin)
+  const [isOwner, setIsOwner] = useState(false);
 
-  const [qty, setQty] = useState(1);
-  const [selectedDecantId, setSelectedDecantId] = useState('');
-  const [manualPrice, setManualPrice] = useState(''); // dollars
-  const [currency, setCurrency] = useState('usd');
-  const [msg, setMsg] = useState('');
+  const [frag, setFrag] = useState(null);       // fragrances.*
+  const [options, setOptions] = useState([]);   // decants rows
   const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
 
-  // Load viewer + owner profile + fragrance + decants + owner note
+  // Buyer UI
+  const [selectedId, setSelectedId] = useState('');
+  const [qty, setQty] = useState(1);
+  const [added, setAdded] = useState(false);
+
+  // Admin add/edit option
+  const [newLabel, setNewLabel] = useState('');
+  const [newPrice, setNewPrice] = useState(''); // dollars
+  const [newSize, setNewSize] = useState('');   // optional ml number
+  const [newCurrency, setNewCurrency] = useState('usd');
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       setMsg('');
 
-      // Who am I?
+      // Who’s logged in?
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user || null;
-      setViewer(user);
+      setViewer(user || null);
 
-      // Boutique owner (Stephanie)
+      // Boutique owner (stephanie)
       const { data: ownerProf } = await supabase
         .from('profiles')
         .select('id, username, is_admin')
@@ -48,139 +57,171 @@ export default function FragranceDetail({ params }) {
         .maybeSingle();
 
       setOwner(ownerProf || null);
+      setIsOwner(!!(user && ownerProf && user.id === ownerProf.id));
 
-      // Fragrance
+      // Fragrance + notes (from fragrances.notes)
       const { data: f } = await supabase
         .from('fragrances')
-        .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
+        .select('id, brand, name, image_url, image_url_transparent, fragrantica_url, notes')
         .eq('id', id)
         .maybeSingle();
 
       setFrag(f || null);
 
-      // Decants (optional table)
+      // Options (decants): label, price_cents, size_ml, currency, in_stock
+      // Table may already exist from earlier steps
       try {
         const { data: ds, error: de } = await supabase
           .from('decants')
-          .select('id, size_ml, label, price_cents, price_usd, currency, in_stock')
+          .select('id, label, price_cents, size_ml, currency, in_stock')
           .eq('fragrance_id', id)
           .order('size_ml', { ascending: true });
+
         if (!de && Array.isArray(ds)) {
-          const mapped = ds.map((d) => ({
-            id: d.id,
-            label: d.label || (d.size_ml ? `${d.size_ml} ml` : 'Decant'),
-            price_cents:
-              typeof d.price_cents === 'number' && d.price_cents > 0
-                ? d.price_cents
-                : dollarsToCents(d.price_usd),
-            currency: (d.currency || 'usd').toLowerCase(),
-            in_stock: d.in_stock ?? true,
-          }));
-          setDecants(mapped);
-          if (mapped.length) setCurrency(mapped[0].currency);
+          setOptions(
+            ds.map((d) => ({
+              ...d,
+              currency: (d.currency || 'usd').toLowerCase(),
+              in_stock: d.in_stock ?? true,
+            }))
+          );
+          if (!selectedId && ds.length) setSelectedId(String(ds[0].id));
+        } else {
+          setOptions([]);
         }
       } catch {
-        // table might not exist; ignore
-      }
-
-      // Owner note: read from user_fragrances.note for @stephanie
-      if (ownerProf?.id) {
-        try {
-          const { data: link, error: le } = await supabase
-            .from('user_fragrances')
-            .select('note')
-            .eq('user_id', ownerProf.id)
-            .eq('fragrance_id', id)
-            .maybeSingle();
-          if (!le && link?.note != null) setOwnerNote(link.note || '');
-        } catch {
-          // ignore
-        }
+        setOptions([]);
       }
 
       setLoading(false);
     })();
   }, [id]);
 
-  const chosenPriceCents = useMemo(() => {
-    if (selectedDecantId) {
-      const d = decants.find((x) => String(x.id) === String(selectedDecantId));
-      if (d?.price_cents) return d.price_cents;
-    }
-    const manual = dollarsToCents(manualPrice);
-    return manual && manual > 0 ? manual : null;
-  }, [selectedDecantId, decants, manualPrice]);
-
   const img = frag?.image_url_transparent || frag?.image_url || '/bottle-placeholder.png';
   const displayName = frag ? `${frag.brand || ''} — ${frag.name || ''}`.trim() : 'Fragrance';
 
-  const isOwner =
-    viewer?.id && owner?.id && String(viewer.id) === String(owner.id);
+  const selectedOpt = useMemo(
+    () => options.find((o) => String(o.id) === String(selectedId)),
+    [options, selectedId]
+  );
 
-  async function saveNote() {
-    if (!isOwner || !owner?.id || !frag?.id) return;
-    setSavingNote(true);
-    setMsg('');
+  // ---------- CART ----------
+  function loadCart() {
     try {
-      // Ensure a shelf link row exists for owner+fragrance, then update note
-      // 1) upsert link (in case fragrance isn't on shelves yet)
-      await supabase
-        .from('user_fragrances')
-        .upsert(
-          { user_id: owner.id, fragrance_id: frag.id, note: ownerNote, manual: true },
-          { onConflict: 'user_id,fragrance_id' }
-        );
-
-      setEditingNote(false);
-      setMsg('Comment saved ✓');
-    } catch (e) {
-      setMsg(e.message || 'Failed to save comment');
-    } finally {
-      setSavingNote(false);
+      return JSON.parse(localStorage.getItem('cart_v1') || '[]');
+    } catch {
+      return [];
     }
   }
+  function saveCart(arr) {
+    localStorage.setItem('cart_v1', JSON.stringify(arr));
+  }
 
-  async function onCheckout() {
+  function handleAddToCart() {
     setMsg('');
-    const cents = chosenPriceCents;
-    if (!cents || cents <= 0) {
-      setMsg('Please select a decant or enter a valid price.');
+    setAdded(false);
+
+    const opt = selectedOpt || options.find((o) => o.in_stock) || null;
+    if (!opt) {
+      setMsg('Please select an option that is in stock.');
+      return;
+    }
+    if (!opt.price_cents || opt.price_cents <= 0) {
+      // price is hidden to visitors, but must exist in DB to calculate checkout later
+      setMsg('This option is not available for purchase right now.');
       return;
     }
     const q = Math.max(1, parseInt(qty, 10) || 1);
 
-    const label = selectedDecantId
-      ? (() => {
-          const d = decants.find((x) => String(x.id) === String(selectedDecantId));
-          return d ? ` (${d.label})` : '';
-        })()
-      : manualPrice
-        ? ` (${Number(manualPrice)} ${currency.toUpperCase()})`
-        : '';
-
     const item = {
-      name: `${displayName}${label}`,
+      name: `${displayName} (${opt.label})`,
       quantity: q,
-      unit_amount: cents, // cents for Stripe
-      currency,
+      unit_amount: opt.price_cents,             // cents (hidden on this page for visitors)
+      currency: opt.currency || 'usd',
       fragrance_id: frag?.id,
+      option_id: opt.id,
     };
 
-    try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: [item] }),
-      });
-      const j = await res.json();
-      if (!res.ok || !j?.url) {
-        setMsg(j?.error || 'Checkout failed.');
-        return;
-      }
-      window.location.href = j.url;
-    } catch (e) {
-      setMsg(e.message || 'Checkout failed.');
+    const cart = loadCart();
+    cart.push(item);
+    saveCart(cart);
+    setAdded(true);
+  }
+
+  // ---------- ADMIN: manage options inline ----------
+  async function saveOption(row) {
+    // Upsert single option
+    const up = {
+      id: row.id || undefined,
+      fragrance_id: frag.id,
+      label: row.label?.trim() || 'Option',
+      price_cents:
+        typeof row.price_cents === 'number'
+          ? row.price_cents
+          : dollarsToCents(row.price_dollars || ''),
+      size_ml: row.size_ml ? Number(row.size_ml) : null,
+      currency: (row.currency || 'usd').toLowerCase(),
+      in_stock: !!row.in_stock,
+    };
+
+    const { data, error } = await supabase
+      .from('decants')
+      .upsert(up)
+      .select('id, label, price_cents, size_ml, currency, in_stock')
+      .maybeSingle();
+
+    if (error) {
+      setMsg(error.message);
+      return;
     }
+    // refresh list
+    const next = options.map((o) => (o.id === row.id ? { ...o, ...data } : o));
+    setOptions(next);
+    if (!selectedId) setSelectedId(String(data.id));
+    setMsg('Option saved ✓');
+  }
+
+  async function addNewOption() {
+    if (!frag?.id) return;
+    const payload = {
+      fragrance_id: frag.id,
+      label: newLabel?.trim() || 'Option',
+      price_cents: dollarsToCents(newPrice),
+      size_ml: newSize ? Number(newSize) : null,
+      currency: newCurrency.toLowerCase(),
+      in_stock: true,
+    };
+    const { data, error } = await supabase
+      .from('decants')
+      .insert(payload)
+      .select('id, label, price_cents, size_ml, currency, in_stock')
+      .maybeSingle();
+
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+    setOptions([...options, data]);
+    setSelectedId(String(data.id));
+    setNewLabel('');
+    setNewPrice('');
+    setNewSize('');
+    setNewCurrency('usd');
+    setMsg('Added option ✓');
+  }
+
+  async function deleteOption(idToDelete) {
+    const { error } = await supabase.from('decants').delete().eq('id', idToDelete);
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+    const next = options.filter((o) => o.id !== idToDelete);
+    setOptions(next);
+    if (String(selectedId) === String(idToDelete)) {
+      setSelectedId(next.length ? String(next[0].id) : '');
+    }
+    setMsg('Deleted option ✓');
   }
 
   if (loading) return <div className="p-6">Loading…</div>;
@@ -235,132 +276,246 @@ export default function FragranceDetail({ params }) {
             <div className="text-lg">{frag.name}</div>
           </div>
 
-          {/* Owner comment (from Stephanie) */}
+          {/* Fragrance Notes (from fragrances.notes) */}
           <div className="p-3 rounded border bg-white">
-            <div className="flex items-center justify-between">
-              <div className="font-medium">Owner’s notes</div>
-              {isOwner && !editingNote && (
-                <button
-                  onClick={() => setEditingNote(true)}
-                  className="text-xs underline"
-                >
-                  Edit
-                </button>
-              )}
+            <div className="font-medium">Fragrance Notes</div>
+            <div className={`mt-1 text-sm whitespace-pre-wrap ${frag.notes ? '' : 'opacity-60'}`}>
+              {frag.notes || 'No notes provided.'}
             </div>
+          </div>
 
-            {!editingNote && (
-              <div className={`mt-1 text-sm ${ownerNote ? '' : 'opacity-60'}`}>
-                {ownerNote || 'No notes yet.'}
-              </div>
+          {/* Purchase panel */}
+          <div className="p-3 rounded border bg-white space-y-3">
+            <div className="font-medium">Choose an option</div>
+
+            {/* Visitor / buyer view: NO prices, just label + quantity + Add to cart */}
+            {!isOwner && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Option</label>
+                  <select
+                    className="border rounded px-3 py-2 w-full"
+                    value={selectedId}
+                    onChange={(e) => setSelectedId(e.target.value)}
+                  >
+                    {options.length === 0 && <option>— No options —</option>}
+                    {options.map((o) => (
+                      <option key={o.id} value={o.id} disabled={!o.in_stock}>
+                        {o.label}{!o.in_stock ? ' (out of stock)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Quantity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="border rounded px-3 py-2 w-full"
+                      value={qty}
+                      onChange={(e) => setQty(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAddToCart}
+                  className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90"
+                >
+                  Add to cart
+                </button>
+
+                {added && (
+                  <div className="text-sm p-2 rounded bg-green-50 border border-green-200">
+                    Added to cart. <Link href="/cart" className="underline">View cart →</Link>
+                  </div>
+                )}
+
+                {msg && <div className="text-sm p-2 rounded bg-white border mt-2">{msg}</div>}
+              </>
             )}
 
-            {editingNote && isOwner && (
-              <div className="mt-2 space-y-2">
-                <textarea
-                  className="w-full border rounded p-2 text-sm"
-                  rows={4}
-                  value={ownerNote}
-                  onChange={(e) => setOwnerNote(e.target.value)}
-                  placeholder="What do you think about this fragrance?"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={saveNote}
-                    disabled={savingNote}
-                    className="px-3 py-1.5 rounded bg-black text-white text-sm disabled:opacity-60"
-                  >
-                    {savingNote ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    onClick={() => setEditingNote(false)}
-                    className="px-3 py-1.5 rounded border text-sm"
-                  >
-                    Cancel
-                  </button>
+            {/* Admin/Owner view: manage options with price */}
+            {isOwner && (
+              <div className="space-y-4">
+                <div className="text-sm opacity-70">
+                  You can create multiple options like <b>5mL decant</b>, <b>10mL decant</b>, or <b>Full Bottle</b>.
+                </div>
+
+                <div className="border rounded divide-y">
+                  {options.map((o) => (
+                    <div key={o.id} className="p-3 grid sm:grid-cols-6 gap-3 items-end">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium mb-1">Label</label>
+                        <input
+                          className="border rounded px-2 py-1 w-full"
+                          value={o.label || ''}
+                          onChange={(e) =>
+                            setOptions((prev) =>
+                              prev.map((x) => x.id === o.id ? { ...x, label: e.target.value } : x)
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Size (mL)</label>
+                        <input
+                          type="number"
+                          className="border rounded px-2 py-1 w-full"
+                          value={o.size_ml ?? ''}
+                          onChange={(e) =>
+                            setOptions((prev) =>
+                              prev.map((x) => x.id === o.id ? { ...x, size_ml: e.target.value } : x)
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Price (USD)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="border rounded px-2 py-1 w-full"
+                          value={centsToDollars(o.price_cents)}
+                          onChange={(e) =>
+                            setOptions((prev) =>
+                              prev.map((x) =>
+                                x.id === o.id
+                                  ? { ...x, price_cents: dollarsToCents(e.target.value) }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Currency</label>
+                        <select
+                          className="border rounded px-2 py-1 w-full"
+                          value={o.currency || 'usd'}
+                          onChange={(e) =>
+                            setOptions((prev) =>
+                              prev.map((x) => x.id === o.id ? { ...x, currency: e.target.value } : x)
+                            )
+                          }
+                        >
+                          <option value="usd">USD</option>
+                          <option value="eur">EUR</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`stock-${o.id}`}
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={!!o.in_stock}
+                          onChange={(e) =>
+                            setOptions((prev) =>
+                              prev.map((x) =>
+                                x.id === o.id ? { ...x, in_stock: e.target.checked } : x
+                              )
+                            )
+                          }
+                        />
+                        <label htmlFor={`stock-${o.id}`} className="text-xs">In stock</label>
+                      </div>
+
+                      <div className="flex gap-2 sm:justify-end">
+                        <button
+                          onClick={() => saveOption(o)}
+                          className="px-3 py-1.5 rounded bg-black text-white text-xs"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => deleteOption(o.id)}
+                          className="px-3 py-1.5 rounded border text-xs"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!options.length && (
+                    <div className="p-3 text-sm opacity-70">No options yet.</div>
+                  )}
+                </div>
+
+                <div className="p-3 border rounded space-y-2">
+                  <div className="font-medium text-sm">Add a new option</div>
+                  <div className="grid sm:grid-cols-6 gap-3 items-end">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1">Label</label>
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        placeholder="e.g., 5mL decant / Full Bottle"
+                        value={newLabel}
+                        onChange={(e) => setNewLabel(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Size (mL)</label>
+                      <input
+                        type="number"
+                        className="border rounded px-2 py-1 w-full"
+                        placeholder="e.g., 5 or 100"
+                        value={newSize}
+                        onChange={(e) => setNewSize(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Price (USD)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="border rounded px-2 py-1 w-full"
+                        placeholder="e.g., 24.00"
+                        value={newPrice}
+                        onChange={(e) => setNewPrice(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Currency</label>
+                      <select
+                        className="border rounded px-2 py-1 w-full"
+                        value={newCurrency}
+                        onChange={(e) => setNewCurrency(e.target.value)}
+                      >
+                        <option value="usd">USD</option>
+                        <option value="eur">EUR</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2 flex sm:justify-end">
+                      <button
+                        onClick={addNewOption}
+                        className="px-3 py-2 rounded bg-black text-white text-xs"
+                      >
+                        Add option
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {msg && <div className="text-sm p-2 rounded bg-white border">{msg}</div>}
+
+                <div className="text-xs opacity-60">
+                  Visitors won’t see prices here. They’ll just pick an option and quantity, then add to cart.
                 </div>
               </div>
             )}
           </div>
-
-          {/* Decants / price */}
-          <div className="p-3 rounded border bg-white space-y-3">
-            <div className="font-medium">Buy a decant</div>
-
-            {decants.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Decant</label>
-                <select
-                  className="border rounded px-3 py-2 w-full"
-                  value={selectedDecantId}
-                  onChange={(e) => setSelectedDecantId(e.target.value)}
-                >
-                  <option value="">— Choose a decant —</option>
-                  {decants.map((d) => (
-                    <option key={d.id} value={d.id} disabled={!d.in_stock}>
-                      {d.label} — {(d.price_cents / 100).toFixed(2)} {d.currency.toUpperCase()}
-                      {!d.in_stock ? ' (out of stock)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Or enter price
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  className="border rounded px-3 py-2 w-full"
-                  placeholder="e.g. 24.00"
-                  value={manualPrice}
-                  onChange={(e) => setManualPrice(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Quantity</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="border rounded px-3 py-2 w-full"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="text-sm opacity-70">
-              Currency: <span className="font-mono">{currency.toUpperCase()}</span>
-              {chosenPriceCents ? (
-                <>
-                  {' '}· Total:{' '}
-                  <b>
-                    {(
-                      (chosenPriceCents * Math.max(1, parseInt(qty, 10) || 1)) /
-                      100
-                    ).toFixed(2)}{' '}
-                    {currency.toUpperCase()}
-                  </b>
-                </>
-              ) : null}
-            </div>
-
-            <button
-              onClick={onCheckout}
-              className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90"
-            >
-              Checkout
-            </button>
-
-            {msg && <div className="mt-2 text-sm p-2 rounded bg-white border">{msg}</div>}
-          </div>
         </div>
       </div>
+
+      {/* Quick link to cart for buyers */}
+      {!isOwner && (
+        <div className="text-sm">
+          <Link className="underline" href="/cart">Go to cart →</Link>
+        </div>
+      )}
     </div>
   );
 }
