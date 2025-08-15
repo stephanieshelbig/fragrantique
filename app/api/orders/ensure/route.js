@@ -12,34 +12,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-/**
- * POST /api/orders/ensure
- * Body: { session_id: string }
- * Ensures an orders row exists for the given Stripe session_id.
- * Idempotent: upserts order; sends email only if not already sent.
- */
 export async function POST(req) {
   try {
     const { session_id } = await req.json();
-    if (!session_id) {
-      return NextResponse.json({ ok: false, error: 'session_id required' }, { status: 400 });
-    }
+    if (!session_id) return NextResponse.json({ ok: false, error: 'session_id required' }, { status: 400 });
 
-    // 1) Already in DB?
     const { data: existing } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('stripe_session_id', session_id)
-      .maybeSingle();
+      .from('orders').select('*').eq('stripe_session_id', session_id).maybeSingle();
+    if (existing?.id) return NextResponse.json({ ok: true, status: 'exists', order: existing });
 
-    if (existing?.id) {
-      return NextResponse.json({ ok: true, status: 'exists', order: existing });
-    }
-
-    // 2) Fetch session from Stripe
     const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    // 3) Fetch line items (best source of names/prices)
     let lineItems = [];
     try {
       const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
@@ -50,68 +33,69 @@ export async function POST(req) {
         currency: x.currency || session.currency,
         fragrance_id: x.price?.metadata?.fragrance_id || null,
       }));
-    } catch {
-      lineItems = [];
-    }
+    } catch { lineItems = []; }
 
-    // Fallback to metadata cart if present
     let metaItems = [];
-    try {
-      if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart);
-    } catch {}
-
+    try { if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart); } catch {}
     const items = lineItems.length ? lineItems : metaItems;
+
+    const md = session.metadata || {};
+    const cd = session.customer_details || {};
+    const ship = session.shipping || {};
+    const addr = ship.address || cd.address || null;
+
+    const shipping = {
+      buyer_name: cd.name || md.shipping_name || null,
+      shipping_name: ship.name || md.shipping_name || null,
+      shipping_address1: addr?.line1 || md.shipping_address1 || null,
+      shipping_address2: addr?.line2 || md.shipping_address2 || null,
+      shipping_city: addr?.city || md.shipping_city || null,
+      shipping_state: addr?.state || md.shipping_state || null,
+      shipping_postal: addr?.postal_code || md.shipping_postal || null,
+      shipping_country: addr?.country || md.shipping_country || null,
+    };
 
     const payload = {
       stripe_session_id: session.id,
       stripe_payment_intent: session.payment_intent || null,
       amount_total: session.amount_total || null,
       currency: session.currency || 'usd',
-      buyer_email: session.customer_details?.email || session.customer_email || null,
-      user_id: session.metadata?.seller_user_id || null,
+      buyer_email: cd.email || session.customer_email || null,
+      user_id: md.seller_user_id || null,
       items: Array.isArray(items) ? items : [],
       status: session.payment_status === 'paid' ? 'paid' : (session.status || 'pending'),
+      buyer_name: shipping.buyer_name,
+      shipping_name: shipping.shipping_name,
+      shipping_address1: shipping.shipping_address1,
+      shipping_address2: shipping.shipping_address2,
+      shipping_city: shipping.shipping_city,
+      shipping_state: shipping.shipping_state,
+      shipping_postal: shipping.shipping_postal,
+      shipping_country: shipping.shipping_country,
       email_sent: false,
       email_error: null,
     };
 
-    // 4) Upsert order
     const { data: upserted, error: upErr } = await supabase
-      .from('orders')
-      .upsert(payload, { onConflict: 'stripe_session_id' })
-      .select('*')
-      .maybeSingle();
-    if (upErr) {
-      return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
-    }
+      .from('orders').upsert(payload, { onConflict: 'stripe_session_id' }).select('*').maybeSingle();
+    if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
 
-    // 5) Send email only if not already sent
-    let emailOk = false;
-    let emailErr = null;
+    // Email (best-effort)
+    let emailOk = false; let emailErr = null;
     try {
       const html = renderOrderHtml({
         sessionId: session.id,
         buyerEmail: payload.buyer_email,
         amountTotal: payload.amount_total,
         currency: payload.currency,
-        items: payload.items
+        items: payload.items,
+        shipping,
       });
-      const res = await sendOrderEmail({
-        to: process.env.ADMIN_EMAIL,
-        subject: 'Fragrantique — New order received',
-        html
-      });
-      // consider as sent if nodemailer returned a messageId or accepted list
-      emailOk = !!(res && (res.ok || res.accepted || res.messageId));
-    } catch (e) {
-      emailOk = false;
-      emailErr = e.message || 'send_failed';
-    }
+      const res = await sendOrderEmail({ to: process.env.ADMIN_EMAIL, subject: 'Fragrantique — New order received', html });
+      emailOk = !!(res && (res.ok || res.messageId || res.accepted));
+    } catch (e) { emailOk = false; emailErr = e.message || 'send_failed'; }
 
-    if (!emailOk && emailErr === null) emailErr = 'skipped_or_unknown';
-
-    await supabase
-      .from('orders')
+    await supabase.from('orders')
       .update({ email_sent: emailOk, email_error: emailOk ? null : emailErr })
       .eq('stripe_session_id', session.id);
 
