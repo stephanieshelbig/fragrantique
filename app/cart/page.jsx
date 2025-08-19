@@ -53,7 +53,12 @@ export default function CartPage() {
     () => items.reduce((sum, it) => sum + (it.unit_amount * it.quantity), 0),
     [items]
   );
-  const subtotalFixed = (subtotalCents / 100).toFixed(2);
+  const SHIPPING_CENTS = 500; // $5.00
+  const TAX_RATE = 0.07;      // 7%
+  const taxCents = Math.round(subtotalCents * TAX_RATE);
+  const totalCents = subtotalCents + SHIPPING_CENTS + taxCents;
+
+  const fmtMoney = (cents) => (cents / 100).toFixed(2);
 
   function validateBuyer() {
     if (!buyer.name || !buyer.address1 || !buyer.city || !buyer.state || !buyer.postal || !buyer.country) {
@@ -175,18 +180,36 @@ export default function CartPage() {
             </div>
           </div>
 
-          <div className="p-4 border rounded bg-white">
+          {/* Summary with live breakdown */}
+          <div className="p-4 border rounded bg-white space-y-2">
             <div className="flex items-center justify-between">
-              <div className="font-medium">
-                Subtotal: {subtotalFixed} {currency}
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={clearCart} className="px-3 py-2 rounded border text-sm">Clear</button>
-                <button onClick={checkoutStripe} className="px-4 py-2 rounded bg-black text-white text-sm">Checkout</button>
-              </div>
+              <div className="font-medium">Order Summary</div>
+              <div className="text-sm opacity-70">{items.length} item{items.length > 1 ? 's' : ''}</div>
             </div>
-            <div className="text-xs opacity-70 mt-1">
-              A flat <b>$5</b> shipping fee will be added at checkout.
+
+            <div className="text-sm grid grid-cols-2 gap-y-1">
+              <div className="opacity-80">Subtotal</div>
+              <div className="text-right">{fmtMoney(subtotalCents)} {currency}</div>
+
+              <div className="opacity-80">Shipping</div>
+              <div className="text-right">{fmtMoney(SHIPPING_CENTS)} {currency}</div>
+
+              <div className="opacity-80">Sales Tax (7%)</div>
+              <div className="text-right">{fmtMoney(taxCents)} {currency}</div>
+
+              <div className="col-span-2 border-t my-2"></div>
+
+              <div className="font-semibold">Total</div>
+              <div className="text-right font-semibold">{fmtMoney(totalCents)} {currency}</div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button onClick={clearCart} className="px-3 py-2 rounded border text-sm">Clear</button>
+              <button onClick={checkoutStripe} className="px-4 py-2 rounded bg-black text-white text-sm">Checkout</button>
+            </div>
+
+            <div className="text-xs opacity-70">
+              Totals shown here will match the checkout amount (items + $5 shipping + 7% tax).
             </div>
           </div>
 
