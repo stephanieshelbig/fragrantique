@@ -16,7 +16,6 @@ export default function CartPage() {
   });
   const [msg, setMsg] = useState('');
 
-  // Load cart + buyer on mount
   useEffect(() => {
     try {
       const arr = JSON.parse(localStorage.getItem('cart_v1') || '[]');
@@ -32,7 +31,6 @@ export default function CartPage() {
     localStorage.setItem('cart_v1', JSON.stringify(next));
     setItems(next);
   }
-
   function saveBuyer(next) {
     localStorage.setItem('cart_contact_v1', JSON.stringify(next));
     setBuyer(next);
@@ -43,12 +41,9 @@ export default function CartPage() {
     const next = items.map((it, idx) => (idx === i ? { ...it, quantity: qty } : it));
     persist(next);
   }
-
   function removeItem(i) {
-    const next = items.filter((_, idx) => idx !== i);
-    persist(next);
+    persist(items.filter((_, idx) => idx !== i));
   }
-
   function clearCart() {
     persist([]);
   }
@@ -58,6 +53,7 @@ export default function CartPage() {
     () => items.reduce((sum, it) => sum + (it.unit_amount * it.quantity), 0),
     [items]
   );
+  const subtotalFixed = (subtotalCents / 100).toFixed(2);
 
   function validateBuyer() {
     if (!buyer.name || !buyer.address1 || !buyer.city || !buyer.state || !buyer.postal || !buyer.country) {
@@ -67,7 +63,7 @@ export default function CartPage() {
     return true;
   }
 
-  async function checkout() {
+  async function checkoutStripe() {
     setMsg('');
     if (!items.length) return;
     if (!validateBuyer()) return;
@@ -108,7 +104,9 @@ export default function CartPage() {
               <div key={i} className="p-3 border rounded bg-white flex items-center gap-3">
                 <div className="flex-1">
                   <div className="font-medium text-sm">{it.name}</div>
-                  <div className="text-xs opacity-70">Price: {(it.unit_amount/100).toFixed(2)} {it.currency.toUpperCase()}</div>
+                  <div className="text-xs opacity-70">
+                    Price: {(it.unit_amount/100).toFixed(2)} {it.currency.toUpperCase()}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -124,65 +122,44 @@ export default function CartPage() {
             ))}
           </div>
 
-          {/* Buyer name + address */}
+          {/* Shipping details */}
           <div className="p-4 border rounded bg-white space-y-3">
             <div className="font-medium">Shipping details</div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium mb-1">Full name</label>
-                <input
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.name}
-                  onChange={(e) => saveBuyer({ ...buyer, name: e.target.value })}
-                />
+                <input className="border rounded px-3 py-2 w-full"
+                  value={buyer.name} onChange={(e) => saveBuyer({ ...buyer, name: e.target.value })}/>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium mb-1">Address line 1</label>
-                <input
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.address1}
-                  onChange={(e) => saveBuyer({ ...buyer, address1: e.target.value })}
-                />
+                <input className="border rounded px-3 py-2 w-full"
+                  value={buyer.address1} onChange={(e) => saveBuyer({ ...buyer, address1: e.target.value })}/>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium mb-1">Address line 2 (optional)</label>
-                <input
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.address2}
-                  onChange={(e) => saveBuyer({ ...buyer, address2: e.target.value })}
-                />
+                <input className="border rounded px-3 py-2 w-full"
+                  value={buyer.address2} onChange={(e) => saveBuyer({ ...buyer, address2: e.target.value })}/>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">City</label>
-                <input
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.city}
-                  onChange={(e) => saveBuyer({ ...buyer, city: e.target.value })}
-                />
+                <input className="border rounded px-3 py-2 w-full"
+                  value={buyer.city} onChange={(e) => saveBuyer({ ...buyer, city: e.target.value })}/>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">State/Province</label>
-                <input
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.state}
-                  onChange={(e) => saveBuyer({ ...buyer, state: e.target.value })}
-                />
+                <input className="border rounded px-3 py-2 w-full"
+                  value={buyer.state} onChange={(e) => saveBuyer({ ...buyer, state: e.target.value })}/>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Postal code</label>
-                <input
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.postal}
-                  onChange={(e) => saveBuyer({ ...buyer, postal: e.target.value })}
-                />
+                <input className="border rounded px-3 py-2 w-full"
+                  value={buyer.postal} onChange={(e) => saveBuyer({ ...buyer, postal: e.target.value })}/>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Country</label>
-                <select
-                  className="border rounded px-3 py-2 w-full"
-                  value={buyer.country}
-                  onChange={(e) => saveBuyer({ ...buyer, country: e.target.value })}
-                >
+                <select className="border rounded px-3 py-2 w-full"
+                  value={buyer.country} onChange={(e) => saveBuyer({ ...buyer, country: e.target.value })}>
                   <option value="US">United States</option>
                   <option value="CA">Canada</option>
                   <option value="GB">United Kingdom</option>
@@ -198,11 +175,18 @@ export default function CartPage() {
             </div>
           </div>
 
-          <div className="p-4 border rounded bg-white flex items-center justify-between">
-            <div className="font-medium">Subtotal: {(subtotalCents/100).toFixed(2)} {currency}</div>
-            <div className="flex items-center gap-2">
-              <button onClick={clearCart} className="px-3 py-2 rounded border text-sm">Clear</button>
-              <button onClick={checkout} className="px-4 py-2 rounded bg-black text-white text-sm">Checkout</button>
+          <div className="p-4 border rounded bg-white">
+            <div className="flex items-center justify-between">
+              <div className="font-medium">
+                Subtotal: {subtotalFixed} {currency}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={clearCart} className="px-3 py-2 rounded border text-sm">Clear</button>
+                <button onClick={checkoutStripe} className="px-4 py-2 rounded bg-black text-white text-sm">Checkout</button>
+              </div>
+            </div>
+            <div className="text-xs opacity-70 mt-1">
+              A flat <b>$5</b> shipping fee will be added at checkout.
             </div>
           </div>
 
