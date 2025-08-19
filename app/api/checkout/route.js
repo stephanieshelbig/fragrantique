@@ -11,14 +11,27 @@ const SITE = 'https://fragrantique.net';
 const supabaseClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-function toInt(v) { if (typeof v === 'number') return Math.round(v); if (typeof v === 'string') return Math.round(parseFloat(v)); return null; }
+function toInt(v) {
+  if (typeof v === 'number') return Math.round(v);
+  if (typeof v === 'string') return Math.round(parseFloat(v));
+  return null;
+}
+
 function sanitizeItem(it) {
   const qty = Math.max(1, parseInt(it.quantity ?? 1, 10) || 1);
   const currency = (it.currency || 'usd').toLowerCase();
   let unit_amount = it.unit_amount;
-  if (unit_amount == null && it.unit_price != null) unit_amount = Math.round(parseFloat(String(it.unit_price)) * 100);
+  if (unit_amount == null && it.unit_price != null) {
+    unit_amount = Math.round(parseFloat(String(it.unit_price)) * 100);
+  }
   unit_amount = toInt(unit_amount);
-  return { name: it.name || 'Fragrance', quantity: qty, unit_amount, currency, fragrance_id: it.fragrance_id ?? null };
+  return {
+    name: it.name || 'Fragrance',
+    quantity: qty,
+    unit_amount,
+    currency,
+    fragrance_id: it.fragrance_id ?? null,
+  };
 }
 
 export async function POST(req) {
@@ -33,19 +46,30 @@ export async function POST(req) {
     const { data: session } = await supabase.auth.getSession();
     const user = session?.session?.user || null;
 
+    // Clean items & validate
     const clean = items.map(sanitizeItem);
     for (const it of clean) {
       if (it.unit_amount == null || Number.isNaN(it.unit_amount) || it.unit_amount <= 0) {
-        return NextResponse.json({ error: 'Each item must include a valid unit_amount (in cents).' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Each item must include a valid unit_amount (in cents).' },
+          { status: 400 }
+        );
       }
     }
+
+    // Use the first item’s currency (we assume all items share currency)
+    const currency = (clean[0].currency || 'usd').toLowerCase();
 
     // Default seller = @stephanie
     let seller_user_id = null;
     const { data: prof } = await supabase
-      .from('profiles').select('id').eq('username', 'stephanie').maybeSingle();
+      .from('profiles')
+      .select('id')
+      .eq('username', 'stephanie')
+      .maybeSingle();
     if (prof?.id) seller_user_id = prof.id;
 
+    // Convert cart items to Stripe line_items
     const line_items = clean.map((it) => ({
       quantity: it.quantity,
       price_data: {
@@ -58,12 +82,34 @@ export async function POST(req) {
       },
     }));
 
+    // --- Add a fixed $5 shipping fee as an extra line item ---
+    const SHIPPING_FEE_CENTS = 500; // $5.00
+    line_items.push({
+      quantity: 1,
+      price_data: {
+        currency,
+        unit_amount: SHIPPING_FEE_CENTS,
+        product_data: {
+          name: 'Shipping',
+          metadata: { type: 'shipping_flat_fee' },
+        },
+      },
+    });
+
+    // Pass useful metadata (also includes shipping address from cart form)
     const md = {
       seller_user_id: seller_user_id || '',
-      cart: JSON.stringify(clean.map(({ name, quantity, unit_amount, currency, fragrance_id }) => ({
-        name, quantity, unit_amount, currency, fragrance_id,
-      }))),
-      // shipping/name/address captured from cart page form
+      cart: JSON.stringify(
+        clean.map(({ name, quantity, unit_amount, currency, fragrance_id }) => ({
+          name,
+          quantity,
+          unit_amount,
+          currency,
+          fragrance_id,
+        }))
+      ),
+      shipping_fee_cents: String(500),
+      // buyer-entered shipping details
       shipping_name: buyer?.name || '',
       shipping_address1: buyer?.address1 || '',
       shipping_address2: buyer?.address2 || '',
