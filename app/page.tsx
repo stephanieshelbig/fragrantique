@@ -26,7 +26,7 @@ export default function HomePage() {
       <h1 className="text-3xl font-bold text-center mb-2">
         Welcome to my Fragrance Boutique
       </h1>
-      <p className="text-lg text-center mb-6">
+      <p className="text-lg text-center mb-6 text-pink-500 font-medium">
         I have a large fragrance collection and I'd love to share it with you!
       </p>
 
