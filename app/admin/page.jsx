@@ -1,149 +1,75 @@
-// app/admin/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { isAdminEmail } from '@/lib/isAdmin';
 
 export default function AdminPage() {
-  const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
+  const [username, setUsername] = useState('stephanie');
+  const [msg, setMsg] = useState('');
+  const [viewer, setViewer] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const userEmail = data?.session?.user?.email ?? null;
-      setEmail(userEmail);
-
-      if (isAdminEmail(userEmail)) {
-        setAllowed(true);
-        setLoading(false);
-      } else {
-        // Not admin → send away (keeps admin area secret)
-        window.location.href = '/';
-      }
+      const { data } = await supabase.auth.getUser();
+      setViewer(data?.user || null);
     })();
   }, []);
 
-  if (loading) return <div className="p-6">Loading…</div>;
-  if (!allowed) return null;
+  async function publishFromDb() {
+    setMsg('Publishing (from DB)…');
+    try {
+      const res = await fetch('/api/publish-layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, mode: 'from-db-private' })
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'publish failed');
+      setMsg(`Published ${j.updated || 0} positions to public ✓`);
+    } catch (e) {
+      setMsg(`Error: ${e.message}`);
+    }
+  }
+
+  async function publishFromLocal() {
+    setMsg('Publishing (from browser backup)…');
+    try {
+      const key = `fragrantique_layout_by_brand_${username}`;
+      const map = JSON.parse(localStorage.getItem(key) || '{}');
+      const res = await fetch('/api/publish-layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, mode: 'from-local', map })
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'publish failed');
+      setMsg(`Published ${j.updated || 0} positions from local backup ✓`);
+    } catch (e) {
+      setMsg(`Error: ${e.message}`);
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-[#fdfcf9] p-6">
-      <header className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-          <p className="text-sm text-gray-600">
-            Signed in as <span className="font-medium">{email}</span>
-          </p>
+    <div className="max-w-xl mx-auto p-6 space-y-4">
+      <h1 className="text-2xl font-bold">Admin</h1>
+      <p className="text-sm opacity-75">
+        Signed in as: {viewer?.email || 'not signed in'} · Username target: <span className="font-mono">{username}</span>
+      </p>
+
+      <div className="space-y-3 border rounded p-4">
+        <h2 className="font-semibold">Publish layout</h2>
+        <p className="text-sm opacity-80">Copy your current arrangement to the public layout (so logged-out visitors see it).</p>
+        <div className="flex gap-2">
+          <button onClick={publishFromDb} className="px-3 py-2 rounded bg-black text-white hover:opacity-90">
+            Publish layout now (from DB)
+          </button>
+          <button onClick={publishFromLocal} className="px-3 py-2 rounded bg-pink-700 text-white hover:opacity-90">
+            Publish from browser backup
+          </button>
         </div>
-        <Link
-          href="/u/stephanie"
-          className="text-sm underline"
-        >
-          ← Back to Boutique
-        </Link>
-      </header>
-
-      <section className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {/* Orders */}
-        <Card
-          title="Orders"
-          desc="View recent Stripe orders and buyer details."
-          actions={[
-            { label: 'Open Orders', href: '/admin/orders' },
-          ]}
-        />
-
-        {/* Image Cleanup */}
-        <Card
-          title="Image Cleanup"
-          desc="Remove white backgrounds and fix missing images."
-          actions={[
-            { label: 'Open Cleaner', href: '/admin/clean-images' },
-          ]}
-        />
-
-        {/* Brand Index */}
-        <Card
-          title="Brand Index"
-          desc="Browse all brands and manage brand pages."
-          actions={[
-            { label: 'Open Brand Index', href: '/brand' },
-          ]}
-        />
-
-        {/* Fragrance Editor (if you have one) */}
-        <Card
-          title="Fragrance Editor"
-          desc="Add or modify fragrances and metadata."
-          actions={[
-            { label: 'Open Editor', href: '/admin/fragrances' },
-          ]}
-        />
-
-        {/* Test Email */}
-        <Card
-          title="Email Test"
-          desc="Send a test email to confirm SMTP works."
-          actions={[
-            { label: 'Send Test Email', href: '/api/test-email', external: true },
-          ]}
-        />
-
-        {/* Webhook Debug (only if you use it) */}
-        <Card
-          title="Stripe Webhook Debug"
-          desc="Review webhook delivery or trigger a test."
-          actions={[
-            { label: 'Stripe Dashboard', href: 'https://dashboard.stripe.com/test/webhooks', external: true },
-          ]}
-        />
-      </section>
-    </main>
-  );
-}
-
-function Card({
-  title,
-  desc,
-  actions,
-}: {
-  title: string;
-  desc: string;
-  actions: { label: string; href: string; external?: boolean }[];
-}) {
-  return (
-    <div className="bg-white border rounded-2xl shadow-sm p-5 flex flex-col">
-      <div className="mb-3">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="text-sm text-gray-600 mt-1">{desc}</p>
       </div>
-      <div className="mt-auto flex flex-wrap gap-2">
-        {actions.map((a) =>
-          a.external ? (
-            <a
-              key={a.label}
-              href={a.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50"
-            >
-              {a.label}
-            </a>
-          ) : (
-            <Link
-              key={a.label}
-              href={a.href}
-              className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50"
-            >
-              {a.label}
-            </Link>
-          )
-        )}
-      </div>
+
+      {msg && <div className="p-3 rounded bg-white border shadow text-sm">{msg}</div>}
     </div>
   );
 }
