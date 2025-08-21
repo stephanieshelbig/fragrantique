@@ -1,9 +1,0 @@
-{
-  "redirects": [
-    { "source": "/", "destination": "/u/stephanie", "permanent": false },
-    { "source": "/@stephanie", "destination": "/u/stephanie", "permanent": true },
-    { "source": "/%40stephanie", "destination": "/u/stephanie", "permanent": true },
-    { "source": "/@:username", "destination": "/u/:username", "permanent": true },
-    { "source": "/%40:username", "destination": "/u/:username", "permanent": true }
-  ]
-}
