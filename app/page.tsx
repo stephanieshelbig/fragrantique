@@ -22,11 +22,15 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Heading */}
-      <h1 className="text-3xl font-bold text-center mb-2">
-        Welcome to my Fragrance Boutique
-      </h1>
-      <p className="text-lg text-center mb-6 text-pink-500 font-medium">
+      {/* Heading + soft gold underline */}
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-2">
+          Welcome to my Fragrance Boutique
+        </h1>
+        <div className="mx-auto h-1 w-40 rounded-full" style={{ backgroundColor: "#c8a96a" }} />
+      </div>
+
+      <p className="text-lg text-center mt-4 mb-6 text-pink-500 font-medium">
         I have a large fragrance collection and I'd love to share it with you!
       </p>
 
