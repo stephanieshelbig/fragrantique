@@ -1,8 +1,102 @@
-'use client';import { useEffect,useState } from 'react';import { supabase } from '@/lib/supabase';
-type Message={id:string;content:string;created_at:string;user_email:string|null};
-export default function Chat(){const [messages,setMessages]=useState<Message[]>([]);const [input,setInput]=useState('');const [email,setEmail]=useState<string|null>(null);
-useEffect(()=>{supabase.auth.getUser().then(({data})=>setEmail(data.user?.email??null));load();const chan=supabase.channel('public:messages').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},payload=>{setMessages(m=>[payload.new as Message,...m]);}).subscribe();return()=>{supabase.removeChannel(chan);};},[]);
-async function load(){const {data}=await supabase.from('messages').select('*').order('created_at',{ascending:false}).limit(50);setMessages(data as any||[]);}
-async function send(){if(!input.trim())return;await supabase.from('messages').insert({content:input,user_email:email});setInput('');}
-return(<div className="max-w-2xl mx-auto"><div className="glass-card p-4 h-[420px] overflow-auto flex flex-col-reverse"><div>{messages.map(m=>(<div key={m.id} className="py-1 text-sm"><span className="opacity-60 mr-2">{new Date(m.created_at).toLocaleTimeString()}</span><b>{m.user_email??'Anonymous'}:</b> {m.content}</div>))}</div></div>
-<div className="mt-3 flex gap-2"><input value={input} onChange={e=>setInput(e.target.value)} className="flex-1 border rounded-lg px-3 py-2" placeholder="Say hi..."/><button onClick={send} className="px-4 rounded-lg bg-[var(--gold)] text-white">Send</button></div></div>);}
+// app/chat/page.tsx
+"use client";
+
+import { useState } from "react";
+
+export default function ChatPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setResult(null);
+
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setResult("Please fill in your name, email, and message.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setResult(j?.error || "Could not send your message.");
+      } else {
+        setResult("Thanks! Your message has been sent.");
+        setName("");
+        setEmail("");
+        setMessage("");
+      }
+    } catch (err: any) {
+      setResult(err?.message || "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#fdfcf9] flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-2xl bg-white border rounded-2xl shadow p-6">
+        <h1 className="text-2xl font-bold text-center">Send me a message</h1>
+        <p className="text-center text-sm text-gray-600 mt-1">
+          I’ll receive your message by email and reply as soon as I can.
+        </p>
+
+        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Your name</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Stephanie"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Your email</label>
+            <input
+              type="email"
+              className="w-full border rounded-lg px-3 py-2"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Message</label>
+            <textarea
+              className="w-full border rounded-lg px-3 py-2 h-36"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type your message…"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full bg-black text-white rounded-xl py-2.5 font-medium hover:opacity-90 disabled:opacity-60"
+          >
+            {busy ? "Sending…" : "Send"}
+          </button>
+        </form>
+
+        {result && (
+          <div className="mt-4 text-center text-sm">
+            {result}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
