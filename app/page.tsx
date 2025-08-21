@@ -1,52 +1,70 @@
 // app/page.tsx
-'use client';
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
+import Image from "next/image";
+import Link from "next/link";
+import Logo from "../public/FragrantiqueLogo.png";
+import Pic1 from "../public/1.jpg";
+import Pic2 from "../public/2.jpg";
+import Pic3 from "../public/3.jpg";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#fdfcf9] flex flex-col items-center px-6 pb-16">
-      {/* Header / Logo */}
-      <section className="w-full max-w-6xl flex flex-col items-center text-center mt-10 md:mt-14">
-        <img
-          src="/FragrantiqueLogo.png"
-          alt="Fragrantique logo"
-          className="w-[280px] md:w-[360px] h-auto drop-shadow-sm"
+    <main className="flex flex-col items-center justify-center min-h-screen bg-white text-gray-800 px-6 py-12">
+      {/* Logo */}
+      <div className="mb-6">
+        <Image
+          src={Logo}
+          alt="Fragrantique Logo"
+          width={250}
+          height={250}
+          priority
         />
-        <h1 className="mt-6 text-2xl md:text-3xl font-bold text-gray-800">
-          Welcome to the Fragrance Boutique&nbsp;–&nbsp;Fragrantique
-        </h1>
+      </div>
 
-        {/* CTA Button */}
-        <div className="mt-6">
-          <Link
-            href="/u/stephanie"
-            className="inline-block rounded-2xl bg-[#f5cfe3] text-gray-900 hover:bg-[#f2bdd8] transition-colors px-5 py-3 text-base md:text-lg font-medium shadow"
-          >
-            Click here to see fragrances and decants for sale
-          </Link>
+      {/* Heading */}
+      <h1 className="text-3xl font-bold text-center mb-2">
+        Welcome to my Fragrance Boutique
+      </h1>
+      <p className="text-lg text-center mb-6">
+        I have a large fragrance collection and I'd love to share it with you!
+      </p>
+
+      {/* Call-to-action button */}
+      <Link
+        href="/u/stephanie"
+        className="bg-pink-200 hover:bg-pink-300 text-gray-800 font-semibold px-6 py-3 rounded-2xl shadow-lg transition"
+      >
+        Click here to see fragrances and decants for sale
+      </Link>
+
+      {/* Image row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 max-w-4xl w-full">
+        <div className="relative w-full h-64">
+          <Image
+            src={Pic1}
+            alt="Fragrance Collection 1"
+            fill
+            className="object-cover rounded-xl shadow-md"
+          />
         </div>
-      </section>
-
-      {/* Photo Grid */}
-      <section className="w-full max-w-6xl mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <img
-          src="/1.jpg"
-          alt="Fragrance collection cabinet 1"
-          className="rounded-2xl shadow-lg w-full h-auto object-cover"
-        />
-        <img
-          src="/2.jpg"
-          alt="Fragrance collection detail 2"
-          className="rounded-2xl shadow-lg w-full h-auto object-cover"
-        />
-        <img
-          src="/3.jpg"
-          alt="Fragrance collection cabinet 3"
-          className="rounded-2xl shadow-lg w-full h-auto object-cover"
-        />
-      </section>
+        <div className="relative w-full h-64">
+          <Image
+            src={Pic2}
+            alt="Fragrance Collection 2"
+            fill
+            className="object-cover rounded-xl shadow-md"
+          />
+        </div>
+        <div className="relative w-full h-64">
+          <Image
+            src={Pic3}
+            alt="Fragrance Collection 3"
+            fill
+            className="object-cover rounded-xl shadow-md"
+          />
+        </div>
+      </div>
     </main>
   );
 }
