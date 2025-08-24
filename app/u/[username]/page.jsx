@@ -24,14 +24,15 @@ export default function UserBoutiquePage({ params }) {
   const [isOwner, setIsOwner] = useState(false);
   const [arranging, setArranging] = useState(false);
 
-  const [reps, setReps] = useState([]); // [{brandKey, brand, bottle:{...}}]
+  const [reps, setReps] = useState([]);          // one bottle per brand
   const [dbPositions, setDbPositions] = useState({}); // {brandKey: {x_pct,y_pct}}
 
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useState(null);    // small status chip text
+  const [debug, setDebug] = useState('');        // tiny debug line (counts)
 
   const rootRef = useRef(null);
 
-  // ---- Load profile, session, bottles and positions ----
+  // ---- Load profile, session, positions, and fragrances (two-step) ----
   useEffect(() => {
     let mounted = true;
 
@@ -59,7 +60,7 @@ export default function UserBoutiquePage({ params }) {
       const viewerId = sess?.session?.user?.id || null;
       setIsOwner(!!viewerId && viewerId === pRow.id);
 
-      // 3) Load brand positions saved by this user
+      // 3) Load saved brand positions (publicly readable)
       const { data: posRows } = await supabase
         .from('brand_positions')
         .select('brand_key, x_pct, y_pct')
@@ -75,24 +76,51 @@ export default function UserBoutiquePage({ params }) {
       if (!mounted) return;
       setDbPositions(posMap);
 
-      // 4) Load this user's bottles and pick one representative per brand
-      const { data: rows, error: fErr } = await supabase
+      // 4) Load user_fragrances → just the IDs (this is small)
+      const { data: links, error: lErr } = await supabase
         .from('user_fragrances')
-        .select('fragrance:fragrances(id,name,brand,image_url,image_url_transparent)')
-        .eq('user_id', pRow.id)
-        .order('brand', { referencedTable: 'fragrances', ascending: true })
-        .order('name', { referencedTable: 'fragrances', ascending: true });
+        .select('fragrance_id')
+        .eq('user_id', pRow.id);
 
-      if (fErr) {
-        setStatus('load error');
+      if (lErr) {
+        setStatus('load error (links)');
         setLoading(false);
         return;
       }
 
+      const ids = (links || [])
+        .map((r) => r?.fragrance_id)
+        .filter((v) => v != null);
+
+      // If no links, we’re done
+      if (!ids.length) {
+        if (!mounted) return;
+        setDebug(`links: 0`);
+        setReps([]);
+        setStatus(null);
+        setLoading(false);
+        return;
+      }
+
+      // 5) Fetch those fragrances directly (avoids RLS join pitfalls)
+      //    Order by brand, name so the first per-brand is deterministic.
+      const { data: frags, error: fErr } = await supabase
+        .from('fragrances')
+        .select('id, name, brand, image_url, image_url_transparent')
+        .in('id', ids)
+        .order('brand', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (fErr) {
+        setStatus('load error (fragrances)');
+        setLoading(false);
+        return;
+      }
+
+      // Build one representative per brand
       const repMap = new Map();
-      (rows || []).forEach((r) => {
-        const f = r?.fragrance || null;
-        if (!f || !f.brand) return;
+      (frags || []).forEach((f) => {
+        if (!f?.brand) return;
         const brandKey = slugifyBrand(f.brand);
         if (!repMap.has(brandKey)) {
           repMap.set(brandKey, {
@@ -115,6 +143,7 @@ export default function UserBoutiquePage({ params }) {
 
       if (!mounted) return;
       setReps(repList);
+      setDebug(`links: ${ids.length} · reps: ${repList.length}`);
       setStatus(null);
       setLoading(false);
     }
@@ -212,9 +241,9 @@ export default function UserBoutiquePage({ params }) {
       </div>
 
       {/* Status chip */}
-      {status && (
+      {(status || debug) && (
         <div className="fixed top-3 right-3 bg-black text-white text-xs px-2.5 py-1.5 rounded-full shadow">
-          {status}
+          {status ? status : debug}
         </div>
       )}
 
