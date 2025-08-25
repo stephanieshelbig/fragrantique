@@ -6,12 +6,10 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Public brand-position layout (no auto-publish):
+ * Public brand-position layout:
  * - Reads public positions for the viewed user (is_public = true).
  * - If viewer is the same user, also reads private positions and overrides.
- * - Drag saves with is_public: true (owner only, explicit move).
- * - Robust brand-key matching (strict + canonical) and race-free save.
- * - Controls (Arrange / Guides / Reload DB) are visible only to the owner.
+ * - Drag saves with is_public: true (owner only, via ?edit=1).
  */
 
 const CANVAS_ASPECT = '3 / 2';
@@ -79,11 +77,10 @@ export default function UserBoutiquePage({ params }) {
   // UI / state
   const [authReady, setAuthReady]   = useState(false);
   const [loading, setLoading]       = useState(true);
-  const [arrange, setArrange]       = useState(false);
-  const [showGuides, setShowGuides] = useState(false);
+  const [arrange, setArrange]       = useState(false);     // still supported via ?edit=1
+  const [showGuides, setShowGuides] = useState(false);     // no UI to toggle now
   const [status, setStatus]         = useState(null);
-  const [viewerId, setViewerId]     = useState(null);  // current session's user id (or null)
-  const [dbPosCount, setDbPosCount] = useState(0);
+  const [viewerId, setViewerId]     = useState(null);      // current session's user id (or null)
 
   // data
   const [profileId, setProfileId]     = useState(null); // the boutique owner's profile id
@@ -126,7 +123,7 @@ export default function UserBoutiquePage({ params }) {
 
     if (!prof?.id) {
       setProfileId(null);
-      setLinks([]); setDbPositions({}); setLocalBrand({}); setDbPosCount(0);
+      setLinks([]); setDbPositions({}); setLocalBrand({});
       setLoading(false);
       return;
     }
@@ -180,13 +177,12 @@ export default function UserBoutiquePage({ params }) {
     (privRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
 
     setDbPositions(merged);
-    setDbPosCount((pubRows?.length || 0) + (privRows?.length || 0));
 
     // Local fallback (used only when DB missing)
     setLocalBrand(loadLocalBrand(username));
 
     const qs = new URLSearchParams(window.location.search);
-    if (qs.get('edit') === '1') setArrange(true);
+    if (qs.get('edit') === '1') setArrange(true);  // owner can still arrange via secret query
 
     setLoading(false);
   }
@@ -368,51 +364,7 @@ export default function UserBoutiquePage({ params }) {
           priority
         />
 
-        {/* Controls */}
-        <div className="absolute right-4 top-4 z-20 flex gap-2 items-center">
-          {/* Always visible */}
-          <Link href="/brand" className="px-3 py-1 rounded bg-black/70 text-white hover:opacity-90">
-            Brand index
-          </Link>
-
-          {/* Owner-only controls */}
-          {isOwner && (
-            <>
-              <button
-                onClick={() => setArrange(a => !a)}
-                className={`px-3 py-1 rounded text-white ${arrange ? 'bg-pink-700' : 'bg-black/70'}`}
-              >
-                {arrange ? 'Arranging… (drag)' : 'Arrange'}
-              </button>
-              <button
-                onClick={() => setShowGuides(g => !g)}
-                className="px-3 py-1 rounded bg-black/50 text-white hover:opacity-90"
-              >
-                Guides
-              </button>
-              <button
-                onClick={() => loadData(viewerId)}
-                className="px-2 py-1 rounded bg-black/40 text-white hover:opacity-90 text-xs"
-                title="Reload from DB"
-              >
-                Reload DB
-              </button>
-            </>
-          )}
-
-          {/* Info chips (harmless for public view) */}
-          <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">
-            DB pos: {dbPosCount}
-            {lastSavedRef.current && (
-              <> · last x{Math.round(lastSavedRef.current.x)}% y{Math.round(lastSavedRef.current.y)}%</>
-            )}
-          </span>
-          {status && (
-            <span className="text-xs px-2 py-1 rounded bg-white/85 border shadow">{status}</span>
-          )}
-        </div>
-
-        {/* Optional shelf guides (owner-only toggle) */}
+        {/* Optional shelf guides (owner-only; no toggle shown) */}
         {isOwner && showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
@@ -509,7 +461,8 @@ export default function UserBoutiquePage({ params }) {
 
       <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
         Viewing <span className="font-medium">@{username}</span> boutique — public layout
-        {isOwner && arrange ? ' · arranging (publishes positions)' : ''}
+        {arrange ? ' · arranging (publishes positions)' : ''}
+        {status ? ` · ${status}` : ''}
       </div>
     </div>
   );
