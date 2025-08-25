@@ -5,13 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-/**
- * Public brand-position layout:
- * - Reads public positions for the viewed user (is_public = true).
- * - If viewer is the same user, also reads private positions and overrides.
- * - Drag saves with is_public: true (owner only, via ?edit=1).
- */
-
 const CANVAS_ASPECT = '3 / 2';
 const DEFAULT_H = 54;
 
@@ -21,7 +14,6 @@ const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Nu
 const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-/** Strict normalization (legacy) */
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -29,36 +21,6 @@ const brandKey = (b) =>
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-
-/** Canonical normalization (more aggressive) */
-const STOPWORDS = new Set([
-  'paris','london','milan','new','york','nyc','roma','rome',
-  'perfume','perfumes','parfum','parfums','fragrance','fragrances',
-  'inc','ltd','llc','co','company','laboratories','laboratory','lab','labs',
-  'edition','editions','house','maison','atelier','collection','collections'
-]);
-function canonicalBrandKey(b) {
-  const strict = brandKey(b);
-  const parts = strict.split('-').filter(Boolean);
-  const kept = parts.filter(p => !STOPWORDS.has(p));
-  const canon = kept.join('-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
-  return canon || strict;
-}
-
-const LS_BRAND = (u) => `fragrantique_layout_by_brand_${u}`;
-function loadLocalBrand(username) {
-  try {
-    const obj = JSON.parse(localStorage.getItem(LS_BRAND(username)) || '{}');
-    for (const k in obj) {
-      obj[k].x_pct = toNum(obj[k].x_pct);
-      obj[k].y_pct = toNum(obj[k].y_pct);
-    }
-    return obj;
-  } catch { return {}; }
-}
-function saveLocalBrand(username, mapObj) {
-  try { localStorage.setItem(LS_BRAND(username), JSON.stringify(mapObj)); } catch {}
-}
 
 function chooseRepForBrand(list) {
   if (!list?.length) return null;
@@ -74,47 +36,28 @@ function chooseRepForBrand(list) {
 export default function UserBoutiquePage({ params }) {
   const username = decodeURIComponent(params.username);
 
-  // UI / state
   const [authReady, setAuthReady]   = useState(false);
   const [loading, setLoading]       = useState(true);
-  const [arrange, setArrange]       = useState(false);     // still supported via ?edit=1
-  const [showGuides, setShowGuides] = useState(false);     // no UI to toggle now
-  const [status, setStatus]         = useState(null);
-  const [viewerId, setViewerId]     = useState(null);      // current session's user id (or null)
+  const [viewerId, setViewerId]     = useState(null);
+  const [profileId, setProfileId]   = useState(null);
+  const [links, setLinks]           = useState([]);
+  const [dbPositions, setDbPositions] = useState({});
 
-  // data
-  const [profileId, setProfileId]     = useState(null); // the boutique owner's profile id
-  const [links, setLinks]             = useState([]);   // user_fragrances + fragrance
-  const [dbPositions, setDbPositions] = useState({});   // merged: public + (own private)
-  const [localBrand, setLocalBrand]   = useState({});   // fallback only
-
-  // refs
   const rootRef = useRef(null);
-  const dragState = useRef(null);
-  const lastSavedRef = useRef(null);
 
-  // Wait for auth, get viewer id, then load
   useEffect(() => {
-    let sub = null;
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       setViewerId(sess?.session?.user?.id || null);
-      setAuthReady(true);
       await loadData(sess?.session?.user?.id || null);
-      sub = supabase.auth.onAuthStateChange(async (_event, session) => {
-        setViewerId(session?.user?.id || null);
-        await loadData(session?.user?.id || null);
-      }).data?.subscription || null;
+      setAuthReady(true);
     })();
-    return () => { if (sub) sub.unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
   async function loadData(currentViewerId) {
     setLoading(true);
-    setStatus(null);
 
-    // Who owns this boutique?
     const { data: prof } = await supabase
       .from('profiles')
       .select('id, username')
@@ -123,13 +66,13 @@ export default function UserBoutiquePage({ params }) {
 
     if (!prof?.id) {
       setProfileId(null);
-      setLinks([]); setDbPositions({}); setLocalBrand({});
+      setLinks([]);
+      setDbPositions({});
       setLoading(false);
       return;
     }
     setProfileId(prof.id);
 
-    // All bottles for this user
     const { data: rows } = await supabase
       .from('user_fragrances')
       .select(`
@@ -154,40 +97,21 @@ export default function UserBoutiquePage({ params }) {
     }));
     setLinks(mapped);
 
-    // Public positions (readable by anyone)
     const { data: pubRows } = await supabase
       .from('user_brand_positions')
       .select('brand_key, x_pct, y_pct, is_public')
       .eq('user_id', prof.id)
       .eq('is_public', true);
 
-    // Private positions (viewer must be the owner)
-    let privRows = [];
-    if (currentViewerId && currentViewerId === prof.id) {
-      const { data: myRows } = await supabase
-        .from('user_brand_positions')
-        .select('brand_key, x_pct, y_pct, is_public')
-        .eq('user_id', prof.id);
-      privRows = myRows || [];
-    }
-
-    // Merge: start with public, then override with private (owner view)
     const merged = {};
-    (pubRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
-    (privRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
+    (pubRows || []).forEach(p => {
+      merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) };
+    });
 
     setDbPositions(merged);
-
-    // Local fallback (used only when DB missing)
-    setLocalBrand(loadLocalBrand(username));
-
-    const qs = new URLSearchParams(window.location.search);
-    if (qs.get('edit') === '1') setArrange(true);  // owner can still arrange via secret query
-
     setLoading(false);
   }
 
-  // Build one rep per brand; pull positions by strict key THEN canonical key, else default
   const reps = useMemo(() => {
     const byBrand = new Map();
     for (const it of links) {
@@ -196,165 +120,40 @@ export default function UserBoutiquePage({ params }) {
       byBrand.get(strict).push(it);
     }
 
-    const chosen = Array.from(byBrand.entries()).map(([strict, list]) => {
+    return Array.from(byBrand.entries()).map(([strict, list]) => {
       const rep = chooseRepForBrand(list);
       if (!rep) return null;
 
       const brand = rep.frag?.brand || 'Unknown';
-      const canon = canonicalBrandKey(brand);
-
-      // Try strict from merged map, then canonical, then local canonical
-      const dbStrict = dbPositions[strict];
-      const dbCanon  = dbPositions[canon];
-      const locCanon = localBrand[canon];
-
-      const x = isNum(dbStrict?.x_pct) ? dbStrict.x_pct
-              : isNum(dbCanon?.x_pct)  ? dbCanon.x_pct
-              : isNum(locCanon?.x_pct) ? locCanon.x_pct
-              : undefined;
-
-      const y = isNum(dbStrict?.y_pct) ? dbStrict.y_pct
-              : isNum(dbCanon?.y_pct)  ? dbCanon.y_pct
-              : isNum(locCanon?.y_pct) ? locCanon.y_pct
-              : undefined;
+      const dbPos = dbPositions[strict];
+      const x = isNum(dbPos?.x_pct) ? dbPos.x_pct : 50;
+      const y = isNum(dbPos?.y_pct) ? dbPos.y_pct : 80;
 
       return {
         ...rep,
         brand,
-        brandKeyStrict: strict,
-        brandKeyCanon : canon,
         x_pct: x,
         y_pct: y
       };
     }).filter(Boolean);
-
-    // Defaults for any without a position yet
-    const needDefaults = [];
-    const positioned = [];
-    for (const it of chosen) {
-      if (isNum(it.x_pct) && isNum(it.y_pct)) positioned.push(it);
-      else needDefaults.push(it);
-    }
-
-    if (needDefaults.length) {
-      const cols = 14, startY = 86, rowPitch = 6, pad = 4;
-      const span = 100 - pad * 2;
-      const step = span / (cols - 1);
-      needDefaults.forEach((it, i) => {
-        const row = Math.floor(i / cols);
-        const col = i % cols;
-        it.x_pct = pad + col * step;
-        it.y_pct = startY - row * rowPitch;
-      });
-    }
-
-    positioned.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-    needDefaults.sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-    return [...positioned, ...needDefaults];
-  }, [links, dbPositions, localBrand]);
-
-  // Drag lifecycle (race-free save)
-  function startDrag(e, itm) {
-    // Only owner can arrange
-    if (!arrange || !viewerId || viewerId !== profileId) return;
-    const container = rootRef.current;
-    if (!container) return;
-    e.preventDefault(); e.stopPropagation();
-
-    if (e.currentTarget.setPointerCapture && e.pointerId != null) {
-      try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
-    }
-
-    const rect = container.getBoundingClientRect();
-    const pointerX = e.touches ? e.touches[0].clientX : e.clientX;
-    const pointerY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    const startX = isNum(itm.x_pct) ? itm.x_pct : 50;
-    const startY = isNum(itm.y_pct) ? itm.y_pct : 80;
-
-    dragState.current = {
-      brandKeyCanon : itm.brandKeyCanon,
-      startXPct: startX,
-      startYPct: startY,
-      pointerX,
-      pointerY,
-      rect,
-      lastXPct: startX,
-      lastYPct: startY
-    };
-
-    window.addEventListener('pointermove', onDragMove, { passive: false });
-    window.addEventListener('pointerup', onDragEnd);
-    window.addEventListener('touchmove', onDragMove, { passive: false });
-    window.addEventListener('touchend', onDragEnd);
-  }
-
-  function onDragMove(e) {
-    if (!dragState.current) return;
-    e.preventDefault();
-
-    const { brandKeyCanon, startXPct, startYPct, pointerX, pointerY, rect } = dragState.current;
-    const nowX = e.touches ? e.touches[0].clientX : e.clientX;
-    const nowY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    const dxPct = pxToPct(nowX - pointerX, rect.width);
-    const dyPct = pxToPct(nowY - pointerY, rect.height);
-
-    const newX = clamp(startXPct + dxPct, 0, 100);
-    const newY = clamp(startYPct + dyPct, 0, 100);
-
-    // Update live ref first
-    dragState.current.lastXPct = newX;
-    dragState.current.lastYPct = newY;
-
-    // Then update UI state so you see it move
-    setDbPositions(prev => ({ ...prev, [brandKeyCanon]: { x_pct: newX, y_pct: newY } }));
-  }
-
-  async function onDragEnd() {
-    const snap = dragState.current;
-    dragState.current = null;
-
-    window.removeEventListener('pointermove', onDragMove);
-    window.removeEventListener('pointerup', onDragEnd);
-    window.removeEventListener('touchmove', onDragMove);
-    window.removeEventListener('touchend', onDragEnd);
-
-    if (!snap) return;
-    const { brandKeyCanon, lastXPct, lastYPct } = snap;
-    const x = Number(lastXPct);
-    const y = Number(lastYPct);
-
-    setStatus('Saving…');
-    lastSavedRef.current = { x, y };
-
-    let err = null;
-    if (profileId && viewerId === profileId) {
-      // Save under owner with is_public = true so everyone sees it
-      const { error } = await supabase
-        .from('user_brand_positions')
-        .upsert({ user_id: profileId, brand_key: brandKeyCanon, x_pct: x, y_pct: y, is_public: true });
-      if (error) err = error.message;
-    } else {
-      err = 'not owner';
-    }
-
-    try {
-      const nextLocal = { ...localBrand, [brandKeyCanon]: { x_pct: x, y_pct: y } };
-      saveLocalBrand(username, nextLocal);
-      setLocalBrand(nextLocal);
-    } catch {}
-
-    setStatus(err ? `DB blocked: ${err}. Saved locally.` : 'DB saved ✓ (public)');
-  }
+  }, [links, dbPositions]);
 
   if (!authReady) return <div className="p-6">Starting session…</div>;
   if (loading)     return <div className="p-6">Loading boutique…</div>;
 
-  const isOwner = viewerId && profileId && viewerId === profileId;
-
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
+      {/* Boutique Header */}
+      <div className="w-full relative h-40 mb-4">
+        <Image
+          src="/StephaniesBoutiqueHeader.png"
+          alt="Stephanie's Boutique Header"
+          fill
+          style={{ objectFit: 'contain' }}
+          priority
+        />
+      </div>
+
       <div className="relative w-full" ref={rootRef} style={{ aspectRatio: CANVAS_ASPECT }}>
         <Image
           src="/Fragrantique_boutiqueBackground.png"
@@ -364,68 +163,23 @@ export default function UserBoutiquePage({ params }) {
           priority
         />
 
-        {/* Optional shelf guides (owner-only; no toggle shown) */}
-        {isOwner && showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
-          <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
-        ))}
-
-        {/* One bottle per brand */}
         {reps.map((it) => {
           const topPct  = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
           const leftPct = clamp(isNum(it.x_pct) ? it.x_pct : 50, 0, 100);
           const href = `/u/${encodeURIComponent(username)}/brand/${brandKey(it.brand)}`;
 
-          const wrapperStyle = {
-            top: `${topPct}%`,
-            left: `${leftPct}%`,
-            transform: 'translate(-50%, -100%)',
-            height: `${DEFAULT_H}px`,
-            touchAction: 'none',
-          };
-
-          return isOwner && arrange ? (
-            <div
-              key={it.brandKeyStrict}
-              className="group absolute select-none cursor-grab active:cursor-grabbing"
-              style={wrapperStyle}
-              onPointerDown={(e) => startDrag(e, it)}
-              onTouchStart={(e) => startDrag(e, it)}
-              title={`${it.brand}`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={bottleSrc(it.frag)}
-                alt={it.frag?.name || 'fragrance'}
-                className="object-contain"
-                style={{
-                  height: '100%',
-                  width: 'auto',
-                  mixBlendMode: 'multiply',
-                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
-                  userSelect: 'none',
-                  WebkitUserDrag: 'none',
-                }}
-                draggable={false}
-                onDragStart={(e) => e.preventDefault()}
-                onError={(e) => {
-                  const img = e.currentTarget;
-                  if (!img.dataset.fallback) {
-                    img.dataset.fallback = '1';
-                    img.src = '/bottle-placeholder.png';
-                  }
-                }}
-              />
-              <div className="pointer-events-none absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                {it.brand}
-              </div>
-            </div>
-          ) : (
+          return (
             <Link
-              key={it.brandKeyStrict}
+              key={it.frag.id}
               href={href}
               prefetch={false}
               className="group absolute select-none cursor-pointer"
-              style={wrapperStyle}
+              style={{
+                top: `${topPct}%`,
+                left: `${leftPct}%`,
+                transform: 'translate(-50%, -100%)',
+                height: `${DEFAULT_H}px`
+              }}
               title={`${it.brand} — view all`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -437,12 +191,9 @@ export default function UserBoutiquePage({ params }) {
                   height: '100%',
                   width: 'auto',
                   mixBlendMode: 'multiply',
-                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
-                  userSelect: 'none',
-                  WebkitUserDrag: 'none',
+                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))'
                 }}
                 draggable={false}
-                onDragStart={(e) => e.preventDefault()}
                 onError={(e) => {
                   const img = e.currentTarget;
                   if (!img.dataset.fallback) {
@@ -457,12 +208,6 @@ export default function UserBoutiquePage({ params }) {
             </Link>
           );
         })}
-      </div>
-
-      <div className="max-w-6xl mx-auto px-2 py-4 text-sm opacity-70">
-        Viewing <span className="font-medium">@{username}</span> boutique — public layout
-        {arrange ? ' · arranging (publishes positions)' : ''}
-        {status ? ` · ${status}` : ''}
       </div>
     </div>
   );
