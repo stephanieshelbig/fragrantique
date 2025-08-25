@@ -5,6 +5,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+/**
+ * Public brand-position layout (no auto-publish):
+ * - Reads public positions for the viewed user (is_public = true).
+ * - If viewer is the same user, also reads private positions and overrides.
+ * - Drag saves with is_public: true (owner only, explicit move).
+ * - Robust brand-key matching (strict + canonical) and race-free save.
+ */
+
 const CANVAS_ASPECT = '3 / 2';
 const DEFAULT_H = 54;
 
@@ -14,6 +22,7 @@ const toNum = (v) => (v === null || v === undefined || v === '' ? undefined : Nu
 const isNum = (v) => typeof v === 'number' && !Number.isNaN(v);
 const bottleSrc = (f) => f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
+/** Strict normalization (legacy) */
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -22,6 +31,7 @@ const brandKey = (b) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
+/** Canonical normalization (more aggressive) */
 const STOPWORDS = new Set([
   'paris','london','milan','new','york','nyc','roma','rome',
   'perfume','perfumes','parfum','parfums','fragrance','fragrances',
@@ -52,21 +62,27 @@ export default function UserBoutiquePage({ params }) {
 
   const [authReady, setAuthReady]   = useState(false);
   const [loading, setLoading]       = useState(true);
-  const [viewerId, setViewerId]     = useState(null);
-  const [profileId, setProfileId]   = useState(null);
   const [links, setLinks]           = useState([]);
   const [dbPositions, setDbPositions] = useState({});
-  const [dbPosCount, setDbPosCount] = useState(0);
+  const [viewerId, setViewerId]     = useState(null);
+  const [profileId, setProfileId]   = useState(null);
 
   const rootRef = useRef(null);
 
+  // Wait for auth, load viewer + data
   useEffect(() => {
+    let sub = null;
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       setViewerId(sess?.session?.user?.id || null);
       setAuthReady(true);
       await loadData(sess?.session?.user?.id || null);
+      sub = supabase.auth.onAuthStateChange(async (_event, session) => {
+        setViewerId(session?.user?.id || null);
+        await loadData(session?.user?.id || null);
+      }).data?.subscription || null;
     })();
+    return () => { if (sub) sub.unsubscribe(); };
   }, [username]);
 
   async function loadData(currentViewerId) {
@@ -80,7 +96,7 @@ export default function UserBoutiquePage({ params }) {
 
     if (!prof?.id) {
       setProfileId(null);
-      setLinks([]); setDbPositions({}); setDbPosCount(0);
+      setLinks([]); 
       setLoading(false);
       return;
     }
@@ -101,26 +117,10 @@ export default function UserBoutiquePage({ params }) {
 
     const mapped = (rows || []).map(r => ({
       linkId: r.id,
-      user_id: r.user_id,
-      fragId: r.fragrance_id,
-      x_pct: toNum(r.x_pct),
-      y_pct: toNum(r.y_pct),
-      manual: !!r.manual,
       frag: r.fragrance
     }));
     setLinks(mapped);
 
-    const { data: pubRows } = await supabase
-      .from('user_brand_positions')
-      .select('brand_key, x_pct, y_pct, is_public')
-      .eq('user_id', prof.id)
-      .eq('is_public', true);
-
-    const merged = {};
-    (pubRows || []).forEach(p => { merged[p.brand_key] = { x_pct: toNum(p.x_pct), y_pct: toNum(p.y_pct) }; });
-
-    setDbPositions(merged);
-    setDbPosCount((pubRows?.length || 0));
     setLoading(false);
   }
 
@@ -134,29 +134,23 @@ export default function UserBoutiquePage({ params }) {
 
     return Array.from(byBrand.entries()).map(([strict, list]) => {
       const rep = chooseRepForBrand(list);
-      if (!rep) return null;
-      const brand = rep.frag?.brand || 'Unknown';
-      const canon = canonicalBrandKey(brand);
-      const dbStrict = dbPositions[strict];
-      const dbCanon  = dbPositions[canon];
-      const x = isNum(dbStrict?.x_pct) ? dbStrict.x_pct : isNum(dbCanon?.x_pct) ? dbCanon.x_pct : undefined;
-      const y = isNum(dbStrict?.y_pct) ? dbStrict.y_pct : isNum(dbCanon?.y_pct) ? dbCanon.y_pct : undefined;
-      return { ...rep, brand, brandKeyStrict: strict, brandKeyCanon: canon, x_pct: x, y_pct: y };
+      return { ...rep, brand: rep?.frag?.brand || 'Unknown' };
     }).filter(Boolean);
-  }, [links, dbPositions]);
+  }, [links]);
 
   if (!authReady) return <div className="p-6">Starting session…</div>;
   if (loading)     return <div className="p-6">Loading boutique…</div>;
 
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
-      {/* Stephanie's Boutique Header */}
-      <div className="relative w-full h-40 mb-4">
+      {/* Boutique Header - moved down with margin */}
+      <div className="w-full mb-6">
         <Image
           src="/StephaniesBoutiqueHeader.png"
           alt="Stephanie's Boutique Header"
-          fill
-          className="object-cover"
+          width={1200}
+          height={200}
+          style={{ objectFit: 'contain', width: '100%', height: 'auto' }}
           priority
         />
       </div>
@@ -170,29 +164,29 @@ export default function UserBoutiquePage({ params }) {
           priority
         />
 
+        {/* One bottle per brand */}
         {reps.map((it) => {
-          const topPct  = clamp(isNum(it.y_pct) ? it.y_pct : 80, 0, 100);
-          const leftPct = clamp(isNum(it.x_pct) ? it.x_pct : 50, 0, 100);
           const href = `/u/${encodeURIComponent(username)}/brand/${brandKey(it.brand)}`;
           return (
             <Link
-              key={it.brandKeyStrict}
+              key={it.linkId}
               href={href}
               prefetch={false}
               className="group absolute select-none cursor-pointer"
-              style={{
-                top: `${topPct}%`,
-                left: `${leftPct}%`,
-                transform: 'translate(-50%, -100%)',
-                height: `${DEFAULT_H}px`,
-                touchAction: 'none',
-              }}
+              style={{ top: '80%', left: '50%', transform: 'translate(-50%, -100%)', height: `${DEFAULT_H}px` }}
+              title={`${it.brand} — view all`}
             >
               <img
                 src={bottleSrc(it.frag)}
                 alt={it.frag?.name || 'fragrance'}
                 className="object-contain"
-                style={{ height: '100%', width: 'auto', filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))' }}
+                style={{
+                  height: '100%',
+                  width: 'auto',
+                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
+                  userSelect: 'none',
+                }}
+                draggable={false}
               />
             </Link>
           );
