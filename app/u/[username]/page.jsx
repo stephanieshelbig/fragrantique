@@ -78,7 +78,7 @@ export default function UserBoutiquePage({ params }) {
   const [authReady, setAuthReady]   = useState(false);
   const [loading, setLoading]       = useState(true);
   const [arrange, setArrange]       = useState(false);     // still supported via ?edit=1
-  const [showGuides, setShowGuides] = useState(false);     // no UI to toggle now
+  const [showGuides, setShowGuides] = useState(false);     // left available for owner if needed
   const [status, setStatus]         = useState(null);
   const [viewerId, setViewerId]     = useState(null);      // current session's user id (or null)
 
@@ -92,6 +92,16 @@ export default function UserBoutiquePage({ params }) {
   const rootRef = useRef(null);
   const dragState = useRef(null);
   const lastSavedRef = useRef(null);
+
+  // helper: sync ?edit=1 in the URL so refresh preserves arranging
+  function setEditParam(on) {
+    try {
+      const url = new URL(window.location.href);
+      if (on) url.searchParams.set('edit', '1');
+      else url.searchParams.delete('edit');
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }
 
   // Wait for auth, get viewer id, then load
   useEffect(() => {
@@ -364,7 +374,28 @@ export default function UserBoutiquePage({ params }) {
           priority
         />
 
-        {/* Optional shelf guides (owner-only; no toggle shown) */}
+        {/* Owner-only small control to toggle arranging */}
+        {isOwner && (
+          <div className="absolute right-4 top-4 z-20">
+            <button
+              onClick={() => {
+                setArrange((prev) => {
+                  const next = !prev;
+                  setEditParam(next);
+                  return next;
+                });
+              }}
+              className={`px-3 py-1 rounded text-white shadow ${
+                arrange ? 'bg-pink-700' : 'bg-black/70 hover:bg-black/80'
+              }`}
+              title="Drag bottles to reposition (saves to public layout)"
+            >
+              {arrange ? 'Arranging… (drag)' : 'Arrange'}
+            </button>
+          </div>
+        )}
+
+        {/* Optional shelf guides (owner-only; no public toggle) */}
         {isOwner && showGuides && [35.8, 46.8, 57.8, 68.8, 79.8].map((y, i) => (
           <div key={i} className="absolute left-0 right-0 border-t-2 border-pink-500/70" style={{ top: `${y}%` }} />
         ))}
