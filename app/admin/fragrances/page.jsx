@@ -248,7 +248,16 @@ export default function AdminFragranceList() {
     <div className="max-w-6xl mx-auto p-6 space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
-        <Link href="/admin" className="underline text-sm">← Back to Admin</Link>
+        <div className="flex items-center gap-3">
+          <Link href="/admin" className="underline text-sm">← Back to Admin</Link>
+          {/* NEW: Add Fragrance button */}
+          <Link
+            href="/add"
+            className="px-3 py-2 rounded bg-pink-600 text-white hover:bg-pink-700 text-sm"
+          >
+            + Add Fragrance
+          </Link>
+        </div>
       </div>
 
       <p className="opacity-70 text-sm">
