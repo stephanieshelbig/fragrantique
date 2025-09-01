@@ -71,16 +71,21 @@ export default function BrandPage({ params }) {
     })();
   }, [username, urlStrictKey]);
 
-  // Normalize and match both strict + canonical keys
+  // Normalize and match both strict + canonical keys, then sort alphabetically
   const filtered = useMemo(() => {
     const wantStrict = (urlStrictKey || '').toLowerCase();
     const wantCanon  = canonicalBrandKey(urlStrictKey);
-    return (frags || []).filter(f => {
-      const disp = f?.brand || 'unknown';
-      const fStrict = brandKey(disp);
-      const fCanon  = canonicalBrandKey(disp);
-      return fStrict === wantStrict || fCanon === wantCanon;
-    });
+
+    return (frags || [])
+      .filter(f => {
+        const disp = f?.brand || 'unknown';
+        const fStrict = brandKey(disp);
+        const fCanon  = canonicalBrandKey(disp);
+        return fStrict === wantStrict || fCanon === wantCanon;
+      })
+      .sort((a, b) =>
+        (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base' })
+      );
   }, [frags, urlStrictKey]);
 
   // Choose display brand
