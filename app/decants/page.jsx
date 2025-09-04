@@ -4,6 +4,41 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+// ---- helpers ----
+const CART_KEY = 'fragrantique_cart';
+
+// Add to localStorage cart (merge quantities by decant_id)
+function addCartItem(dec) {
+  if (!dec?.id) return;
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    const cart = raw ? JSON.parse(raw) : { items: [] };
+
+    const items = Array.isArray(cart.items) ? cart.items : [];
+    const idx = items.findIndex(
+      (it) => it && it.kind === 'decant' && Number(it.decant_id) === Number(dec.id)
+    );
+
+    if (idx >= 0) {
+      items[idx].qty = Math.max(1, Number(items[idx].qty || 0) + 1);
+    } else {
+      items.push({
+        id: `dec_${dec.id}`,
+        kind: 'decant',
+        decant_id: dec.id,
+        fragrance_id: dec.fragrance_id,
+        label: dec.label || '',
+        qty: 1,
+      });
+    }
+
+    localStorage.setItem(CART_KEY, JSON.stringify({ items }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Extract numeric mL from label, e.g. "2mL decant" -> 2
 function parseVolumeRank(label = '') {
   const s = String(label).toLowerCase();
@@ -21,6 +56,7 @@ function parseVolumeRank(label = '') {
 export default function AllDecantsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [justAdded, setJustAdded] = useState(null); // decant_id for brief confirmation
 
   useEffect(() => {
     (async () => {
@@ -43,6 +79,7 @@ export default function AllDecantsPage() {
     })();
   }, []);
 
+  // Sort: Brand → Name → (mL ascending; non-mL after)
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
       const ab = (a.fragrance?.brand || '').localeCompare(b.fragrance?.brand || '', undefined, { sensitivity: 'base' });
@@ -61,6 +98,16 @@ export default function AllDecantsPage() {
       return (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' });
     });
   }, [rows]);
+
+  function handleAdd(dec) {
+    const ok = addCartItem(dec);
+    if (ok) {
+      setJustAdded(dec.id);
+      setTimeout(() => setJustAdded(null), 1200);
+    } else {
+      alert('Could not add to cart. Please try again.');
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl w-full px-4 py-6 space-y-4">
@@ -91,6 +138,8 @@ export default function AllDecantsPage() {
               const brand = d.fragrance?.brand || 'Unknown';
               const name = d.fragrance?.name || 'Unnamed';
               const label = d.label || '';
+              const added = justAdded === d.id;
+
               return (
                 <li key={d.id} className="flex items-center justify-between px-3 py-2">
                   <div className="text-sm">
@@ -98,7 +147,7 @@ export default function AllDecantsPage() {
                     <span className="font-medium">{name}</span>{' '}
                     <span>{label}</span>
                   </div>
-                  <div className="text-xs">
+                  <div className="flex items-center gap-3 text-xs">
                     <Link
                       href={`/fragrance/${d.fragrance_id}`}
                       className="underline hover:no-underline"
@@ -106,6 +155,15 @@ export default function AllDecantsPage() {
                     >
                       View fragrance
                     </Link>
+                    <button
+                      onClick={() => handleAdd(d)}
+                      className={`px-2 py-1 rounded border ${
+                        added ? 'bg-green-600 text-white border-green-600' : 'bg-white hover:bg-gray-50'
+                      }`}
+                      title="Add this item to your cart"
+                    >
+                      {added ? 'Added!' : 'Add to cart'}
+                    </button>
                   </div>
                 </li>
               );
