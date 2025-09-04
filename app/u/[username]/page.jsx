@@ -64,9 +64,9 @@ export default function UserBoutiquePage({ params }) {
   const [viewerId, setViewerId]     = useState(null);
   const [profileId, setProfileId]   = useState(null);
 
-  const [links, setLinks]             = useState([]);   // user_fragrances + fragrance
-  const [dbPositions, setDbPositions] = useState({});   // public + (owner private if needed)
-  const [localBrand, setLocalBrand]   = useState({});   // local fallback only
+  const [links, setLinks]             = useState([]);
+  const [dbPositions, setDbPositions] = useState({});
+  const [localBrand, setLocalBrand]   = useState({});
 
   const rootRef = useRef(null);
   const dragState = useRef(null);
@@ -110,14 +110,12 @@ export default function UserBoutiquePage({ params }) {
       }).data?.subscription || null;
     })();
     return () => { if (sub) sub.unsubscribe(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
   async function loadData(currentViewerId) {
     setLoading(true);
     setStatus(null);
 
-    // boutique owner
     const { data: prof } = await supabase
       .from('profiles')
       .select('id, username')
@@ -132,7 +130,6 @@ export default function UserBoutiquePage({ params }) {
     }
     setProfileId(prof.id);
 
-    // bottles for this user
     const { data: rows } = await supabase
       .from('user_fragrances')
       .select(`
@@ -152,14 +149,12 @@ export default function UserBoutiquePage({ params }) {
     }));
     setLinks(mapped);
 
-    // public brand positions
     const { data: pubRows } = await supabase
       .from('user_brand_positions')
       .select('brand_key, x_pct, y_pct, is_public')
       .eq('user_id', prof.id)
       .eq('is_public', true);
 
-    // owner private (optional)
     let privRows = [];
     if (currentViewerId && currentViewerId === prof.id) {
       const { data: myRows } = await supabase
@@ -182,7 +177,6 @@ export default function UserBoutiquePage({ params }) {
     setLoading(false);
   }
 
-  // reps: one bottle per brand, positioned by strict or canonical key
   const reps = useMemo(() => {
     const byBrand = new Map();
     for (const it of links) {
@@ -222,7 +216,6 @@ export default function UserBoutiquePage({ params }) {
       };
     }).filter(Boolean);
 
-    // defaults for any without a position yet
     const needDefaults = [];
     const positioned = [];
     for (const it of chosen) {
@@ -247,7 +240,6 @@ export default function UserBoutiquePage({ params }) {
     return [...positioned, ...needDefaults];
   }, [links, dbPositions, localBrand]);
 
-  // drag lifecycle (owner only)
   function startDrag(e, itm) {
     if (!arrange || !viewerId || viewerId !== profileId) return;
     const container = rootRef.current;
@@ -329,7 +321,6 @@ export default function UserBoutiquePage({ params }) {
       err = 'not owner';
     }
 
-    // local fallback
     try {
       const nextLocal = { ...localBrand, [brandKeyCanon]: { x_pct: x, y_pct: y } };
       saveLocalBrand(username, nextLocal);
@@ -359,7 +350,7 @@ export default function UserBoutiquePage({ params }) {
         )}
       </div>
 
-      {/* NEW: just the decants link (added at the top, minimal change) */}
+      {/* NEW: link to /decants */}
       <div className="mb-3 text-center text-sm">
         <Link href="/decants" className="font-semibold underline">
           click here for all available decants
@@ -422,7 +413,7 @@ export default function UserBoutiquePage({ params }) {
                   }
                 }}
               />
-              {/* Hover label (arranging) */}
+              {/* Hover label */}
               <div className="pointer-events-none absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity">
                 {it.brand}
               </div>
@@ -437,4 +428,37 @@ export default function UserBoutiquePage({ params }) {
               title={`${it.brand} — view all`}
             >
               {/* Bottle */}
-              {/* eslint-disable-next-line @next
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={bottleSrc(it.frag)}
+                alt={it.frag?.name || 'fragrance'}
+                className="object-contain"
+                style={{
+                  height: '100%',
+                  width: 'auto',
+                  mixBlendMode: 'multiply',
+                  filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.15))',
+                  userSelect: 'none',
+                  WebkitUserDrag: 'none',
+                }}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.dataset.fallback) {
+                    img.dataset.fallback = '1';
+                    img.src = '/bottle-placeholder.png';
+                  }
+                }}
+              />
+              {/* Hover label */}
+              <div className="pointer-events-none absolute left-1/2 -bottom-5 -translate-x-1/2 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                {it.brand}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
