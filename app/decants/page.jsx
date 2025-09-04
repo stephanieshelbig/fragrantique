@@ -9,6 +9,30 @@ function dollars(cents) {
   return `$${(n / 100).toFixed(n % 100 === 0 ? 0 : 2)}`;
 }
 
+// Extract a numeric mL from label, e.g. "2mL decant" -> 2, "0.5 mL" -> 0.5
+// Return { volMl: number|null, rank: number } where smaller rank sorts first.
+// - mL volumes get rank 0 (and sort by volMl ascending)
+// - common non-mL labels get larger ranks so they appear after mL sizes
+function parseVolumeRank(label = '') {
+  const s = String(label).toLowerCase();
+
+  // numeric mL like "2mL", "5 mL", "0.5ml"
+  const m = s.match(/([\d.]+)\s*ml/);
+  if (m) {
+    const vol = parseFloat(m[1]);
+    if (!Number.isNaN(vol)) return { volMl: vol, rank: 0 };
+  }
+
+  // Common phrases → order these after mL sizes, but in a predictable way
+  // You can adjust these weights as you like.
+  if (/\btravel\b|\bdiscovery\b/.test(s)) return { volMl: null, rank: 3 };
+  if (/\bsample\b|\btester\b/.test(s))   return { volMl: null, rank: 4 };
+  if (/\bfull\b|\bbottle\b/.test(s))     return { volMl: null, rank: 5 };
+
+  // Unknown labels come after mL sizes but before "full bottle"
+  return { volMl: null, rank: 2 };
+}
+
 export default function AllDecantsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,22 +54,34 @@ export default function AllDecantsPage() {
         .eq('in_stock', true)
         .limit(10000);
 
-      if (!error) {
-        setRows(data || []);
-      } else {
-        setRows([]);
-      }
+      if (!error) setRows(data || []);
+      else setRows([]);
+
       setLoading(false);
     })();
   }, []);
 
-  // Sort alphabetically: Brand, then Name, then Label
+  // Sort: Brand → Name → (mL ascending; non-mL after)
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
       const ab = (a.fragrance?.brand || '').localeCompare(b.fragrance?.brand || '', undefined, { sensitivity: 'base' });
       if (ab !== 0) return ab;
+
       const an = (a.fragrance?.name || '').localeCompare(b.fragrance?.name || '', undefined, { sensitivity: 'base' });
       if (an !== 0) return an;
+
+      const av = parseVolumeRank(a.label);
+      const bv = parseVolumeRank(b.label);
+
+      // Rank first: mL (rank 0) before others
+      if (av.rank !== bv.rank) return av.rank - bv.rank;
+
+      // If both mL, smaller volume first
+      if (av.rank === 0 && av.volMl != null && bv.volMl != null) {
+        if (av.volMl !== bv.volMl) return av.volMl - bv.volMl;
+      }
+
+      // Fallback: label alpha
       return (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' });
     });
   }, [rows]);
