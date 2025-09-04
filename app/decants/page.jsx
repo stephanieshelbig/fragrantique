@@ -4,35 +4,37 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-// ---- helpers ----
-const CART_KEY = 'fragrantique_cart';
+// cart key used by /app/cart/page.jsx
+const CART_KEY = 'cart_v1';
 
-// Add to localStorage cart (merge quantities by decant_id)
-function addCartItem(dec) {
-  if (!dec?.id) return;
+// Merge an item into cart_v1 (array of items)
+function addToCartV1({ name, unit_amount, currency = 'usd', quantity = 1 }) {
   try {
     const raw = localStorage.getItem(CART_KEY);
-    const cart = raw ? JSON.parse(raw) : { items: [] };
+    const arr = raw ? JSON.parse(raw) : [];
+    const items = Array.isArray(arr) ? arr : [];
 
-    const items = Array.isArray(cart.items) ? cart.items : [];
+    // Merge by (name + unit_amount + currency) — simple & stable for your cart
     const idx = items.findIndex(
-      (it) => it && it.kind === 'decant' && Number(it.decant_id) === Number(dec.id)
+      (it) =>
+        it &&
+        it.name === name &&
+        Number(it.unit_amount) === Number(unit_amount) &&
+        (it.currency || 'usd') === (currency || 'usd')
     );
 
     if (idx >= 0) {
-      items[idx].qty = Math.max(1, Number(items[idx].qty || 0) + 1);
+      items[idx].quantity = Math.max(1, Number(items[idx].quantity || 1) + Number(quantity || 1));
     } else {
       items.push({
-        id: `dec_${dec.id}`,
-        kind: 'decant',
-        decant_id: dec.id,
-        fragrance_id: dec.fragrance_id,
-        label: dec.label || '',
-        qty: 1,
+        name,
+        unit_amount: Number(unit_amount) || 0,
+        currency: (currency || 'usd').toLowerCase(),
+        quantity: Number(quantity) || 1,
       });
     }
 
-    localStorage.setItem(CART_KEY, JSON.stringify({ items }));
+    localStorage.setItem(CART_KEY, JSON.stringify(items));
     return true;
   } catch {
     return false;
@@ -56,7 +58,7 @@ function parseVolumeRank(label = '') {
 export default function AllDecantsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [justAdded, setJustAdded] = useState(null); // decant_id for brief confirmation
+  const [justAddedId, setJustAddedId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -68,6 +70,8 @@ export default function AllDecantsPage() {
           fragrance_id,
           label,
           in_stock,
+          price_cents,
+          currency,
           fragrance:fragrances(id, brand, name)
         `)
         .eq('in_stock', true)
@@ -79,7 +83,7 @@ export default function AllDecantsPage() {
     })();
   }, []);
 
-  // Sort: Brand → Name → (mL ascending; non-mL after)
+  // Sort: Brand → Name → (mL ascending; non-mL after) → Label alpha
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
       const ab = (a.fragrance?.brand || '').localeCompare(b.fragrance?.brand || '', undefined, { sensitivity: 'base' });
@@ -100,10 +104,21 @@ export default function AllDecantsPage() {
   }, [rows]);
 
   function handleAdd(dec) {
-    const ok = addCartItem(dec);
+    const brand = dec.fragrance?.brand || 'Unknown';
+    const name = dec.fragrance?.name || 'Unnamed';
+    const label = dec.label || '';
+    const displayName = `${brand} ${name} ${label}`.trim();
+
+    const ok = addToCartV1({
+      name: displayName,
+      unit_amount: Number(dec.price_cents) || 0,
+      currency: (dec.currency || 'usd').toLowerCase(),
+      quantity: 1,
+    });
+
     if (ok) {
-      setJustAdded(dec.id);
-      setTimeout(() => setJustAdded(null), 1200);
+      setJustAddedId(dec.id);
+      setTimeout(() => setJustAddedId(null), 1200);
     } else {
       alert('Could not add to cart. Please try again.');
     }
@@ -138,7 +153,7 @@ export default function AllDecantsPage() {
               const brand = d.fragrance?.brand || 'Unknown';
               const name = d.fragrance?.name || 'Unnamed';
               const label = d.label || '';
-              const added = justAdded === d.id;
+              const added = justAddedId === d.id;
 
               return (
                 <li key={d.id} className="flex items-center justify-between px-3 py-2">
