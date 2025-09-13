@@ -337,7 +337,7 @@ export default function UserBoutiquePage({ params }) {
     <div className="mx-auto max-w-6xl w-full px-2">
       {/* NEW: Thin header line */}
       <div className="w-full text-center text-xs sm:text-sm md:text-base font-semibold py-2">
-        Fragrantique - Best Viewed in Landscape Mode
+        Best Viewed in Landscape Mode (Mobile users - rotate your device)
       </div>
 
       {/* Header Links */}
