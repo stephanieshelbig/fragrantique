@@ -94,14 +94,16 @@ export default function AdminOrders() {
     );
 
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ fulfilled: nextValue })
-        .eq('id', order.id);
-
-      if (error) {
+      const res = await fetch('/api/admin/orders/fulfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: order.id, fulfilled: nextValue }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        // rollback on error
         setOrders(prevOrders);
-        setMsg(error.message || 'Failed to save fulfilled status');
+        setMsg(j?.error || 'Failed to save fulfilled status');
       } else {
         setMsg(nextValue ? 'Marked as fulfilled' : 'Marked as unfulfilled');
       }
