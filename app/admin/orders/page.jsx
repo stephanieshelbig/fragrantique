@@ -9,8 +9,9 @@ export default function AdminOrders() {
   const [viewer, setViewer] = useState(null);
   const [orders, setOrders] = useState([]);
   const [msg, setMsg] = useState('');
-  const [creating, setCreating] = useState({}); // { [orderId]: true }
-  const [saving, setSaving] = useState({});     // { [orderId]: true } for fulfilled toggle
+  const [creating, setCreating] = useState({}); // { [orderId]: true } - label creation
+  const [saving, setSaving] = useState({});     // { [orderId]: true } - fulfilled toggle
+  const [savingNote, setSavingNote] = useState({}); // { [orderId]: true } - comment save
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -119,6 +120,32 @@ export default function AdminOrders() {
     }
   }
 
+  async function saveComment(orderId, comment) {
+    setSavingNote(prev => ({ ...prev, [orderId]: true }));
+    setMsg('');
+    try {
+      const res = await fetch('/api/admin/orders/comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, comment }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setMsg(j?.error || 'Failed to save comment');
+      } else {
+        setMsg('Comment saved ✓');
+      }
+    } catch (e) {
+      setMsg(e.message || 'Failed to save comment');
+    } finally {
+      setSavingNote(prev => {
+        const { [orderId]: _, ...rest } = prev;
+        return rest;
+      });
+      setTimeout(() => setMsg(''), 1200);
+    }
+  }
+
   function copyToClipboard(text) {
     try {
       navigator.clipboard.writeText(String(text || ''));
@@ -187,6 +214,7 @@ export default function AdminOrders() {
           const canCreate = o.status === 'paid';
           const busyCreate = !!creating[o.id];
           const busySaveFulfilled = !!saving[o.id];
+          const busySaveNote = !!savingNote[o.id];
 
           return (
             <div key={o.id} className="border rounded bg-white p-4">
@@ -224,6 +252,7 @@ export default function AdminOrders() {
                 )}
               </div>
 
+              {/* Items */}
               <ul className="mt-2 list-disc pl-5 text-sm">
                 {items.map((it, i) => (
                   <li key={i}>
@@ -232,10 +261,29 @@ export default function AdminOrders() {
                 ))}
               </ul>
 
+              {/* Admin note / comment */}
+              <div className="mt-3">
+                <label className="block text-xs font-medium mb-1">Comment</label>
+                <textarea
+                  className="border rounded w-full px-2 py-1 text-sm"
+                  rows={2}
+                  defaultValue={o.comment || ''}
+                  placeholder="Add a short note about this order (visible to admin only)"
+                  onBlur={(e) => saveComment(o.id, e.target.value)}
+                />
+                {busySaveNote && (
+                  <div className="text-xs opacity-60 mt-1">
+                    Saving…
+                  </div>
+                )}
+              </div>
+
+              {/* Stripe session id */}
               <div className="mt-2 text-xs opacity-70">
                 Stripe session: {o.stripe_session_id}
               </div>
 
+              {/* Shipping label block */}
               <div className="mt-3 p-3 border rounded bg-gray-50 text-sm">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold">USPS Label</div>
