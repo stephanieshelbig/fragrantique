@@ -337,7 +337,7 @@ export default function UserBoutiquePage({ params }) {
     <div className="mx-auto max-w-6xl w-full px-2">
       {/* Header Links */}
       <div className="flex justify-end gap-4 py-3 text-sm font-medium">
-        <Link href="/brand" className="hover:underline">Brand Index</Link>
+        <Link href="/brand" className="hover:underline">Sort By Brand</Link>
         <Link href="/chat" className="hover:underline">Contact Me</Link>
         <Link href="/cart" className="hover:underline">Cart</Link>
         {isOwner && (
