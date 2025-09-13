@@ -335,6 +335,11 @@ export default function UserBoutiquePage({ params }) {
 
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
+      {/* NEW: Thin header line */}
+      <div className="w-full text-center text-xs sm:text-sm md:text-base font-semibold py-2">
+        Fragrantique - Best Viewed in Landscape Mode
+      </div>
+
       {/* Header Links */}
       <div className="flex justify-end gap-4 py-3 text-sm font-medium">
         <Link href="/brand" className="hover:underline">Sort By Brand</Link>
@@ -350,7 +355,7 @@ export default function UserBoutiquePage({ params }) {
         )}
       </div>
 
-      {/* NEW: link to /decants */}
+      {/* link to /decants */}
       <div className="mb-3 text-center text-sm">
         <Link href="/decants" className="font-semibold underline">
           click here for all available decants
