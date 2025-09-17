@@ -1,28 +1,32 @@
-// app/sitemap.ts
 import type { MetadataRoute } from 'next'
+import { createClient } from '@supabase/supabase-js'
+
+// Create a Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = 'https://fragrantique.net'
 
-  // List your important static pages here:
-  const staticPaths = [
-    '',                // homepage
-    'explore',         // example
-    'decants',         // example: index listing all decants
-    'about',           // example
-    'contact'          // example
-  ]
+  // 1. Fetch decants from Supabase
+  const { data: decants } = await supabase
+    .from('decants') // replace with your table name
+    .select('slug, updated_at')
 
-  const now = new Date()
-
-  const urls: MetadataRoute.Sitemap = staticPaths.map(p => ({
+  // 2. Static pages
+  const staticPages = ['', 'explore', 'decants', 'about', 'contact'].map(p => ({
     url: p ? `${base}/${p}` : base,
-    lastModified: now
+    lastModified: new Date(),
   }))
 
-  // (Optional) If you have a page that lists every decant (e.g. /decants),
-  // and each decant page is linked from there, Google can discover them.
-  // Later, we can upgrade this to include every individual decant URL.
+  // 3. Decant detail pages
+  const decantPages =
+    decants?.map(d => ({
+      url: `${base}/decants/${d.slug}`,
+      lastModified: d.updated_at ? new Date(d.updated_at) : new Date(),
+    })) ?? []
 
-  return urls
+  return [...staticPages, ...decantPages]
 }
