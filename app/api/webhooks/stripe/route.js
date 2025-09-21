@@ -7,6 +7,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const stripe = getStripeClient();
+
+// IMPORTANT: service role for RPC/stock updates (server-only env var)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -15,7 +17,9 @@ const supabase = createClient(
 export async function POST(req) {
   const sig = req.headers.get('stripe-signature');
   const webhookSecret = getWebhookSecret();
-  if (!sig) return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
+  if (!sig) {
+    return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
+  }
 
   const rawBody = await req.text();
 
@@ -23,33 +27,73 @@ export async function POST(req) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
-    return NextResponse.json({ error: `Webhook signature verification failed: ${err.message}` }, { status: 400 });
+    return NextResponse.json(
+      { error: `Webhook signature verification failed: ${err.message}` },
+      { status: 400 }
+    );
   }
 
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
 
-      // Line items (preferred)
-      let lineItems = [];
+      // ---- 1) Pull items from Stripe line items (preferred) ----
+      let itemsFromLineItems = [];
       try {
-        const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
-        lineItems = li.data.map(x => ({
-          name: x.description || x.price?.product || 'Item',
-          quantity: x.quantity || 1,
-          unit_amount: x.price?.unit_amount ?? null,
-          currency: x.currency || session.currency,
-          fragrance_id: x.price?.metadata?.fragrance_id || null,
-        }));
-      } catch { lineItems = []; }
+        // Expand product so we can read product.metadata, too
+        const li = await stripe.checkout.sessions.listLineItems(session.id, {
+          limit: 100,
+          expand: ['data.price.product'],
+        });
 
-      // Fallback to metadata cart
-      let metaItems = [];
-      try { if (session.metadata?.cart) metaItems = JSON.parse(session.metadata.cart); } catch {}
+        itemsFromLineItems = li.data.map((x) => {
+          // Try to find option_id on price or product metadata
+          const priceMeta = (x.price && x.price.metadata) || {};
+          const prodObj = x.price && x.price.product && typeof x.price.product === 'object'
+            ? x.price.product
+            : null;
+          const productMeta = (prodObj && prodObj.metadata) || {};
 
-      const items = lineItems.length ? lineItems : metaItems;
+          const option_id = priceMeta.option_id || productMeta.option_id || null;
 
-      // Shipping/name from Stripe first, else metadata from cart form
+          return {
+            name: x.description || (prodObj && prodObj.name) || 'Item',
+            quantity: x.quantity || 1,
+            unit_amount: x.price?.unit_amount ?? null,
+            currency: x.currency || session.currency,
+            // If you also set fragrance_id in metadata, we’ll pass it through:
+            fragrance_id: priceMeta.fragrance_id || productMeta.fragrance_id || null,
+            option_id,
+          };
+        });
+      } catch {
+        itemsFromLineItems = [];
+      }
+
+      // ---- 2) Fallback to your session.metadata.cart (if used) ----
+      let itemsFromCart = [];
+      try {
+        if (session.metadata?.cart) {
+          const parsed = JSON.parse(session.metadata.cart);
+          if (Array.isArray(parsed)) {
+            itemsFromCart = parsed.map((it) => ({
+              name: it.name || 'Item',
+              quantity: Math.max(1, parseInt(it.quantity, 10) || 1),
+              unit_amount: typeof it.unit_amount === 'number' ? it.unit_amount : null,
+              currency: (it.currency || session.currency || 'usd'),
+              fragrance_id: it.fragrance_id || null,
+              option_id: it.option_id || null, // <- preferred source when using cart fallback
+            }));
+          }
+        }
+      } catch {
+        itemsFromCart = [];
+      }
+
+      // Prefer Stripe line items; fallback to the cart array
+      const items = itemsFromLineItems.length ? itemsFromLineItems : itemsFromCart;
+
+      // ---- 3) Pull shipping / buyer data (same behavior you had) ----
       const md = session.metadata || {};
       const cd = session.customer_details || {};
       const ship = session.shipping || {};
@@ -66,6 +110,7 @@ export async function POST(req) {
         shipping_country: addr?.country || md.shipping_country || null,
       };
 
+      // ---- 4) Upsert order (same as before) ----
       const payload = {
         stripe_session_id: session.id,
         stripe_payment_intent: session.payment_intent || null,
@@ -87,6 +132,23 @@ export async function POST(req) {
 
       await supabase.from('orders').upsert(payload, { onConflict: 'stripe_session_id' });
 
+      // ---- 5) DECREMENT STOCK for each purchased decant option ----
+      // Requires SQL from step 1:
+      //   create or replace function public.decrement_decant_quantity(p_option_id uuid, p_qty int) returns void ...
+      for (const it of payload.items) {
+        const optionId = it.option_id || null;
+        const qty = Math.max(0, parseInt(it.quantity, 10) || 0);
+
+        if (optionId && qty > 0) {
+          // Null quantities in DB (unlimited) are preserved by the RPC; finite are decremented.
+          await supabase.rpc('decrement_decant_quantity', {
+            p_option_id: optionId,
+            p_qty: qty,
+          });
+        }
+      }
+
+      // ---- 6) Send notification email (same as before) ----
       const html = renderOrderHtml({
         sessionId: session.id,
         buyerEmail: payload.buyer_email,
@@ -95,10 +157,11 @@ export async function POST(req) {
         items: payload.items,
         shipping,
       });
+
       await sendOrderEmail({
         to: process.env.ADMIN_EMAIL,
         subject: 'Fragrantique — New order received',
-        html
+        html,
       });
     }
 
