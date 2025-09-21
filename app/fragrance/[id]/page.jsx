@@ -37,6 +37,7 @@ export default function FragranceDetail({ params }) {
   const [newPrice, setNewPrice] = useState('');
   const [newSize, setNewSize] = useState('');
   const [newCurrency, setNewCurrency] = useState('usd');
+  const [newQuantity, setNewQuantity] = useState(''); // NEW
 
   useEffect(() => {
     (async () => {
@@ -69,7 +70,7 @@ export default function FragranceDetail({ params }) {
       try {
         const { data: ds, error: de } = await supabase
           .from('decants')
-          .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // <-- quantity already added in your last step
+          .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // quantity already supported
           .eq('fragrance_id', id)
           .order('size_ml', { ascending: true });
         if (!de && Array.isArray(ds)) {
@@ -117,7 +118,7 @@ export default function FragranceDetail({ params }) {
 
     const q = Math.max(1, parseInt(qty, 10) || 1);
 
-    // >>> NEW: block overselling on the client (finite stock only)
+    // Block overselling on the client (finite stock only)
     if (opt.quantity !== null && typeof opt.quantity === 'number') {
       const cart = loadCart();
       const alreadyInCart = cart
@@ -135,7 +136,6 @@ export default function FragranceDetail({ params }) {
         return;
       }
     }
-    // <<< END NEW
 
     const item = {
       name: `${displayName} (${opt.label})`,
@@ -154,7 +154,7 @@ export default function FragranceDetail({ params }) {
     const up = {
       id: row.id || undefined,
       fragrance_id: frag.id,
-      seller_user_id: owner.id,               // <<< IMPORTANT
+      seller_user_id: owner.id,               // IMPORTANT
       label: row.label?.trim() || 'Option',
       price_cents:
         typeof row.price_cents === 'number'
@@ -183,13 +183,16 @@ export default function FragranceDetail({ params }) {
     if (!isOwner || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
     const payload = {
       fragrance_id: frag.id,
-      seller_user_id: owner.id,               // <<< IMPORTANT
+      seller_user_id: owner.id,               // IMPORTANT
       label: newLabel?.trim() || 'Option',
       price_cents: dollarsToCents(newPrice),
       size_ml: newSize ? Number(newSize) : null,
       currency: newCurrency.toLowerCase(),
       in_stock: true,
-      quantity: null, // default to unlimited
+      quantity:
+        newQuantity === '' || newQuantity === null || newQuantity === undefined
+          ? null
+          : Math.max(0, Number(newQuantity) || 0), // NEW: start quantity (blank = unlimited)
     };
     const { data, error } = await supabase
       .from('decants')
@@ -199,7 +202,7 @@ export default function FragranceDetail({ params }) {
     if (error) { setMsg(error.message); return; }
     setOptions((prev) => [...prev, data]);
     setSelectedId(String(data.id));
-    setNewLabel(''); setNewPrice(''); setNewSize(''); setNewCurrency('usd');
+    setNewLabel(''); setNewPrice(''); setNewSize(''); setNewCurrency('usd'); setNewQuantity(''); // clear NEW
     setMsg('Added option ✓');
   }
 
@@ -375,7 +378,7 @@ export default function FragranceDetail({ params }) {
                         </select>
                       </div>
 
-                      {/* Owner-only: Quantity (unchanged visually) */}
+                      {/* Owner-only: Quantity */}
                       <div>
                         <label className="block text-xs font-medium mb-1">Quantity</label>
                         <input
@@ -433,7 +436,7 @@ export default function FragranceDetail({ params }) {
 
                 <div className="p-3 border rounded space-y-2">
                   <div className="font-medium text-sm">Add a new option</div>
-                  <div className="grid sm:grid-cols-6 gap-3 items-end">
+                  <div className="grid sm:grid-cols-7 gap-3 items-end">{/* +1 column for new Quantity */}
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-medium mb-1">Label</label>
                       <input
@@ -475,6 +478,26 @@ export default function FragranceDetail({ params }) {
                         <option value="eur">EUR</option>
                       </select>
                     </div>
+
+                    {/* NEW: Quantity for new option */}
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Quantity</label>
+                      <input
+                        type="number"
+                        className="border rounded px-2 py-1 w-full"
+                        placeholder="Leave blank for unlimited"
+                        value={newQuantity}
+                        onChange={(e) =>
+                          setNewQuantity(
+                            e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0)
+                          )
+                        }
+                      />
+                      <div className="text-[11px] mt-1 opacity-70">
+                        {newQuantity === '' ? 'Unlimited' : `${newQuantity} to start`}
+                      </div>
+                    </div>
+
                     <div className="sm:col-span-2 flex sm:justify-end">
                       <button onClick={addNewOption} className="px-3 py-2 rounded bg-black text-white text-xs">
                         Add option
