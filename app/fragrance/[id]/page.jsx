@@ -69,7 +69,7 @@ export default function FragranceDetail({ params }) {
       try {
         const { data: ds, error: de } = await supabase
           .from('decants')
-          .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // <-- added quantity
+          .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // <-- quantity already added in your last step
           .eq('fragrance_id', id)
           .order('size_ml', { ascending: true });
         if (!de && Array.isArray(ds)) {
@@ -114,7 +114,29 @@ export default function FragranceDetail({ params }) {
     if (!opt.price_cents || opt.price_cents <= 0) {
       setMsg('This option is not available for purchase right now.'); return;
     }
+
     const q = Math.max(1, parseInt(qty, 10) || 1);
+
+    // >>> NEW: block overselling on the client (finite stock only)
+    if (opt.quantity !== null && typeof opt.quantity === 'number') {
+      const cart = loadCart();
+      const alreadyInCart = cart
+        .filter((i) => String(i.option_id) === String(opt.id))
+        .reduce((sum, i) => sum + (parseInt(i.quantity, 10) || 0), 0);
+
+      const remaining = Math.max(0, Number(opt.quantity) - alreadyInCart);
+
+      if (remaining <= 0) {
+        setMsg(`"${opt.label}" is already at the limit in your cart (${alreadyInCart}/${opt.quantity}).`);
+        return;
+      }
+      if (q > remaining) {
+        setMsg(`Only ${remaining} left for "${opt.label}" (you already have ${alreadyInCart} in your cart).`);
+        return;
+      }
+    }
+    // <<< END NEW
+
     const item = {
       name: `${displayName} (${opt.label})`,
       quantity: q,
@@ -144,12 +166,12 @@ export default function FragranceDetail({ params }) {
       quantity:
         row.quantity === '' || row.quantity === null || row.quantity === undefined
           ? null
-          : Math.max(0, Number(row.quantity) || 0), // <-- added quantity write
+          : Math.max(0, Number(row.quantity) || 0), // write quantity
     };
     const { data, error } = await supabase
       .from('decants')
       .upsert(up)
-      .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // <-- include quantity in return
+      .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
       .maybeSingle();
     if (error) { setMsg(error.message); return; }
     setOptions((prev) => prev.map((o) => (o.id === row.id ? { ...o, ...data } : o)));
@@ -167,12 +189,12 @@ export default function FragranceDetail({ params }) {
       size_ml: newSize ? Number(newSize) : null,
       currency: newCurrency.toLowerCase(),
       in_stock: true,
-      quantity: null, // <-- new options default to unlimited (blank)
+      quantity: null, // default to unlimited
     };
     const { data, error } = await supabase
       .from('decants')
       .insert(payload)
-      .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // <-- include quantity
+      .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
       .maybeSingle();
     if (error) { setMsg(error.message); return; }
     setOptions((prev) => [...prev, data]);
@@ -254,7 +276,7 @@ export default function FragranceDetail({ params }) {
                   <select
                     className="border rounded px-3 py-2 w-full"
                     value={selectedId}
-                    onChange={(e) => setSelectedId(e.target.value)}
+                    onChange={(e) => { setSelectedId(e.target.value); setMsg(''); setAdded(false); }}
                   >
                     {options.length === 0 && <option>— No options —</option>}
                     {options.map((o) => (
@@ -273,7 +295,7 @@ export default function FragranceDetail({ params }) {
                       min="1"
                       className="border rounded px-3 py-2 w-full"
                       value={qty}
-                      onChange={(e) => setQty(e.target.value)}
+                      onChange={(e) => { setQty(e.target.value); setMsg(''); setAdded(false); }}
                     />
                   </div>
                 </div>
@@ -353,7 +375,7 @@ export default function FragranceDetail({ params }) {
                         </select>
                       </div>
 
-                      {/* NEW: Quantity (owner-only) */}
+                      {/* Owner-only: Quantity (unchanged visually) */}
                       <div>
                         <label className="block text-xs font-medium mb-1">Quantity</label>
                         <input
@@ -369,7 +391,6 @@ export default function FragranceDetail({ params }) {
                                       ...x,
                                       quantity:
                                         e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0),
-                                      // if set to 0 locally, you can manually uncheck in_stock; webhook will also handle it after purchases
                                     }
                                   : x
                               )
