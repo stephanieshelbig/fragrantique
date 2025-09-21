@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase'; // ← NEW: to fetch live stock
 
 export default function CartPage() {
   const [items, setItems] = useState([]);
@@ -16,6 +17,9 @@ export default function CartPage() {
   });
   const [msg, setMsg] = useState('');
 
+  // NEW: live stock map => { [option_id]: { quantity: number|null, in_stock: boolean } }
+  const [stockMap, setStockMap] = useState({});
+
   useEffect(() => {
     try {
       const arr = JSON.parse(localStorage.getItem('cart_v1') || '[]');
@@ -27,6 +31,43 @@ export default function CartPage() {
     } catch {}
   }, []);
 
+  // NEW: fetch live stock whenever the set of option_ids in the cart changes
+  useEffect(() => {
+    (async () => {
+      try {
+        const optionIds = Array.from(
+          new Set(
+            (items || [])
+              .map((it) => (it?.option_id ? String(it.option_id) : null))
+              .filter(Boolean)
+          )
+        );
+        if (optionIds.length === 0) {
+          setStockMap({});
+          return;
+        }
+        const { data, error } = await supabase
+          .from('decants')
+          .select('id, quantity, in_stock')
+          .in('id', optionIds);
+        if (error || !Array.isArray(data)) {
+          setStockMap({});
+          return;
+        }
+        const map = {};
+        for (const row of data) {
+          map[String(row.id)] = {
+            quantity: row.quantity === null ? null : Number(row.quantity),
+            in_stock: !!row.in_stock,
+          };
+        }
+        setStockMap(map);
+      } catch {
+        setStockMap({});
+      }
+    })();
+  }, [JSON.stringify((items || []).map((it) => it?.option_id || null))]); // derive deps without changing your data flow
+
   function persist(next) {
     localStorage.setItem('cart_v1', JSON.stringify(next));
     setItems(next);
@@ -36,11 +77,59 @@ export default function CartPage() {
     setBuyer(next);
   }
 
+  // NEW: helper — given a line index and desired qty, clamp against stock
+  function clampQtyForIndex(i, desired) {
+    const line = items[i];
+    if (!line) return Math.max(1, parseInt(desired, 10) || 1);
+
+    const optId = line.option_id ? String(line.option_id) : null;
+    const qDesired = Math.max(1, parseInt(desired, 10) || 1);
+
+    // no option_id → no stock tracking
+    if (!optId) return qDesired;
+
+    const info = stockMap[optId];
+    // unknown stock → allow user change; server/webhook still enforces
+    if (!info) return qDesired;
+
+    // out of stock → clamp to 0 (we'll remove/complain)
+    if (!info.in_stock) return 0;
+
+    // unlimited → allow any positive
+    if (info.quantity === null) return qDesired;
+
+    // finite: total across all lines with same option_id must not exceed stock
+    const otherTotal = items.reduce((sum, it, idx) => {
+      if (idx === i) return sum;
+      return String(it.option_id) === optId ? sum + (parseInt(it.quantity, 10) || 0) : sum;
+    }, 0);
+    const remaining = Math.max(0, Number(info.quantity) - otherTotal);
+    return Math.min(qDesired, remaining);
+  }
+
   function updateQty(i, q) {
-    const qty = Math.max(1, parseInt(q, 10) || 1);
-    const next = items.map((it, idx) => (idx === i ? { ...it, quantity: qty } : it));
+    setMsg('');
+    const clamped = clampQtyForIndex(i, q);
+    // If clamp hits 0 (out of stock / no remaining after others), drop the line
+    if (clamped <= 0) {
+      const next = items.filter((_, idx) => idx !== i);
+      persist(next);
+      return;
+    }
+    const next = items.map((it, idx) => (idx === i ? { ...it, quantity: clamped } : it));
+    // Friendly message if we reduced the desired quantity
+    const desired = Math.max(1, parseInt(q, 10) || 1);
+    if (clamped < desired) {
+      const line = items[i];
+      const info = line?.option_id ? stockMap[String(line.option_id)] : null;
+      const left = info?.quantity ?? null;
+      if (info && info.in_stock && left !== null) {
+        setMsg(`Only ${left} left for "${line.name}".`);
+      }
+    }
     persist(next);
   }
+
   function removeItem(i) {
     persist(items.filter((_, idx) => idx !== i));
   }
@@ -68,10 +157,44 @@ export default function CartPage() {
     return true;
   }
 
+  // NEW: validate all lines against live stock before checkout
+  function validateStock() {
+    const problems = [];
+    for (const it of items) {
+      const qty = parseInt(it.quantity, 10) || 0;
+      if (qty <= 0) {
+        problems.push(`"${it.name}" has zero quantity.`);
+        continue;
+      }
+      const optId = it.option_id ? String(it.option_id) : null;
+      if (!optId) continue; // no tracking
+
+      const info = stockMap[optId];
+      if (!info) continue; // unknown → allow (server still enforces)
+
+      if (!info.in_stock) {
+        problems.push(`"${it.name}" is out of stock.`);
+        continue;
+      }
+      if (info.quantity !== null && qty > Number(info.quantity)) {
+        problems.push(`"${it.name}" exceeds stock. Max available is ${info.quantity}.`);
+      }
+    }
+    return { ok: problems.length === 0, problems };
+  }
+
   async function checkoutStripe() {
     setMsg('');
     if (!items.length) return;
     if (!validateBuyer()) return;
+
+    // NEW: stock validation gate
+    const { ok, problems } = validateStock();
+    if (!ok) {
+      setMsg(problems.join(' '));
+      return;
+    }
+
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -105,26 +228,40 @@ export default function CartPage() {
       {items.length > 0 && (
         <>
           <div className="space-y-3">
-            {items.map((it, i) => (
-              <div key={i} className="p-3 border rounded bg-white flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="font-medium text-sm">{it.name}</div>
-                  <div className="text-xs opacity-70">
-                    Price: {(it.unit_amount/100).toFixed(2)} {it.currency.toUpperCase()}
+            {items.map((it, i) => {
+              const info = it.option_id ? stockMap[String(it.option_id)] : undefined;
+              const finite = info ? info.quantity !== null : false;
+              const left = info ? info.quantity : null;
+              const notInStock = info ? !info.in_stock : false;
+
+              return (
+                <div key={i} className="p-3 border rounded bg-white flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{it.name}</div>
+                    <div className="text-xs opacity-70">
+                      Price: {(it.unit_amount/100).toFixed(2)} {it.currency.toUpperCase()}
+                    </div>
+                    {/* NEW: subtle stock hints */}
+                    {notInStock && (
+                      <div className="text-xs text-red-600 mt-1">Out of stock</div>
+                    )}
+                    {finite && !notInStock && (
+                      <div className="text-xs opacity-70 mt-1">{left} left</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      className="border rounded px-2 py-1 w-20"
+                      value={it.quantity}
+                      onChange={(e) => updateQty(i, e.target.value)}
+                    />
+                    <button onClick={() => removeItem(i)} className="px-3 py-1.5 rounded border text-xs">Remove</button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    className="border rounded px-2 py-1 w-20"
-                    value={it.quantity}
-                    onChange={(e) => updateQty(i, e.target.value)}
-                  />
-                  <button onClick={() => removeItem(i)} className="px-3 py-1.5 rounded border text-xs">Remove</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Shipping details */}
