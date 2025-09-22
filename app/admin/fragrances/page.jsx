@@ -1,396 +1,254 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase'; // match your admin page import
 
-export default function AdminFragranceList() {
-  const [viewer, setViewer] = useState(null);
+const ADMIN_EMAIL = 'stephanieshelbig@gmail.com';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+
+// ---------- Helpers ----------
+const toText = (val) => {
+  if (val == null) return '';
+  if (Array.isArray(val)) return val.filter(Boolean).join(', ');
+  if (typeof val === 'object') {
+    try {
+      const flat = JSON.stringify(val);
+      return flat.replace(/[{}\[\]"]/g, ' ').replace(/\s+/g, ' ').trim();
+    } catch {
+      return String(val);
+    }
+  }
+  return String(val);
+};
+
+const norm = (s = '') => toText(s).toLowerCase();
+const has = (val, sub) => norm(val).includes(sub.toLowerCase());
+
+const getBottleUrl = (f) => {
+  // Prefer transparent, then normal URL, then construct from image_path in 'bottles' bucket.
+  if (f.image_url_transparent) return f.image_url_transparent;
+  if (f.image_url) return f.image_url;
+  if (f.image_path && SUPABASE_URL) {
+    return `${SUPABASE_URL}/storage/v1/object/public/bottles/${f.image_path}`;
+  }
+  return '/bottle-placeholder.png';
+};
+
+// ---------- UI ----------
+function HeaderNav() {
+  return (
+    <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+      <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+        <Link href="/" className="text-2xl font-semibold">Fragrantique</Link>
+        <nav className="flex items-center gap-6">
+          <Link href="/brand-index" className="hover:underline">Brand Index</Link>
+          <Link href="/contact" className="hover:underline">Contact Me</Link>
+          <Link href="/cart" className="hover:underline">Cart</Link>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+function SearchBar({ value, onChange, onReload }) {
+  return (
+    <div className="mx-auto max-w-7xl px-4 pt-6 pb-4 flex items-center gap-3">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search by brand or name or notes"
+        className="w-full rounded-xl border px-4 py-2"
+      />
+      <button onClick={onReload} className="rounded-xl border px-4 py-2 hover:bg-gray-50">
+        Reload
+      </button>
+    </div>
+  );
+}
+
+function Card({ f }) {
+  const img = getBottleUrl(f);
+  return (
+    <div className="rounded-2xl border p-4 shadow-sm bg-white">
+      <div className="flex items-start gap-3">
+        {/* Bottle image */}
+        <div className="w-16 h-20 rounded overflow-hidden border bg-gray-100 shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={img}
+            alt={`${f.brand || ''} ${f.name || ''}`}
+            className="w-full h-full object-contain"
+            style={{ mixBlendMode: 'multiply' }}
+            loading="lazy"
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (!el.dataset.fallback) {
+                el.dataset.fallback = '1';
+                el.src = '/bottle-placeholder.png';
+              }
+            }}
+          />
+        </div>
+
+        {/* Details */}
+        <div className="flex-1">
+          <div className="text-xs text-gray-500">Brand</div>
+          <div className="font-medium">{f.brand || '—'}</div>
+
+          <div className="mt-1 text-xs text-gray-500">Fragrance Name</div>
+          <div className="font-medium">{f.name || '—'}</div>
+
+          <div className="mt-3">
+            <Link
+              href={`/fragrance/${f.id}`}
+              className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50"
+            >
+              Info
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Page ----------
+export default function NotesPage() {
+  const [query, setQuery] = useState('');
+  const [fragrances, setFragrances] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [owner, setOwner] = useState({ id: null, username: 'stephanie' });
+  const [isPending, startTransition] = useTransition();
+  const [loadError, setLoadError] = useState(null);
+  const searchParams = useSearchParams();
 
-  const [q, setQ] = useState('');
-  const [rows, setRows] = useState([]);
-  const [linkedIds, setLinkedIds] = useState(new Set()); // fragrance_ids already on shelves
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState('');
-  const [busy, setBusy] = useState(false);
-
+  // Determine admin (optional)
   useEffect(() => {
     (async () => {
-      // who am I?
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth?.user || null;
-      setViewer(user);
-
-      if (!user) {
-        setLoading(false);
-        return;
+      try {
+        const qEmail = searchParams?.get('me');
+        const { data } = await supabase.auth.getUser();
+        const email = (data?.user?.email || qEmail || '').toLowerCase();
+        setIsAdmin(email === ADMIN_EMAIL.toLowerCase());
+      } catch {
+        const qEmail = (searchParams?.get('me') || '').toLowerCase();
+        setIsAdmin(qEmail === ADMIN_EMAIL.toLowerCase());
       }
-
-      // am I admin?
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('id, is_admin, username')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      setIsAdmin(!!prof?.is_admin);
-
-      // resolve boutique owner (you)
-      const { data: ownerProf } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .eq('username', 'stephanie')
-        .maybeSingle();
-
-      if (ownerProf?.id) setOwner(ownerProf);
-
-      await load(ownerProf?.id || null);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function load(ownerId) {
-    setLoading(true);
-    setMsg('');
+  const load = async () => {
+    setLoadError(null);
 
-    // full catalog
-    const { data: allFrags } = await supabase
+    // Pull common fields + the image columns your admin page uses.
+    const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
+      .select('id, brand, name, accords, show_on_notes, image_url, image_url_transparent, image_path')
       .order('brand', { ascending: true })
-      .order('name', { ascending: true })
-      .limit(5000);
+      .order('name', { ascending: true });
 
-    setRows(allFrags || []);
-
-    // which are already on shelves for owner?
-    if (ownerId) {
-      const { data: links } = await supabase
-        .from('user_fragrances')
-        .select('fragrance_id')
-        .eq('user_id', ownerId)
-        .limit(10000);
-
-      setLinkedIds(new Set((links || []).map(l => l.fragrance_id)));
-    } else {
-      setLinkedIds(new Set());
-    }
-
-    setLoading(false);
-  }
-
-  const filtered = useMemo(() => {
-    if (!q) return rows;
-    const s = q.toLowerCase();
-    return rows.filter(r =>
-      (r.brand || '').toLowerCase().includes(s) ||
-      (r.name || '').toLowerCase().includes(s)
-    );
-  }, [rows, q]);
-
-  if (loading) return <div className="p-6">Loading…</div>;
-
-  if (!viewer || !isAdmin) {
-    return (
-      <div className="max-w-3xl mx-auto p-6 space-y-3">
-        <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
-        <p className="opacity-70">{msg || 'Please sign in as an admin.'}</p>
-        <Link href="/admin" className="underline text-sm">← Back to Admin</Link>
-      </div>
-    );
-  }
-
-  async function addOneToShelves(fragranceId) {
-    if (!owner.id) return;
-    setBusy(true);
-    setMsg('Adding to shelves…');
-
-    await supabase
-      .from('user_fragrances')
-      .insert({ user_id: owner.id, fragrance_id: fragranceId, manual: true });
-
-    await load(owner.id);
-    setBusy(false);
-    setMsg('Added to shelves ✓');
-  }
-
-  async function removeOneFromShelves(fragranceId) {
-    if (!owner.id) return;
-    setBusy(true);
-    setMsg('Removing from shelves…');
-
-    await supabase
-      .from('user_fragrances')
-      .delete()
-      .eq('user_id', owner.id)
-      .eq('fragrance_id', fragranceId);
-
-    await load(owner.id);
-    setBusy(false);
-    setMsg('Removed from shelves ✓');
-  }
-
-  async function addAllMissingToShelves() {
-    if (!owner.id) return;
-    setBusy(true);
-    setMsg('Adding ALL missing to shelves…');
-
-    const missing = rows.filter(r => !linkedIds.has(r.id)).map(r => r.id);
-    if (!missing.length) {
-      setMsg('Everything is already on your shelves.');
-      setBusy(false);
+    if (error) {
+      console.error('fragrances query error', error);
+      setLoadError(`Fragrances query failed: ${error.message || 'unknown error'}`);
+      setFragrances([]);
       return;
     }
 
-    const chunk = 200;
-    let inserted = 0;
-    for (let i = 0; i < missing.length; i += chunk) {
-      const batch = missing.slice(i, i + chunk).map(fid => ({
-        user_id: owner.id, fragrance_id: fid, manual: true
-      }));
-      await supabase.from('user_fragrances').insert(batch);
-      inserted += batch.length;
-    }
+    setFragrances(frags || []);
+  };
 
-    await load(owner.id);
-    setBusy(false);
-    setMsg(`Added ${inserted} items to shelves ✓`);
-  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function makeTransparent(fragrance) {
-    setBusy(true);
-    setMsg('Removing background…');
-
-    try {
-      const res = await fetch('/api/remove-bg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: fragrance.image_url,
-          fragranceId: fragrance.id
-        })
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j?.success) {
-        throw new Error(j?.error || `remove-bg failed`);
-      }
-      setMsg('Transparent image saved ✓');
-    } catch (e) {
-      setMsg(`Background remover error: ${e.message}`);
-    } finally {
-      setBusy(false);
-      await load(owner.id);
-    }
-  }
-
-  async function makeAllMissingTransparent() {
-    setBusy(true);
-    setMsg('Making transparent for all missing…');
-
-    const targets = rows.filter(r => !r.image_url_transparent && r.image_url);
-    let ok = 0, fail = 0;
-
-    for (const f of targets) {
-      try {
-        const res = await fetch('/api/remove-bg', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: f.image_url, fragranceId: f.id })
-        });
-        const j = await res.json().catch(() => ({}));
-        if (res.ok && j?.success) ok++; else fail++;
-      } catch {
-        fail++;
-      }
-    }
-
-    setMsg(`Transparent done: ${ok} ok, ${fail} failed`);
-    setBusy(false);
-    await load(owner.id);
-  }
-
-  async function deleteFragrance(fragrance) {
-    if (!isAdmin) return;
-    const ok = window.confirm(
-      `Delete "${fragrance.brand} — ${fragrance.name}" from the catalog?\n` +
-      `This will also remove it from your shelves.\n\nThis cannot be undone.`
+  // Search (brand/name/accords)
+  const filtered = useMemo(() => {
+    const q = norm(query);
+    // If show_on_notes is missing/null, treat as visible for everyone.
+    const base = fragrances.filter((f) =>
+      isAdmin ? true : (f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes)
     );
-    if (!ok) return;
+    if (!q) return base;
+    return base.filter((f) => {
+      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`;
+      return hay.includes(q);
+    });
+  }, [query, fragrances, isAdmin]);
 
-    setBusy(true);
-    setMsg('Deleting fragrance…');
+  // Buckets — a fragrance can appear in multiple columns if accords contain multiple targets
+  const grouped = useMemo(() => {
+    const buckets = {
+      vanilla: [],
+      florals: [],
+      whiteFlorals: [],
+      fruity: [],
+      uncategorized: [],
+    };
 
-    try {
-      const res = await fetch('/api/admin-delete-fragrance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fragranceId: fragrance.id,
-          deleteFromShelves: true,
-          deleteStorage: true
-        })
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j?.ok) {
-        throw new Error(j?.error || 'delete failed');
+    filtered.forEach((f) => {
+      const a = f.accords;
+      const isWhiteFloral = has(a, 'White Floral');
+      const isFloral = has(a, 'Floral') && !isWhiteFloral; // "Floral" but not "White Floral"
+      const isVanilla = has(a, 'Vanilla');
+      const isFruity = has(a, 'Fruity');
+
+      if (isVanilla) buckets.vanilla.push(f);
+      if (isFloral) buckets.florals.push(f);
+      if (isWhiteFloral) buckets.whiteFlorals.push(f);
+      if (isFruity) buckets.fruity.push(f);
+
+      if (!isVanilla && !isFloral && !isWhiteFloral && !isFruity) {
+        buckets.uncategorized.push(f);
       }
-      setMsg('Fragrance deleted ✓');
-      await load(owner.id);
-    } catch (e) {
-      setMsg(`Delete error: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
+    });
+
+    const sorter = (x, y) =>
+      (x.brand || '').localeCompare(y.brand || '') ||
+      (x.name || '').localeCompare(y.name || '');
+    Object.values(buckets).forEach((arr) => arr.sort(sorter));
+
+    return buckets;
+  }, [filtered]);
+
+  const Column = ({ title, list }) => (
+    <div className="space-y-4">
+      <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">{title}</div>
+      {list.length === 0 && <div className="text-xs text-gray-400 px-1">No matches</div>}
+      {list.map((f) => (
+        <Card key={f.id} f={f} />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
-        <div className="flex items-center gap-3">
-          <Link href="/admin" className="underline text-sm">← Back to Admin</Link>
-          {/* NEW: Add Fragrance button */}
-          <Link
-            href="/add"
-            className="px-3 py-2 rounded bg-pink-600 text-white hover:bg-pink-700 text-sm"
-          >
-            + Add Fragrance
-          </Link>
+    <div className="min-h-screen bg-white">
+      <HeaderNav />
+      <main className="mx-auto max-w-7xl px-4 pb-20">
+        <SearchBar value={query} onChange={setQuery} onReload={() => startTransition(load)} />
+
+        {loadError && (
+          <div className="mx-auto max-w-7xl mt-2 mb-2 rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-800">
+            {loadError}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
+          <Column title="VANILLA / GOURMAND" list={grouped.vanilla} />
+          <Column title="FLORALS" list={grouped.florals} />
+          <Column title="WHITE FLORALS" list={grouped.whiteFlorals} />
+          <Column title="FRUITY" list={grouped.fruity} />
         </div>
-      </div>
 
-      <p className="opacity-70 text-sm">
-        Managing catalog for <span className="font-medium">@{owner.username}</span>.
-      </p>
+        {/* Optional: surface uncategorized for you to refine accords */}
+        {/* {isAdmin && grouped.uncategorized.length > 0 && ... } */}
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by brand or name…"
-          className="border rounded px-3 py-2 w-full sm:w-80"
-        />
-        <button
-          onClick={() => load(owner.id)}
-          className="px-3 py-2 rounded bg-black text-white hover:opacity-90"
-        >
-          Reload
-        </button>
-
-        <div className="flex-1" />
-
-        {/* Bulk actions */}
-        <button
-          disabled={busy}
-          onClick={addAllMissingToShelves}
-          className="px-3 py-2 rounded bg-blue-600 text-white hover:opacity-90 disabled:opacity-60"
-          title="Link every fragrance not yet on your shelves"
-        >
-          Add all missing to shelves
-        </button>
-        <button
-          disabled={busy}
-          onClick={makeAllMissingTransparent}
-          className="px-3 py-2 rounded bg-pink-700 text-white hover:opacity-90 disabled:opacity-60"
-          title="Run background removal for all without transparent images"
-        >
-          Make transparent (missing only)
-        </button>
-      </div>
-
-      {msg && <div className="p-3 rounded bg-white border shadow text-sm">{msg}</div>}
-
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.map(f => {
-          const onShelves = linkedIds.has(f.id);
-          const img = f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
-          return (
-            <div key={f.id} className="border rounded p-3 bg-white flex gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={img}
-                alt={f.name}
-                className="w-14 h-20 object-contain"
-                style={{ mixBlendMode: 'multiply' }}
-                onError={(e) => {
-                  const el = e.currentTarget;
-                  if (!el.dataset.fallback) {
-                    el.dataset.fallback = '1';
-                    el.src = '/bottle-placeholder.png';
-                  }
-                }}
-              />
-              <div className="flex-1">
-                <div className="text-xs opacity-70">{f.brand}</div>
-                <div className="font-medium">{f.name}</div>
-
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Link
-                    href={`/fragrance/${f.id}/edit`}
-                    className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
-                  >
-                    Edit
-                  </Link>
-
-                  {!onShelves ? (
-                    <button
-                      disabled={busy}
-                      onClick={() => addOneToShelves(f.id)}
-                      className="px-2 py-1 rounded bg-black text-white text-xs hover:opacity-90 disabled:opacity-60"
-                      title="Add this to your shelves"
-                    >
-                      Add to shelves
-                    </button>
-                  ) : (
-                    <button
-                      disabled={busy}
-                      onClick={() => removeOneFromShelves(f.id)}
-                      className="px-2 py-1 rounded bg-amber-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
-                      title="Remove this from your shelves"
-                    >
-                      Remove from shelves
-                    </button>
-                  )}
-
-                  <button
-                    disabled={busy || !f.image_url}
-                    onClick={() => makeTransparent(f)}
-                    className="px-2 py-1 rounded bg-pink-700 text-white text-xs hover:opacity-90 disabled:opacity-60"
-                    title="Create transparent PNG and save to Storage"
-                  >
-                    Transparent
-                  </button>
-
-                  <button
-                    disabled={busy}
-                    onClick={() => deleteFragrance(f)}
-                    className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
-                    title="Delete this fragrance from the catalog (admin only)"
-                  >
-                    Delete fragrance
-                  </button>
-
-                  {f.fragrantica_url && (
-                    <a
-                      href={f.fragrantica_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2 py-1 rounded bg-white border text-xs hover:bg-gray-50"
-                    >
-                      Fragrantica ↗
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {!filtered.length && (
-        <div className="p-4 border rounded bg-white">No matches.</div>
-      )}
+        {isPending && <div className="text-sm text-gray-500 mt-6">Refreshing…</div>}
+      </main>
     </div>
   );
 }
