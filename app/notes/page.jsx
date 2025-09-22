@@ -27,8 +27,6 @@ const toText = (val) => {
 };
 
 const norm = (s = '') => toText(s).toLowerCase();
-
-// Case-insensitive substring check
 const has = (val, sub) => norm(val).includes(sub.toLowerCase());
 
 // ---------- UI ----------
@@ -63,12 +61,29 @@ function SearchBar({ value, onChange, onReload }) {
   );
 }
 
-function Card({ f, decants, onAdd, isAdmin, onToggle }) {
+function Card({ f }) {
   const accordsDisplay = toText(f.accords);
+  const imageUrl = f.image_url || f.image || f.photo_url || f.thumbnail || null;
+
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
-        <div className="w-12 h-16 rounded bg-gray-100 border shrink-0" />
+        {/* Image */}
+        <div className="w-16 h-20 rounded overflow-hidden border bg-gray-100 shrink-0">
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={`${f.brand || ''} ${f.name || ''}`}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full" />
+          )}
+        </div>
+
+        {/* Text */}
         <div className="flex-1">
           <div className="text-xs text-gray-500">Brand</div>
           <div className="font-medium">{f.brand || '—'}</div>
@@ -77,39 +92,18 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
           <div className="font-medium">{f.name || '—'}</div>
 
           <div className="mt-3 flex items-center gap-2">
-            <Link href={`/fragrance/${f.id}`} className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50">
-              View fragrance
+            <Link
+              href={`/fragrance/${f.id}`}
+              className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50"
+            >
+              Info
             </Link>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {decants?.length ? (
-              decants.map((d) => (
-                <button
-                  key={d.id}
-                  className="text-sm rounded-lg bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5"
-                  onClick={() => onAdd(f, d)}
-                  title={`Add ${d.label} to cart`}
-                >
-                  {d.label}
-                </button>
-              ))
-            ) : (
-              <div className="text-xs text-gray-400">No decant options</div>
-            )}
+          {/* Admin-only tiny accords peek */}
+          <div className="mt-2 text-[11px] text-gray-500 hidden">
+            Accords: {accordsDisplay || '—'}
           </div>
-
-          {isAdmin && (
-            <div className="mt-4">
-              <button
-                onClick={() => onToggle(f)}
-                className="text-xs rounded-md border px-2 py-1 hover:bg-gray-50"
-              >
-                {f.show_on_notes ? 'Hide from Notes' : 'Show on Notes'}
-              </button>
-              <div className="mt-1 text-[11px] text-gray-500">Accords: {accordsDisplay || '—'}</div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -120,7 +114,6 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
 export default function NotesPage() {
   const [query, setQuery] = useState('');
   const [fragrances, setFragrances] = useState([]);
-  const [decantsByFrag, setDecantsByFrag] = useState({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [loadError, setLoadError] = useState(null);
@@ -145,48 +138,35 @@ export default function NotesPage() {
   const load = async () => {
     setLoadError(null);
 
-    // ✅ Use the correct lowercase column: accords
-    const { data: frags, error } = await supabase
+    // Try selecting with a common image column; if it errors (column doesn't exist), retry without it.
+    let frags = null;
+    let error = null;
+
+    // Attempt 1: with image_url
+    let res = await supabase
       .from('fragrances')
-      .select('id, brand, name, accords, show_on_notes')
+      .select('id, brand, name, accords, show_on_notes, image_url')
       .order('brand', { ascending: true });
+
+    if (res.error) {
+      // Attempt 2: without image_url (fallback if column doesn't exist)
+      res = await supabase
+        .from('fragrances')
+        .select('id, brand, name, accords, show_on_notes')
+        .order('brand', { ascending: true });
+    }
+
+    frags = res.data;
+    error = res.error;
 
     if (error) {
       console.error('fragrances query error', error);
       setLoadError(`Fragrances query failed: ${error.message || 'unknown error'}`);
       setFragrances([]);
-      setDecantsByFrag({});
       return;
     }
 
-    const all = frags || [];
-
-    // Visibility: if show_on_notes is undefined/null, assume visible for non-admins
-    const isVisible = (row) =>
-      isAdmin ? true : (row.show_on_notes === undefined || row.show_on_notes === null ? true : !!row.show_on_notes);
-
-    const visible = all.filter(isVisible);
-    const ids = visible.map((f) => f.id);
-
-    let byFrag = {};
-    if (ids.length > 0) {
-      const { data: decants, error: decErr } = await supabase
-        .from('decant_options')
-        .select('id, fragrance_id, label, price_cents')
-        .in('fragrance_id', ids);
-
-      if (decErr) {
-        console.error('decants query error', decErr);
-      } else if (decants) {
-        byFrag = decants.reduce((acc, d) => {
-          (acc[d.fragrance_id] ||= []).push(d);
-          return acc;
-        }, {});
-      }
-    }
-
-    setFragrances(all);
-    setDecantsByFrag(byFrag);
+    setFragrances(frags || []);
   };
 
   useEffect(() => {
@@ -207,7 +187,7 @@ export default function NotesPage() {
     });
   }, [query, fragrances, isAdmin]);
 
-  // Buckets (duplicate into all matching columns)
+  // Buckets (duplicate into all matching columns; strict substring rules)
   const grouped = useMemo(() => {
     const buckets = {
       vanilla: [],
@@ -220,7 +200,6 @@ export default function NotesPage() {
     filtered.forEach((f) => {
       const a = f.accords;
 
-      // Evaluate each column independently (fragrance can appear in multiple columns)
       const isWhiteFloral = has(a, 'White Floral');
       const isFloral = has(a, 'Floral') && !isWhiteFloral; // Florals but not White Floral
       const isVanilla = has(a, 'Vanilla');
@@ -244,98 +223,28 @@ export default function NotesPage() {
     return buckets;
   }, [filtered]);
 
-  const addToCart = (frag, decant) => {
-    const item = {
-      name: `${frag.brand} — ${frag.name} (${decant.label})`,
-      quantity: 1,
-      unit_amount: decant.price_cents ?? 0,
-      currency: 'usd',
-      fragrance_id: frag.id,
-      decant_option_id: decant.id,
-    };
-
-    const keysToTry = ['cartItems', 'fragrantique_cart'];
-    const key =
-      keysToTry.find((k) => {
-        try { return Array.isArray(JSON.parse(localStorage.getItem(k) || '[]')); }
-        catch { return false; }
-      }) || 'cartItems';
-
-    const current = JSON.parse(localStorage.getItem(key) || '[]');
-    const idx = current.findIndex(
-      (x) => x.fragrance_id === item.fragrance_id && x.decant_option_id === item.decant_option_id
-    );
-    if (idx >= 0) current[idx].quantity += 1;
-    else current.push(item);
-
-    localStorage.setItem(key, JSON.stringify(current));
-    try { window.dispatchEvent(new CustomEvent('fragrantique:cart:updated')); } catch {}
-  };
-
-  const toggleShow = async (f) => {
-    if (!isAdmin) return;
-    const { error } = await supabase
-      .from('fragrances')
-      .update({ show_on_notes: !f.show_on_notes })
-      .eq('id', f.id);
-    if (error) {
-      console.error(error);
-      alert('Failed to update.');
-      return;
-    }
-    startTransition(() => load());
-  };
-
   const Column = ({ title, list }) => (
     <div className="space-y-4">
       <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">{title}</div>
       {list.length === 0 && <div className="text-xs text-gray-400 px-1">No matches</div>}
       {list.map((f) => (
-        <Card
-          key={f.id}
-          f={f}
-          decants={decantsByFrag[f.id] || []}
-          onAdd={addToCart}
-          isAdmin={isAdmin}
-          onToggle={toggleShow}
-        />
+        <Card key={f.id} f={f} />
       ))}
     </div>
   );
-
-  const AdminDebugBar = () => {
-    if (!isAdmin) return null;
-    const total = fragrances.length;
-    const visible = fragrances.filter((f) =>
-      f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes
-    ).length;
-    const filteredCount = filtered.length;
-    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(f.accords)).join(' | ') || '—';
-
-    return (
-      <div className="mx-auto max-w-7xl px-4 mt-2 mb-2 space-y-2">
-        {loadError && (
-          <div className="rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-800">
-            {loadError}
-          </div>
-        )}
-        <div className="rounded-lg border bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <div>Admin view: total={total} • visible(calc)={visible} • after search={filteredCount}</div>
-          <div>
-            Bucket sizes — Vanilla/Gourmand: {grouped.vanilla.length}, Florals: {grouped.florals.length}, White Florals: {grouped.whiteFlorals.length}, Fruity: {grouped.fruity.length}, Uncategorized: {grouped.uncategorized.length}
-          </div>
-          <div className="mt-1">Accords sample: <code>{sampleAccords}</code></div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-white">
       <HeaderNav />
       <main className="mx-auto max-w-7xl px-4 pb-20">
         <SearchBar value={query} onChange={setQuery} onReload={() => startTransition(load)} />
-        <AdminDebugBar />
+
+        {/* Optional tiny error surface for you */}
+        {loadError && (
+          <div className="mx-auto max-w-7xl mt-2 mb-2 rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-800">
+            {loadError}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
           <Column title="VANILLA / GOURMAND" list={grouped.vanilla} />
@@ -344,26 +253,8 @@ export default function NotesPage() {
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
 
-        {/* Admin-only: see uncategorized */}
-        {isAdmin && grouped.uncategorized.length > 0 && (
-          <div className="mt-10 space-y-4">
-            <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
-              Uncategorized (admin only)
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {grouped.uncategorized.map((f) => (
-                <Card
-                  key={f.id}
-                  f={f}
-                  decants={decantsByFrag[f.id] || []}
-                  onAdd={addToCart}
-                  isAdmin={isAdmin}
-                  onToggle={toggleShow}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* (Optional) If you want to see what didn't match, add an admin uncategorized section here */}
+        {/* {isAdmin && grouped.uncategorized.length > 0 && (...)} */}
 
         {isPending && <div className="text-sm text-gray-500 mt-6">Refreshing…</div>}
       </main>
