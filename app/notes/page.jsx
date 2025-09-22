@@ -1,11 +1,11 @@
 'use client';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = false;
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { useSearchParams } from 'next/navigation';
 
 // ---------- Helpers ----------
 const toText = (val) => {
@@ -23,7 +23,7 @@ const toText = (val) => {
 const norm = (s = '') => toText(s).toLowerCase();
 const has = (val, sub) => norm(val).includes(sub.toLowerCase());
 
-const getBottleUrl = (f) =>
+const bottleUrl = (f) =>
   f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
 
 // ---------- UI ----------
@@ -48,7 +48,7 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by brand or name or notes"
+        placeholder="Search by brand, fragrance, or accords…"
         className="w-full rounded-xl border px-4 py-2"
       />
       <button onClick={onReload} className="rounded-xl border px-4 py-2 hover:bg-gray-50">
@@ -59,7 +59,7 @@ function SearchBar({ value, onChange, onReload }) {
 }
 
 function Card({ f }) {
-  const img = getBottleUrl(f);
+  const img = bottleUrl(f);
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -80,7 +80,6 @@ function Card({ f }) {
             }}
           />
         </div>
-
         <div className="flex-1">
           <div className="text-xs text-gray-500">Brand</div>
           <div className="font-medium">{f.brand || '—'}</div>
@@ -101,11 +100,10 @@ function Card({ f }) {
 
 // ---------- Page ----------
 export default function NotesPage() {
-  const [query, setQuery] = useState('');
+  const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [isPending, startTransition] = useTransition();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     (async () => {
@@ -125,37 +123,44 @@ export default function NotesPage() {
     })();
   }, []);
 
-  // Search by brand/name/accords
   const filtered = useMemo(() => {
-    const q = norm(query);
-    if (!q) return rows;
-    return rows.filter((f) => `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`.includes(q));
-  }, [rows, query]);
+    const s = norm(q);
+    if (!s) return rows;
+    return rows.filter((f) =>
+      `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`.includes(s)
+    );
+  }, [rows, q]);
 
-  // Buckets — can appear in multiple columns
+  // Bucket rules (can appear in multiple)
   const grouped = useMemo(() => {
     const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
+    const sort = (a, b) =>
+      (a.brand || '').localeCompare(b.brand || '') ||
+      (a.name || '').localeCompare(b.name || '');
 
     filtered.forEach((f) => {
       const a = f.accords;
-      const isWhiteFloral = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhiteFloral; // Floral but not White Floral
+      const isWhite = has(a, 'White Floral');
+      const isFloral = has(a, 'Floral') && !isWhite; // exclude white from generic Floral
       const isVanilla = has(a, 'Vanilla');
       const isFruity = has(a, 'Fruity');
 
       if (isVanilla) buckets.vanilla.push(f);
       if (isFloral) buckets.florals.push(f);
-      if (isWhiteFloral) buckets.whiteFlorals.push(f);
+      if (isWhite) buckets.whiteFlorals.push(f);
       if (isFruity) buckets.fruity.push(f);
     });
 
-    const sorter = (x, y) =>
-      (x.brand || '').localeCompare(y.brand || '') ||
-      (x.name || '').localeCompare(y.name || '');
-    Object.values(buckets).forEach((arr) => arr.sort(sorter));
-
+    Object.values(buckets).forEach((arr) => arr.sort(sort));
     return buckets;
   }, [filtered]);
+
+  const allFourEmpty =
+    filtered.length > 0 &&
+    !grouped.vanilla.length &&
+    !grouped.florals.length &&
+    !grouped.whiteFlorals.length &&
+    !grouped.fruity.length;
 
   const Column = ({ title, list }) => (
     <div className="space-y-4">
@@ -170,20 +175,36 @@ export default function NotesPage() {
       <HeaderNav />
 
       <main className="mx-auto max-w-7xl px-4 pb-20">
-        <SearchBar value={query} onChange={setQuery} onReload={() => startTransition(() => location.reload())} />
+        <SearchBar value={q} onChange={setQ} onReload={() => startTransition(() => location.reload())} />
 
-        {loadError && (
-          <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-red-50 px-3 py-2 text-sm text-red-800">
-            {loadError}
-          </div>
-        )}
+        {/* Tiny debug/helper strip so you know if the DB returned rows */}
+        <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-white px-3 py-2 text-xs text-gray-700">
+          Loaded <b>{rows.length}</b> fragrances{q ? <> · after search: <b>{filtered.length}</b></> : null}.
+          {rows.length === 0 && !loadError && (
+            <> If this seems wrong in production, double-check Supabase anon keys and RLS SELECT policy on <code>public.fragrances</code>.</>
+          )}
+          {loadError && <div className="text-red-700 mt-1">{loadError}</div>}
+        </div>
 
+        {/* 4 buckets */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
           <Column title="VANILLA / GOURMAND" list={grouped.vanilla} />
           <Column title="FLORALS" list={grouped.florals} />
           <Column title="WHITE FLORALS" list={grouped.whiteFlorals} />
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
+
+        {/* Fallback grid so you still see cards if none matched any column */}
+        {allFourEmpty && (
+          <div className="mt-10 space-y-4">
+            <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
+              All fragrances (no column matches)
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filtered.map((f) => <Card key={f.id} f={f} />)}
+            </div>
+          </div>
+        )}
 
         {isPending && <div className="text-sm text-gray-500 mt-6">Refreshing…</div>}
       </main>
