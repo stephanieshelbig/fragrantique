@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 export const revalidate = false;
-export const dynamic = 'force-dynamic';
+
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
