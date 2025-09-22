@@ -1,32 +1,33 @@
 'use client';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = false;
+export const revalidate = 0;
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
-// ---------- Helpers ----------
-const toText = (val) => {
-  if (val == null) return '';
-  if (Array.isArray(val)) return val.filter(Boolean).join(', ');
-  if (typeof val === 'object') {
-    try {
-      const flat = JSON.stringify(val);
-      return flat.replace(/[{}\[\]"]/g, ' ').replace(/\s+/g, ' ').trim();
-    } catch { return String(val); }
+// ---- Supabase (local, browser-friendly) ----
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ---- Helpers ----
+const toText = (v) => {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.filter(Boolean).join(', ');
+  if (typeof v === 'object') {
+    try { return JSON.stringify(v).replace(/[{}\[\]"]/g, ' ').replace(/\s+/g, ' ').trim(); }
+    catch { return String(v); }
   }
-  return String(val);
+  return String(v);
 };
-
 const norm = (s = '') => toText(s).toLowerCase();
 const has = (val, sub) => norm(val).includes(sub.toLowerCase());
 
-const bottleUrl = (f) =>
-  f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+const bottleUrl = (f) => f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
 
-// ---------- UI ----------
+// ---- UI bits ----
 function HeaderNav() {
   return (
     <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
@@ -98,28 +99,28 @@ function Card({ f }) {
   );
 }
 
-// ---------- Page ----------
+// ---- Page ----
 export default function NotesPage() {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
   const [loadError, setLoadError] = useState(null);
-  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     (async () => {
-      setLoadError(null);
-      const { data, error } = await supabase
-        .from('fragrances')
-        .select('id, brand, name, accords, image_url, image_url_transparent')
-        .order('brand', { ascending: true })
-        .order('name', { ascending: true });
-
-      if (error) {
-        setLoadError(`Fragrances query failed: ${error.message || 'unknown error'}`);
+      try {
+        setLoadError(null);
+        const { data, error } = await supabase
+          .from('fragrances')
+          .select('id, brand, name, accords, image_url, image_url_transparent')
+          .order('brand', { ascending: true })
+          .order('name', { ascending: true });
+        if (error) throw error;
+        setRows(data || []);
+      } catch (err) {
+        console.error('fragrances query error', err);
+        setLoadError(`Fragrances query failed: ${err?.message || 'unknown error'}`);
         setRows([]);
-        return;
       }
-      setRows(data || []);
     })();
   }, []);
 
@@ -131,7 +132,7 @@ export default function NotesPage() {
     );
   }, [rows, q]);
 
-  // Bucket rules (can appear in multiple)
+  // Strict bucketing by substrings on `fragrances.accords`
   const grouped = useMemo(() => {
     const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
     const sort = (a, b) =>
@@ -141,7 +142,7 @@ export default function NotesPage() {
     filtered.forEach((f) => {
       const a = f.accords;
       const isWhite = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhite; // exclude white from generic Floral
+      const isFloral = has(a, 'Floral') && !isWhite; // Florals but not White Floral
       const isVanilla = has(a, 'Vanilla');
       const isFruity = has(a, 'Fruity');
 
@@ -175,18 +176,21 @@ export default function NotesPage() {
       <HeaderNav />
 
       <main className="mx-auto max-w-7xl px-4 pb-20">
-        <SearchBar value={q} onChange={setQ} onReload={() => startTransition(() => location.reload())} />
+        <SearchBar value={q} onChange={setQ} onReload={() => location.reload()} />
 
-        {/* Tiny debug/helper strip so you know if the DB returned rows */}
+        {/* Tiny debug strip so you know if DB returned rows */}
         <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-white px-3 py-2 text-xs text-gray-700">
           Loaded <b>{rows.length}</b> fragrances{q ? <> · after search: <b>{filtered.length}</b></> : null}.
           {rows.length === 0 && !loadError && (
-            <> If this seems wrong in production, double-check Supabase anon keys and RLS SELECT policy on <code>public.fragrances</code>.</>
+            <> If this seems wrong, confirm your Vercel env vars
+              (<code>NEXT_PUBLIC_SUPABASE_URL</code>, <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>)
+              and RLS SELECT policy on <code>public.fragrances</code>.
+            </>
           )}
           {loadError && <div className="text-red-700 mt-1">{loadError}</div>}
         </div>
 
-        {/* 4 buckets */}
+        {/* 4 columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
           <Column title="VANILLA / GOURMAND" list={grouped.vanilla} />
           <Column title="FLORALS" list={grouped.florals} />
@@ -194,7 +198,7 @@ export default function NotesPage() {
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
 
-        {/* Fallback grid so you still see cards if none matched any column */}
+        {/* Fallback: show all if none matched any bucket */}
         {allFourEmpty && (
           <div className="mt-10 space-y-4">
             <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
@@ -205,8 +209,6 @@ export default function NotesPage() {
             </div>
           </div>
         )}
-
-        {isPending && <div className="text-sm text-gray-500 mt-6">Refreshing…</div>}
       </main>
     </div>
   );
