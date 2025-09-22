@@ -14,7 +14,6 @@ const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ---------- Helpers ----------
-
 const toText = (val) => {
   if (val == null) return '';
   if (Array.isArray(val)) return val.filter(Boolean).join(', ');
@@ -22,9 +21,7 @@ const toText = (val) => {
     try {
       const flat = JSON.stringify(val);
       return flat.replace(/[{}\[\]"]/g, ' ').replace(/\s+/g, ' ').trim();
-    } catch {
-      return String(val);
-    }
+    } catch { return String(val); }
   }
   return String(val);
 };
@@ -40,49 +37,37 @@ const inCol = {
       a.includes('tonka') ||
       a.includes('praline') ||
       a.includes('caramel') ||
-      a.includes('chocolate')
+      a.includes('chocolate') ||
+      a.includes('sweet')
     );
   },
   FLORALS: (accords) => {
     const a = norm(accords);
     return (
       (a.includes('floral') && !a.includes('white')) ||
-      a.includes('rose') ||
-      a.includes('violet') ||
-      a.includes('lily') ||
-      a.includes('peony') ||
-      a.includes('iris')
+      a.includes('rose') || a.includes('violet') ||
+      a.includes('lily') || a.includes('peony') || a.includes('iris')
     );
   },
   WHITE_FLORALS: (accords) => {
     const a = norm(accords);
     return (
       a.includes('white floral') ||
-      a.includes('jasmine') ||
-      a.includes('tuberose') ||
-      a.includes('gardenia') ||
-      a.includes('orange blossom') ||
-      a.includes('neroli')
+      a.includes('jasmine') || a.includes('tuberose') ||
+      a.includes('gardenia') || a.includes('orange blossom') || a.includes('neroli')
     );
   },
   FRUITY: (accords) => {
     const a = norm(accords);
     return (
-      a.includes('fruity') ||
-      a.includes('citrus') ||
-      a.includes('apple') ||
-      a.includes('berry') ||
-      a.includes('peach') ||
-      a.includes('pear') ||
-      a.includes('pineapple')
+      a.includes('fruity') || a.includes('citrus') ||
+      a.includes('apple') || a.includes('berry') ||
+      a.includes('peach') || a.includes('pear') || a.includes('pineapple')
     );
   },
 };
 
-const getAccords = (f) => f.accords_cap ?? f.accords_lc ?? f.accords ?? '';
-
-// ---------- UI bits ----------
-
+// ---------- UI ----------
 function HeaderNav() {
   return (
     <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
@@ -115,7 +100,7 @@ function SearchBar({ value, onChange, onReload }) {
 }
 
 function Card({ f, decants, onAdd, isAdmin, onToggle }) {
-  const accordsDisplay = toText(getAccords(f));
+  const accordsDisplay = toText(f.accords);
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -168,7 +153,6 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
 }
 
 // ---------- Page ----------
-
 export default function NotesPage() {
   const [query, setQuery] = useState('');
   const [fragrances, setFragrances] = useState([]);
@@ -197,11 +181,11 @@ export default function NotesPage() {
   const load = async () => {
     setLoadError(null);
 
-    // IMPORTANT: Quote the capitalized column name.
-    // Also tolerate missing show_on_notes by not relying on it to fetch.
+    // ✅ Select the real lowercase column: `accords`
+    // Also select show_on_notes if it exists; if not, it's null and we'll treat as visible.
     const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, accords_lc:accords, accords_cap:"Accords", show_on_notes')
+      .select('id, brand, name, accords, show_on_notes')
       .order('brand', { ascending: true });
 
     if (error) {
@@ -214,7 +198,7 @@ export default function NotesPage() {
 
     const all = frags || [];
 
-    // Visibility: if show_on_notes is undefined/null (column missing or null), assume visible.
+    // Visibility: if show_on_notes is undefined/null, assume visible for non-admins
     const isVisible = (row) =>
       isAdmin ? true : (row.show_on_notes === undefined || row.show_on_notes === null ? true : !!row.show_on_notes);
 
@@ -230,7 +214,6 @@ export default function NotesPage() {
 
       if (decErr) {
         console.error('decants query error', decErr);
-        // don't hard fail — just leave decants empty
       } else if (decants) {
         byFrag = decants.reduce((acc, d) => {
           (acc[d.fragrance_id] ||= []).push(d);
@@ -248,31 +231,25 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
+  // Search
   const filtered = useMemo(() => {
     const q = norm(query);
-    // Apply same visibility rule here too
     const base = fragrances.filter((f) =>
       isAdmin ? true : (f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes)
     );
     if (!q) return base;
     return base.filter((f) => {
-      const accords = getAccords(f);
-      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(accords)}`;
+      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`;
       return hay.includes(q);
     });
   }, [query, fragrances, isAdmin]);
 
+  // Buckets (+ admin uncategorized)
   const grouped = useMemo(() => {
-    const buckets = {
-      vanilla: [],
-      florals: [],
-      whiteFlorals: [],
-      fruity: [],
-      uncategorized: [],
-    };
+    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [], uncategorized: [] };
 
     filtered.forEach((f) => {
-      const a = getAccords(f);
+      const a = f.accords;
       if (inCol.WHITE_FLORALS(a)) buckets.whiteFlorals.push(f);
       else if (inCol.VANILLA_GOURMAND(a)) buckets.vanilla.push(f);
       else if (inCol.FRUITY(a)) buckets.fruity.push(f);
@@ -354,7 +331,7 @@ export default function NotesPage() {
       f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes
     ).length;
     const filteredCount = filtered.length;
-    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(getAccords(f))).join(' | ') || '—';
+    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(f.accords)).join(' | ') || '—';
 
     return (
       <div className="mx-auto max-w-7xl px-4 mt-2 mb-2 space-y-2">
@@ -368,12 +345,7 @@ export default function NotesPage() {
           <div>
             Bucket sizes — Vanilla/Gourmand: {grouped.vanilla.length}, Florals: {grouped.florals.length}, White Florals: {grouped.whiteFlorals.length}, Fruity: {grouped.fruity.length}, Uncategorized: {grouped.uncategorized.length}
           </div>
-          <div className="mt-1">
-            Accords sample: <code>{sampleAccords}</code>
-          </div>
-          <div className="mt-1">
-            Tip: append <code>?me={ADMIN_EMAIL}</code> to this URL to enable admin view if not logged in.
-          </div>
+          <div className="mt-1">Accords sample: <code>{sampleAccords}</code></div>
         </div>
       </div>
     );
@@ -393,7 +365,6 @@ export default function NotesPage() {
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
 
-        {/* Admin-only: see uncategorized to tune tags */}
         {isAdmin && grouped.uncategorized.length > 0 && (
           <div className="mt-10 space-y-4">
             <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
