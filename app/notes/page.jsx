@@ -13,7 +13,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// --- Helpers -----------------------------------------------------------------------------
+// ---------- Helpers ----------
 
 const toText = (val) => {
   if (val == null) return '';
@@ -79,14 +79,9 @@ const inCol = {
   },
 };
 
-// Choose accords from possible columns (Accords vs accords)
-const getAccords = (f) => {
-  // accords_cap: "Accords" (quoted, capital A)
-  // accords_lc:  accords  (lowercase)
-  return f.accords_cap ?? f.accords_lc ?? f.accords ?? '';
-};
+const getAccords = (f) => f.accords_cap ?? f.accords_lc ?? f.accords ?? '';
 
-// --- UI ----------------------------------------------------------------------------------
+// ---------- UI bits ----------
 
 function HeaderNav() {
   return (
@@ -172,7 +167,7 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
   );
 }
 
-// --- Page --------------------------------------------------------------------------------
+// ---------- Page ----------
 
 export default function NotesPage() {
   const [query, setQuery] = useState('');
@@ -180,6 +175,7 @@ export default function NotesPage() {
   const [decantsByFrag, setDecantsByFrag] = useState({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [loadError, setLoadError] = useState(null);
   const searchParams = useSearchParams();
 
   // Determine admin
@@ -199,18 +195,30 @@ export default function NotesPage() {
   }, []);
 
   const load = async () => {
-    // NOTE: fetch both "Accords" (quoted, capital A) and accords (lowercase)
+    setLoadError(null);
+
+    // IMPORTANT: Quote the capitalized column name.
+    // Also tolerate missing show_on_notes by not relying on it to fetch.
     const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, accords_lc:accords, accords_cap:Accords, show_on_notes')
+      .select('id, brand, name, accords_lc:accords, accords_cap:"Accords", show_on_notes')
       .order('brand', { ascending: true });
 
     if (error) {
-      console.error(error);
+      console.error('fragrances query error', error);
+      setLoadError(`Fragrances query failed: ${error.message || 'unknown error'}`);
+      setFragrances([]);
+      setDecantsByFrag({});
       return;
     }
 
-    const visible = (frags || []).filter((f) => (isAdmin ? true : !!f.show_on_notes));
+    const all = frags || [];
+
+    // Visibility: if show_on_notes is undefined/null (column missing or null), assume visible.
+    const isVisible = (row) =>
+      isAdmin ? true : (row.show_on_notes === undefined || row.show_on_notes === null ? true : !!row.show_on_notes);
+
+    const visible = all.filter(isVisible);
     const ids = visible.map((f) => f.id);
 
     let byFrag = {};
@@ -220,17 +228,18 @@ export default function NotesPage() {
         .select('id, fragrance_id, label, price_cents')
         .in('fragrance_id', ids);
 
-      if (!decErr && decants) {
+      if (decErr) {
+        console.error('decants query error', decErr);
+        // don't hard fail — just leave decants empty
+      } else if (decants) {
         byFrag = decants.reduce((acc, d) => {
           (acc[d.fragrance_id] ||= []).push(d);
           return acc;
         }, {});
-      } else if (decErr) {
-        console.error(decErr);
       }
     }
 
-    setFragrances(frags || []);
+    setFragrances(all);
     setDecantsByFrag(byFrag);
   };
 
@@ -239,10 +248,12 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  // Search against brand + name + accords (whichever column exists)
   const filtered = useMemo(() => {
     const q = norm(query);
-    const base = fragrances.filter((f) => (isAdmin ? true : !!f.show_on_notes));
+    // Apply same visibility rule here too
+    const base = fragrances.filter((f) =>
+      isAdmin ? true : (f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes)
+    );
     if (!q) return base;
     return base.filter((f) => {
       const accords = getAccords(f);
@@ -251,7 +262,6 @@ export default function NotesPage() {
     });
   }, [query, fragrances, isAdmin]);
 
-  // Buckets (+ admin uncategorized)
   const grouped = useMemo(() => {
     const buckets = {
       vanilla: [],
@@ -340,20 +350,29 @@ export default function NotesPage() {
   const AdminDebugBar = () => {
     if (!isAdmin) return null;
     const total = fragrances.length;
-    const visible = fragrances.filter((f) => !!f.show_on_notes).length;
+    const visible = fragrances.filter((f) =>
+      f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes
+    ).length;
     const filteredCount = filtered.length;
+    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(getAccords(f))).join(' | ') || '—';
+
     return (
-      <div className="mx-auto max-w-7xl px-4 mt-2 mb-2">
+      <div className="mx-auto max-w-7xl px-4 mt-2 mb-2 space-y-2">
+        {loadError && (
+          <div className="rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-800">
+            {loadError}
+          </div>
+        )}
         <div className="rounded-lg border bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <div>Admin view: total={total} • visible={visible} • after search={filteredCount}</div>
+          <div>Admin view: total={total} • visible(calc)={visible} • after search={filteredCount}</div>
           <div>
             Bucket sizes — Vanilla/Gourmand: {grouped.vanilla.length}, Florals: {grouped.florals.length}, White Florals: {grouped.whiteFlorals.length}, Fruity: {grouped.fruity.length}, Uncategorized: {grouped.uncategorized.length}
           </div>
           <div className="mt-1">
-            Accords column detected per row (first two examples):{' '}
-            <code>
-              {fragrances.slice(0, 2).map((f) => toText(getAccords(f))).join(' | ') || '—'}
-            </code>
+            Accords sample: <code>{sampleAccords}</code>
+          </div>
+          <div className="mt-1">
+            Tip: append <code>?me={ADMIN_EMAIL}</code> to this URL to enable admin view if not logged in.
           </div>
         </div>
       </div>
@@ -374,6 +393,7 @@ export default function NotesPage() {
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
 
+        {/* Admin-only: see uncategorized to tune tags */}
         {isAdmin && grouped.uncategorized.length > 0 && (
           <div className="mt-10 space-y-4">
             <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
