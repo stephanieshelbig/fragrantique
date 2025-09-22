@@ -28,44 +28,8 @@ const toText = (val) => {
 
 const norm = (s = '') => toText(s).toLowerCase();
 
-const inCol = {
-  VANILLA_GOURMAND: (accords) => {
-    const a = norm(accords);
-    return (
-      a.includes('vanilla') ||
-      a.includes('gourmand') ||
-      a.includes('tonka') ||
-      a.includes('praline') ||
-      a.includes('caramel') ||
-      a.includes('chocolate') ||
-      a.includes('sweet')
-    );
-  },
-  FLORALS: (accords) => {
-    const a = norm(accords);
-    return (
-      (a.includes('floral') && !a.includes('white')) ||
-      a.includes('rose') || a.includes('violet') ||
-      a.includes('lily') || a.includes('peony') || a.includes('iris')
-    );
-  },
-  WHITE_FLORALS: (accords) => {
-    const a = norm(accords);
-    return (
-      a.includes('white floral') ||
-      a.includes('jasmine') || a.includes('tuberose') ||
-      a.includes('gardenia') || a.includes('orange blossom') || a.includes('neroli')
-    );
-  },
-  FRUITY: (accords) => {
-    const a = norm(accords);
-    return (
-      a.includes('fruity') || a.includes('citrus') ||
-      a.includes('apple') || a.includes('berry') ||
-      a.includes('peach') || a.includes('pear') || a.includes('pineapple')
-    );
-  },
-};
+// Case-insensitive substring check
+const has = (val, sub) => norm(val).includes(sub.toLowerCase());
 
 // ---------- UI ----------
 function HeaderNav() {
@@ -100,7 +64,7 @@ function SearchBar({ value, onChange, onReload }) {
 }
 
 function Card({ f, decants, onAdd, isAdmin, onToggle }) {
-  const accordsDisplay = toText(f.accords);
+  const accordsDisplay = toText(f.accord);
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -143,7 +107,7 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
               >
                 {f.show_on_notes ? 'Hide from Notes' : 'Show on Notes'}
               </button>
-              <div className="mt-1 text-[11px] text-gray-500">Accords: {accordsDisplay || '—'}</div>
+              <div className="mt-1 text-[11px] text-gray-500">Accord: {accordsDisplay || '—'}</div>
             </div>
           )}
         </div>
@@ -181,11 +145,10 @@ export default function NotesPage() {
   const load = async () => {
     setLoadError(null);
 
-    // ✅ Select the real lowercase column: `accords`
-    // Also select show_on_notes if it exists; if not, it's null and we'll treat as visible.
+    // ✅ Select the real lowercase column: `accord`
     const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, accords, show_on_notes')
+      .select('id, brand, name, accord, show_on_notes')
       .order('brand', { ascending: true });
 
     if (error) {
@@ -239,29 +202,45 @@ export default function NotesPage() {
     );
     if (!q) return base;
     return base.filter((f) => {
-      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`;
+      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accord)}`;
       return hay.includes(q);
     });
   }, [query, fragrances, isAdmin]);
 
-  // Buckets (+ admin uncategorized)
+  // Buckets (duplicate into all matching columns)
   const grouped = useMemo(() => {
-    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [], uncategorized: [] };
+    const buckets = {
+      vanilla: [],
+      florals: [],
+      whiteFlorals: [],
+      fruity: [],
+      uncategorized: [],
+    };
 
     filtered.forEach((f) => {
-      const a = f.accords;
-      if (inCol.WHITE_FLORALS(a)) buckets.whiteFlorals.push(f);
-      else if (inCol.VANILLA_GOURMAND(a)) buckets.vanilla.push(f);
-      else if (inCol.FRUITY(a)) buckets.fruity.push(f);
-      else if (inCol.FLORALS(a)) buckets.florals.push(f);
-      else buckets.uncategorized.push(f);
+      const a = f.accord;
+
+      // Evaluate each column independently (fragrance can appear in multiple columns)
+      const isWhiteFloral = has(a, 'White Floral');
+      const isFloral = has(a, 'Floral') && !isWhiteFloral; // don't double-place if "White Floral"
+      const isVanilla = has(a, 'Vanilla');
+      const isFruity = has(a, 'Fruity');
+
+      if (isVanilla) buckets.vanilla.push(f);
+      if (isFloral) buckets.florals.push(f);
+      if (isWhiteFloral) buckets.whiteFlorals.push(f);
+      if (isFruity) buckets.fruity.push(f);
+
+      if (!isVanilla && !isFloral && !isWhiteFloral && !isFruity) {
+        buckets.uncategorized.push(f);
+      }
     });
 
     const sorter = (x, y) =>
       (x.brand || '').localeCompare(y.brand || '') ||
       (x.name || '').localeCompare(y.name || '');
-
     Object.values(buckets).forEach((arr) => arr.sort(sorter));
+
     return buckets;
   }, [filtered]);
 
@@ -331,7 +310,7 @@ export default function NotesPage() {
       f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes
     ).length;
     const filteredCount = filtered.length;
-    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(f.accords)).join(' | ') || '—';
+    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(f.accord)).join(' | ') || '—';
 
     return (
       <div className="mx-auto max-w-7xl px-4 mt-2 mb-2 space-y-2">
@@ -345,7 +324,7 @@ export default function NotesPage() {
           <div>
             Bucket sizes — Vanilla/Gourmand: {grouped.vanilla.length}, Florals: {grouped.florals.length}, White Florals: {grouped.whiteFlorals.length}, Fruity: {grouped.fruity.length}, Uncategorized: {grouped.uncategorized.length}
           </div>
-          <div className="mt-1">Accords sample: <code>{sampleAccords}</code></div>
+          <div className="mt-1">Accord sample: <code>{sampleAccords}</code></div>
         </div>
       </div>
     );
@@ -365,6 +344,7 @@ export default function NotesPage() {
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
 
+        {/* Admin-only: see uncategorized */}
         {isAdmin && grouped.uncategorized.length > 0 && (
           <div className="mt-10 space-y-4">
             <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
