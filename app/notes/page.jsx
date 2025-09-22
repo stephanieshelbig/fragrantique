@@ -1,11 +1,7 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
 
 // ---------- Helpers ----------
 const toText = (v) => {
@@ -21,19 +17,7 @@ const norm = (s = '') => toText(s).toLowerCase();
 const has = (val, sub) => norm(val).includes(sub.toLowerCase());
 const bottleUrl = (f) => f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
 
-// Create Supabase client **lazily** to avoid server crash when env vars are missing.
-function getSupabaseClient() {
-  try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anon) return null;
-    return createClient(url, anon);
-  } catch {
-    return null;
-  }
-}
-
-// ---------- UI ----------
+// ---------- UI bits ----------
 function HeaderNav() {
   return (
     <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
@@ -58,7 +42,7 @@ function SearchBar({ value, onChange, onReload }) {
         placeholder="Search by brand, fragrance, or accords…"
         className="w-full rounded-xl border px-4 py-2"
       />
-      <button onClick={onReload} className="rounded-xl border px-4 py-2 hover:bg-gray-50">
+      <button onClick={onReload} className="rounded-xl border px-3 py-2 hover:bg-gray-50">
         Reload
       </button>
     </div>
@@ -109,7 +93,7 @@ function Card({ f }) {
 export default function NotesPage() {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
-  const [hint, setHint] = useState(null); // shows env/RLS hints
+  const [hint, setHint] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
@@ -117,30 +101,42 @@ export default function NotesPage() {
       setLoadError(null);
       setHint(null);
 
-      const sb = getSupabaseClient();
-      if (!sb) {
-        setHint(
-          'Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in this environment. ' +
-          'Set them in Vercel → Project → Settings → Environment Variables (Preview/Production).'
-        );
+      const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+      if (!base || !anon) {
+        setHint('Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in this deployment environment.');
         setRows([]);
         return;
       }
 
-      try {
-        const { data, error } = await sb
-          .from('fragrances')
-          .select('id, brand, name, accords, image_url, image_url_transparent')
-          .order('brand', { ascending: true })
-          .order('name', { ascending: true });
+      const url =
+        `${base}/rest/v1/fragrances` +
+        `?select=id,brand,name,accords,image_url,image_url_transparent` +
+        `&order=brand.asc&order=name.asc`;
 
-        if (error) throw error;
-        setRows(data || []);
-        if (!data || data.length === 0) {
-          setHint('Query returned 0 rows. If this is unexpected, confirm RLS SELECT policy on public.fragrances allows anon read.');
+      try {
+        const res = await fetch(url, {
+          headers: {
+            apikey: anon,
+            Authorization: `Bearer ${anon}`,
+          },
+          // Force a fresh client-side request
+          cache: 'no-store',
+        });
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`);
+        }
+
+        const data = await res.json();
+        setRows(Array.isArray(data) ? data : []);
+        if (!data?.length) {
+          setHint('Query returned 0 rows. If unexpected, verify RLS SELECT policy on public.fragrances allows anon.');
         }
       } catch (err) {
-        console.error('fragrances query error', err);
+        console.error('REST fetch error:', err);
         setLoadError(`Fragrances query failed: ${err?.message || 'unknown error'}`);
         setRows([]);
       }
