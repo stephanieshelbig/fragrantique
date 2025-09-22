@@ -7,12 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
-// ---- Supabase (local, browser-friendly) ----
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
-
-// ---- Helpers ----
+// ---------- Helpers ----------
 const toText = (v) => {
   if (v == null) return '';
   if (Array.isArray(v)) return v.filter(Boolean).join(', ');
@@ -24,10 +19,21 @@ const toText = (v) => {
 };
 const norm = (s = '') => toText(s).toLowerCase();
 const has = (val, sub) => norm(val).includes(sub.toLowerCase());
-
 const bottleUrl = (f) => f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
 
-// ---- UI bits ----
+// Create Supabase client **lazily** to avoid server crash when env vars are missing.
+function getSupabaseClient() {
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) return null;
+    return createClient(url, anon);
+  } catch {
+    return null;
+  }
+}
+
+// ---------- UI ----------
 function HeaderNav() {
   return (
     <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
@@ -99,23 +105,40 @@ function Card({ f }) {
   );
 }
 
-// ---- Page ----
+// ---------- Page ----------
 export default function NotesPage() {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
+  const [hint, setHint] = useState(null); // shows env/RLS hints
   const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     (async () => {
+      setLoadError(null);
+      setHint(null);
+
+      const sb = getSupabaseClient();
+      if (!sb) {
+        setHint(
+          'Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in this environment. ' +
+          'Set them in Vercel → Project → Settings → Environment Variables (Preview/Production).'
+        );
+        setRows([]);
+        return;
+      }
+
       try {
-        setLoadError(null);
-        const { data, error } = await supabase
+        const { data, error } = await sb
           .from('fragrances')
           .select('id, brand, name, accords, image_url, image_url_transparent')
           .order('brand', { ascending: true })
           .order('name', { ascending: true });
+
         if (error) throw error;
         setRows(data || []);
+        if (!data || data.length === 0) {
+          setHint('Query returned 0 rows. If this is unexpected, confirm RLS SELECT policy on public.fragrances allows anon read.');
+        }
       } catch (err) {
         console.error('fragrances query error', err);
         setLoadError(`Fragrances query failed: ${err?.message || 'unknown error'}`);
@@ -142,7 +165,7 @@ export default function NotesPage() {
     filtered.forEach((f) => {
       const a = f.accords;
       const isWhite = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhite; // Florals but not White Floral
+      const isFloral = has(a, 'Floral') && !isWhite; // "Floral" but not "White Floral"
       const isVanilla = has(a, 'Vanilla');
       const isFruity = has(a, 'Fruity');
 
@@ -178,16 +201,11 @@ export default function NotesPage() {
       <main className="mx-auto max-w-7xl px-4 pb-20">
         <SearchBar value={q} onChange={setQ} onReload={() => location.reload()} />
 
-        {/* Tiny debug strip so you know if DB returned rows */}
+        {/* Debug strip */}
         <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-white px-3 py-2 text-xs text-gray-700">
           Loaded <b>{rows.length}</b> fragrances{q ? <> · after search: <b>{filtered.length}</b></> : null}.
-          {rows.length === 0 && !loadError && (
-            <> If this seems wrong, confirm your Vercel env vars
-              (<code>NEXT_PUBLIC_SUPABASE_URL</code>, <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>)
-              and RLS SELECT policy on <code>public.fragrances</code>.
-            </>
-          )}
-          {loadError && <div className="text-red-700 mt-1">{loadError}</div>}
+          {hint && <div className="mt-1 text-amber-800 bg-amber-50 border rounded px-2 py-1">{hint}</div>}
+          {loadError && <div className="mt-1 text-red-700">{loadError}</div>}
         </div>
 
         {/* 4 columns */}
