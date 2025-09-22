@@ -3,15 +3,9 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-
-const ADMIN_EMAIL = 'stephanieshelbig@gmail.com';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+import { supabase } from '@/lib/supabase'; // same import style as your admin page
 
 // ---------- Helpers ----------
 const toText = (val) => {
@@ -63,27 +57,31 @@ function SearchBar({ value, onChange, onReload }) {
 
 function Card({ f }) {
   const accordsDisplay = toText(f.accords);
-  const imageUrl = f.image_url || f.image || f.photo_url || f.thumbnail || null;
+  const img = f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
 
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
-        {/* Image */}
+        {/* Bottle image */}
         <div className="w-16 h-20 rounded overflow-hidden border bg-gray-100 shrink-0">
-          {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={`${f.brand || ''} ${f.name || ''}`}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full" />
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={img}
+            alt={`${f.brand || ''} ${f.name || ''}`}
+            className="w-full h-full object-contain"
+            style={{ mixBlendMode: 'multiply' }}
+            loading="lazy"
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (!el.dataset.fallback) {
+                el.dataset.fallback = '1';
+                el.src = '/bottle-placeholder.png';
+              }
+            }}
+          />
         </div>
 
-        {/* Text */}
+        {/* Details */}
         <div className="flex-1">
           <div className="text-xs text-gray-500">Brand</div>
           <div className="font-medium">{f.brand || '—'}</div>
@@ -91,7 +89,7 @@ function Card({ f }) {
           <div className="mt-1 text-xs text-gray-500">Fragrance Name</div>
           <div className="font-medium">{f.name || '—'}</div>
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3">
             <Link
               href={`/fragrance/${f.id}`}
               className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50"
@@ -100,10 +98,8 @@ function Card({ f }) {
             </Link>
           </div>
 
-          {/* Admin-only tiny accords peek */}
-          <div className="mt-2 text-[11px] text-gray-500 hidden">
-            Accords: {accordsDisplay || '—'}
-          </div>
+          {/* (Optional) tiny peek for debugging:
+          <div className="mt-2 text-[11px] text-gray-500">Accords: {accordsDisplay || '—'}</div> */}
         </div>
       </div>
     </div>
@@ -114,50 +110,19 @@ function Card({ f }) {
 export default function NotesPage() {
   const [query, setQuery] = useState('');
   const [fragrances, setFragrances] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [loadError, setLoadError] = useState(null);
   const searchParams = useSearchParams();
 
-  // Determine admin
-  useEffect(() => {
-    (async () => {
-      try {
-        const qEmail = searchParams?.get('me');
-        const { data } = await supabase.auth.getUser();
-        const email = (data?.user?.email || qEmail || '').toLowerCase();
-        setIsAdmin(email === ADMIN_EMAIL.toLowerCase());
-      } catch {
-        const qEmail = (searchParams?.get('me') || '').toLowerCase();
-        setIsAdmin(qEmail === ADMIN_EMAIL.toLowerCase());
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const load = async () => {
     setLoadError(null);
 
-    // Try selecting with a common image column; if it errors (column doesn't exist), retry without it.
-    let frags = null;
-    let error = null;
-
-    // Attempt 1: with image_url
-    let res = await supabase
+    // Pull exactly what your Admin page uses (plus accords)
+    const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, accords, show_on_notes, image_url')
-      .order('brand', { ascending: true });
-
-    if (res.error) {
-      // Attempt 2: without image_url (fallback if column doesn't exist)
-      res = await supabase
-        .from('fragrances')
-        .select('id, brand, name, accords, show_on_notes')
-        .order('brand', { ascending: true });
-    }
-
-    frags = res.data;
-    error = res.error;
+      .select('id, brand, name, accords, image_url, image_url_transparent')
+      .order('brand', { ascending: true })
+      .order('name', { ascending: true });
 
     if (error) {
       console.error('fragrances query error', error);
@@ -172,22 +137,19 @@ export default function NotesPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, []);
 
-  // Search
+  // Search (brand/name/accords)
   const filtered = useMemo(() => {
     const q = norm(query);
-    const base = fragrances.filter((f) =>
-      isAdmin ? true : (f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes)
-    );
-    if (!q) return base;
-    return base.filter((f) => {
+    if (!q) return fragrances;
+    return fragrances.filter((f) => {
       const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`;
       return hay.includes(q);
     });
-  }, [query, fragrances, isAdmin]);
+  }, [query, fragrances]);
 
-  // Buckets (duplicate into all matching columns; strict substring rules)
+  // Buckets — a fragrance can appear in multiple columns if accords contain multiple targets
   const grouped = useMemo(() => {
     const buckets = {
       vanilla: [],
@@ -201,7 +163,7 @@ export default function NotesPage() {
       const a = f.accords;
 
       const isWhiteFloral = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhiteFloral; // Florals but not White Floral
+      const isFloral = has(a, 'Floral') && !isWhiteFloral; // "Floral" but not "White Floral"
       const isVanilla = has(a, 'Vanilla');
       const isFruity = has(a, 'Fruity');
 
@@ -239,7 +201,6 @@ export default function NotesPage() {
       <main className="mx-auto max-w-7xl px-4 pb-20">
         <SearchBar value={query} onChange={setQuery} onReload={() => startTransition(load)} />
 
-        {/* Optional tiny error surface for you */}
         {loadError && (
           <div className="mx-auto max-w-7xl mt-2 mb-2 rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-800">
             {loadError}
@@ -252,9 +213,6 @@ export default function NotesPage() {
           <Column title="WHITE FLORALS" list={grouped.whiteFlorals} />
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
-
-        {/* (Optional) If you want to see what didn't match, add an admin uncategorized section here */}
-        {/* {isAdmin && grouped.uncategorized.length > 0 && (...)} */}
 
         {isPending && <div className="text-sm text-gray-500 mt-6">Refreshing…</div>}
       </main>
