@@ -64,7 +64,7 @@ function SearchBar({ value, onChange, onReload }) {
 }
 
 function Card({ f, decants, onAdd, isAdmin, onToggle }) {
-  const accordsDisplay = toText(f.accord);
+  const accordsDisplay = toText(f.accords);
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -107,7 +107,7 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
               >
                 {f.show_on_notes ? 'Hide from Notes' : 'Show on Notes'}
               </button>
-              <div className="mt-1 text-[11px] text-gray-500">Accord: {accordsDisplay || '—'}</div>
+              <div className="mt-1 text-[11px] text-gray-500">Accords: {accordsDisplay || '—'}</div>
             </div>
           )}
         </div>
@@ -145,10 +145,10 @@ export default function NotesPage() {
   const load = async () => {
     setLoadError(null);
 
-    // ✅ Select the real lowercase column: `accord`
+    // ✅ Use the correct lowercase column: accords
     const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, accord, show_on_notes')
+      .select('id, brand, name, accords, show_on_notes')
       .order('brand', { ascending: true });
 
     if (error) {
@@ -202,7 +202,7 @@ export default function NotesPage() {
     );
     if (!q) return base;
     return base.filter((f) => {
-      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accord)}`;
+      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`;
       return hay.includes(q);
     });
   }, [query, fragrances, isAdmin]);
@@ -218,11 +218,11 @@ export default function NotesPage() {
     };
 
     filtered.forEach((f) => {
-      const a = f.accord;
+      const a = f.accords;
 
       // Evaluate each column independently (fragrance can appear in multiple columns)
       const isWhiteFloral = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhiteFloral; // don't double-place if "White Floral"
+      const isFloral = has(a, 'Floral') && !isWhiteFloral; // Florals but not White Floral
       const isVanilla = has(a, 'Vanilla');
       const isFruity = has(a, 'Fruity');
 
@@ -310,7 +310,7 @@ export default function NotesPage() {
       f.show_on_notes === undefined || f.show_on_notes === null ? true : !!f.show_on_notes
     ).length;
     const filteredCount = filtered.length;
-    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(f.accord)).join(' | ') || '—';
+    const sampleAccords = fragrances.slice(0, 3).map((f) => toText(f.accords)).join(' | ') || '—';
 
     return (
       <div className="mx-auto max-w-7xl px-4 mt-2 mb-2 space-y-2">
@@ -324,7 +324,7 @@ export default function NotesPage() {
           <div>
             Bucket sizes — Vanilla/Gourmand: {grouped.vanilla.length}, Florals: {grouped.florals.length}, White Florals: {grouped.whiteFlorals.length}, Fruity: {grouped.fruity.length}, Uncategorized: {grouped.uncategorized.length}
           </div>
-          <div className="mt-1">Accord sample: <code>{sampleAccords}</code></div>
+          <div className="mt-1">Accords sample: <code>{sampleAccords}</code></div>
         </div>
       </div>
     );
