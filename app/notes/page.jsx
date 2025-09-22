@@ -16,11 +16,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 // --- Helpers -----------------------------------------------------------------------------
 
 const toText = (val) => {
-  // Accepts string, null/undefined, array (from JSON), or object; returns a clean string
   if (val == null) return '';
   if (Array.isArray(val)) return val.filter(Boolean).join(', ');
   if (typeof val === 'object') {
-    // Some schemas store accords as { mainAccords: [...] } or similar—flatten best effort
     try {
       const flat = JSON.stringify(val);
       return flat.replace(/[{}\[\]"]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -47,7 +45,6 @@ const inCol = {
   },
   FLORALS: (accords) => {
     const a = norm(accords);
-    // broad floral signals; exclude white floral (own column)
     return (
       (a.includes('floral') && !a.includes('white')) ||
       a.includes('rose') ||
@@ -80,6 +77,13 @@ const inCol = {
       a.includes('pineapple')
     );
   },
+};
+
+// Choose accords from possible columns (Accords vs accords)
+const getAccords = (f) => {
+  // accords_cap: "Accords" (quoted, capital A)
+  // accords_lc:  accords  (lowercase)
+  return f.accords_cap ?? f.accords_lc ?? f.accords ?? '';
 };
 
 // --- UI ----------------------------------------------------------------------------------
@@ -116,6 +120,7 @@ function SearchBar({ value, onChange, onReload }) {
 }
 
 function Card({ f, decants, onAdd, isAdmin, onToggle }) {
+  const accordsDisplay = toText(getAccords(f));
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -158,7 +163,7 @@ function Card({ f, decants, onAdd, isAdmin, onToggle }) {
               >
                 {f.show_on_notes ? 'Hide from Notes' : 'Show on Notes'}
               </button>
-              <div className="mt-1 text-[11px] text-gray-500">Accords: {toText(f.accords) || '—'}</div>
+              <div className="mt-1 text-[11px] text-gray-500">Accords: {accordsDisplay || '—'}</div>
             </div>
           )}
         </div>
@@ -194,9 +199,10 @@ export default function NotesPage() {
   }, []);
 
   const load = async () => {
+    // NOTE: fetch both "Accords" (quoted, capital A) and accords (lowercase)
     const { data: frags, error } = await supabase
       .from('fragrances')
-      .select('id, brand, name, accords, show_on_notes')
+      .select('id, brand, name, accords_lc:accords, accords_cap:Accords, show_on_notes')
       .order('brand', { ascending: true });
 
     if (error) {
@@ -233,29 +239,30 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  // Search
+  // Search against brand + name + accords (whichever column exists)
   const filtered = useMemo(() => {
     const q = norm(query);
     const base = fragrances.filter((f) => (isAdmin ? true : !!f.show_on_notes));
     if (!q) return base;
     return base.filter((f) => {
-      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`;
+      const accords = getAccords(f);
+      const hay = `${norm(f.brand)} ${norm(f.name)} ${norm(accords)}`;
       return hay.includes(q);
     });
   }, [query, fragrances, isAdmin]);
 
-  // Buckets (+ admin-only uncategorized to help you tune accords)
+  // Buckets (+ admin uncategorized)
   const grouped = useMemo(() => {
     const buckets = {
       vanilla: [],
       florals: [],
       whiteFlorals: [],
       fruity: [],
-      uncategorized: [], // admin only view
+      uncategorized: [],
     };
 
     filtered.forEach((f) => {
-      const a = f.accords;
+      const a = getAccords(f);
       if (inCol.WHITE_FLORALS(a)) buckets.whiteFlorals.push(f);
       else if (inCol.VANILLA_GOURMAND(a)) buckets.vanilla.push(f);
       else if (inCol.FRUITY(a)) buckets.fruity.push(f);
@@ -343,7 +350,10 @@ export default function NotesPage() {
             Bucket sizes — Vanilla/Gourmand: {grouped.vanilla.length}, Florals: {grouped.florals.length}, White Florals: {grouped.whiteFlorals.length}, Fruity: {grouped.fruity.length}, Uncategorized: {grouped.uncategorized.length}
           </div>
           <div className="mt-1">
-            Tip: append <code>?me={ADMIN_EMAIL}</code> to this URL if you’re not signed in to Supabase auth.
+            Accords column detected per row (first two examples):{' '}
+            <code>
+              {fragrances.slice(0, 2).map((f) => toText(getAccords(f))).join(' | ') || '—'}
+            </code>
           </div>
         </div>
       </div>
@@ -364,7 +374,6 @@ export default function NotesPage() {
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
 
-        {/* Admin-only helper: see what didn't land in any of the 4 columns */}
         {isAdmin && grouped.uncategorized.length > 0 && (
           <div className="mt-10 space-y-4">
             <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
