@@ -1,7 +1,6 @@
 'use client';
 
-export const dynamic = 'force-dynamic'; // ✅ disable prerendering for this page
-export const revalidate = 0;
+export const dynamic = 'force-dynamic'; // don't prerender this page
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -12,7 +11,6 @@ const ADMIN_EMAIL = 'stephanieshelbig@gmail.com';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-// createClient tolerates empty strings; we also only use it in effects
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 const norm = (s = '') => (s || '').toString().toLowerCase();
@@ -164,10 +162,9 @@ export default function NotesPage() {
   }, []);
 
   const load = async () => {
-    const selectCols = 'id, brand, name, accords, show_on_notes';
     const { data: frags, error } = await supabase
       .from('fragrances')
-      .select(selectCols)
+      .select('id, brand, name, accords, show_on_notes')
       .order('brand', { ascending: true });
 
     if (error) {
@@ -178,7 +175,6 @@ export default function NotesPage() {
     const visible = (frags || []).filter((f) => (isAdmin ? true : f.show_on_notes));
     const ids = visible.map((f) => f.id);
 
-    // ✅ Avoid Supabase `.in([])` which throws
     let byFrag = {};
     if (ids.length > 0) {
       const { data: decants, error: decErr } = await supabase
@@ -244,10 +240,11 @@ export default function NotesPage() {
     };
 
     const keysToTry = ['cartItems', 'fragrantique_cart'];
-    let key = keysToTry.find((k) => {
-      try { return Array.isArray(JSON.parse(localStorage.getItem(k) || '[]')); }
-      catch { return false; }
-    }) || 'cartItems';
+    let key =
+      keysToTry.find((k) => {
+        try { return Array.isArray(JSON.parse(localStorage.getItem(k) || '[]')); }
+        catch { return false; }
+      }) || 'cartItems';
 
     const current = JSON.parse(localStorage.getItem(key) || '[]');
     const idx = current.findIndex(
