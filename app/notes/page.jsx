@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase'; // same as your admin page
+import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
 
 // ---------- Helpers ----------
@@ -23,17 +23,8 @@ const toText = (val) => {
 const norm = (s = '') => toText(s).toLowerCase();
 const has = (val, sub) => norm(val).includes(sub.toLowerCase());
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-
-const getBottleUrl = (f) => {
-  // Prefer transparent -> normal -> path in 'bottles' bucket -> placeholder
-  if (f.image_url_transparent) return f.image_url_transparent;
-  if (f.image_url) return f.image_url;
-  if (f.image_path && SUPABASE_URL) {
-    return `${SUPABASE_URL}/storage/v1/object/public/bottles/${f.image_path}`;
-  }
-  return '/bottle-placeholder.png';
-};
+const getBottleUrl = (f) =>
+  f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
 
 // ---------- UI ----------
 function HeaderNav() {
@@ -119,10 +110,9 @@ export default function NotesPage() {
   useEffect(() => {
     (async () => {
       setLoadError(null);
-      // Pull same fields your admin page uses + accords + image_path for bottles bucket
       const { data, error } = await supabase
         .from('fragrances')
-        .select('id, brand, name, accords, image_url, image_url_transparent, image_path')
+        .select('id, brand, name, accords, image_url, image_url_transparent')
         .order('brand', { ascending: true })
         .order('name', { ascending: true });
 
@@ -142,14 +132,14 @@ export default function NotesPage() {
     return rows.filter((f) => `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`.includes(q));
   }, [rows, query]);
 
-  // Buckets — a fragrance may appear in multiple if accords contain several targets
+  // Buckets — can appear in multiple columns
   const grouped = useMemo(() => {
     const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
 
     filtered.forEach((f) => {
       const a = f.accords;
       const isWhiteFloral = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhiteFloral; // don't double-count white floral here
+      const isFloral = has(a, 'Floral') && !isWhiteFloral; // Floral but not White Floral
       const isVanilla = has(a, 'Vanilla');
       const isFruity = has(a, 'Fruity');
 
@@ -162,17 +152,10 @@ export default function NotesPage() {
     const sorter = (x, y) =>
       (x.brand || '').localeCompare(y.brand || '') ||
       (x.name || '').localeCompare(y.name || '');
-
     Object.values(buckets).forEach((arr) => arr.sort(sorter));
+
     return buckets;
   }, [filtered]);
-
-  const allFourEmpty =
-    filtered.length > 0 &&
-    grouped.vanilla.length === 0 &&
-    grouped.florals.length === 0 &&
-    grouped.whiteFlorals.length === 0 &&
-    grouped.fruity.length === 0;
 
   const Column = ({ title, list }) => (
     <div className="space-y-4">
@@ -195,35 +178,12 @@ export default function NotesPage() {
           </div>
         )}
 
-        {!loadError && rows.length === 0 && (
-          <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            No fragrances returned from the database. If this is production, double-check:
-            <ul className="list-disc ml-5">
-              <li><code>public.fragrances</code> has a SELECT policy (RLS) allowing anon read.</li>
-              <li><code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are set in Vercel for this environment.</li>
-            </ul>
-          </div>
-        )}
-
-        {/* 4 columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
           <Column title="VANILLA / GOURMAND" list={grouped.vanilla} />
           <Column title="FLORALS" list={grouped.florals} />
           <Column title="WHITE FLORALS" list={grouped.whiteFlorals} />
           <Column title="FRUITY" list={grouped.fruity} />
         </div>
-
-        {/* Fallback: show everything if none matched any column */}
-        {allFourEmpty && (
-          <div className="mt-10 space-y-4">
-            <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
-              All fragrances (no column matches)
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filtered.map((f) => <Card key={f.id} f={f} />)}
-            </div>
-          </div>
-        )}
 
         {isPending && <div className="text-sm text-gray-500 mt-6">Refreshing…</div>}
       </main>
