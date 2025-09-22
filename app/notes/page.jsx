@@ -4,20 +4,59 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 // ---------- Helpers ----------
-const toText = (v) => {
+const bottleUrl = (f) => f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+
+function toText(v) {
   if (v == null) return '';
   if (Array.isArray(v)) return v.filter(Boolean).join(', ');
   if (typeof v === 'object') {
-    try { return JSON.stringify(v).replace(/[{}\[\]"]/g, ' ').replace(/\s+/g, ' ').trim(); }
-    catch { return String(v); }
+    try { return JSON.stringify(v); } catch { return String(v); }
   }
   return String(v);
-};
-const norm = (s = '') => toText(s).toLowerCase();
-const has = (val, sub) => norm(val).includes(sub.toLowerCase());
-const bottleUrl = (f) => f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+}
 
-// ---------- UI bits ----------
+// Parse accords into an array of lowercased names: ["fruity","floral", ...]
+function parseAccordNames(accords) {
+  try {
+    // If it's a string that looks like JSON, parse it.
+    if (typeof accords === 'string') {
+      const trimmed = accords.trim();
+      if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+        const j = JSON.parse(trimmed);
+        return parseAccordNames(j);
+      }
+      // Otherwise treat as plain text; split on commas.
+      return trimmed
+        .split(/[,\|]/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+    }
+
+    // If it's an array: elements can be strings or objects with .name
+    if (Array.isArray(accords)) {
+      return accords
+        .map((x) => {
+          if (typeof x === 'string') return x.toLowerCase().trim();
+          if (x && typeof x === 'object' && x.name) return String(x.name).toLowerCase().trim();
+          return null;
+        })
+        .filter(Boolean);
+    }
+
+    // If it's a single object with .name
+    if (accords && typeof accords === 'object' && 'name' in accords) {
+      return [String(accords.name).toLowerCase().trim()];
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+const contains = (names, target) => names.includes(target.toLowerCase());
+
+// ---------- UI ----------
 function HeaderNav() {
   return (
     <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
@@ -51,6 +90,7 @@ function SearchBar({ value, onChange, onReload }) {
 
 function Card({ f, showAccords = true }) {
   const img = bottleUrl(f);
+  const accordNames = parseAccordNames(f.accords);
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -80,7 +120,7 @@ function Card({ f, showAccords = true }) {
 
           {showAccords && (
             <div className="mt-2 text-xs text-gray-500">
-              Accords: <span className="font-mono">{toText(f.accords) || '—'}</span>
+              Accords: <span className="font-mono">{accordNames.join(', ') || '—'}</span>
             </div>
           )}
 
@@ -111,7 +151,7 @@ export default function NotesPage() {
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
       if (!base || !anon) {
-        setHint('Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in this deployment environment.');
+        setHint('Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in this environment.');
         setRows([]);
         return;
       }
@@ -135,7 +175,7 @@ export default function NotesPage() {
         const data = await res.json();
         setRows(Array.isArray(data) ? data : []);
         if (!data?.length) {
-          setHint('Query returned 0 rows. If unexpected, verify RLS SELECT policy on public.fragrances allows anon.');
+          setHint('Query returned 0 rows. Verify the RLS SELECT policy on public.fragrances allows anon.');
         }
       } catch (err) {
         console.error('REST fetch error:', err);
@@ -145,15 +185,21 @@ export default function NotesPage() {
     })();
   }, []);
 
+  // Search (brand/name/accords text)
   const filtered = useMemo(() => {
-    const s = norm(q);
+    const s = (q || '').toLowerCase();
     if (!s) return rows;
-    return rows.filter((f) =>
-      `${norm(f.brand)} ${norm(f.name)} ${norm(f.accords)}`.includes(s)
-    );
+    return rows.filter((f) => {
+      const accordsNames = parseAccordNames(f.accords).join(' ');
+      return (
+        (f.brand || '').toLowerCase().includes(s) ||
+        (f.name || '').toLowerCase().includes(s) ||
+        accordsNames.includes(s)
+      );
+    });
   }, [rows, q]);
 
-  // Strict bucketing by substrings on `fragrances.accords`
+  // Bucketing using parsed accord names
   const { vanilla, florals, whiteFlorals, fruity, uncategorized } = useMemo(() => {
     const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [], uncategorized: [] };
     const sort = (a, b) =>
@@ -161,11 +207,11 @@ export default function NotesPage() {
       (a.name || '').localeCompare(b.name || '');
 
     filtered.forEach((f) => {
-      const a = f.accords; // can be string/array/json → our helpers normalize
-      const isWhite = has(a, 'White Floral');
-      const isFloral = has(a, 'Floral') && !isWhite; // "Floral" but not "White Floral"
-      const isVanilla = has(a, 'Vanilla');
-      const isFruity = has(a, 'Fruity');
+      const names = parseAccordNames(f.accords);
+      const isWhite = contains(names, 'white floral');
+      const isFloral = contains(names, 'floral') && !isWhite; // Floral but not White Floral
+      const isVanilla = contains(names, 'vanilla');
+      const isFruity = contains(names, 'fruity');
 
       if (isVanilla) buckets.vanilla.push(f);
       if (isFloral) buckets.florals.push(f);
@@ -186,7 +232,7 @@ export default function NotesPage() {
     </div>
   );
 
-  const sampleAccords = rows.slice(0, 5).map((r) => toText(r.accords) || '—');
+  const sampleAccords = rows.slice(0, 5).map((r) => parseAccordNames(r.accords).join(', ') || '—');
 
   return (
     <div className="min-h-screen bg-white">
@@ -199,7 +245,7 @@ export default function NotesPage() {
         <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-white px-3 py-2 text-xs text-gray-700">
           Loaded <b>{rows.length}</b> fragrances{q ? <> · after search: <b>{filtered.length}</b></> : null}.
           {!!sampleAccords.length && (
-            <div className="mt-1">Sample accords: <code>{sampleAccords.join('  |  ')}</code></div>
+            <div className="mt-1">Sample parsed accords: <code>{sampleAccords.join('  |  ')}</code></div>
           )}
           {hint && <div className="mt-1 text-amber-800 bg-amber-50 border rounded px-2 py-1">{hint}</div>}
           {loadError && <div className="mt-1 text-red-700">{loadError}</div>}
@@ -213,16 +259,14 @@ export default function NotesPage() {
           <Column title="FRUITY" list={fruity} />
         </div>
 
-        {/* Always show Uncategorized so we can see what didn't match */}
+        {/* Uncategorized for anything that didn't match */}
         <div className="mt-10 space-y-4">
           <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
             Uncategorized
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {uncategorized.map((f) => <Card key={f.id} f={f} />)}
-            {uncategorized.length === 0 && (
-              <div className="text-xs text-gray-400 px-1">Nothing uncategorized 🎉</div>
-            )}
+            {uncategorized.length === 0 && <div className="text-xs text-gray-400 px-1">Nothing uncategorized 🎉</div>}
           </div>
         </div>
       </main>
