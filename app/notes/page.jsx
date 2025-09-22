@@ -49,7 +49,7 @@ function SearchBar({ value, onChange, onReload }) {
   );
 }
 
-function Card({ f }) {
+function Card({ f, showAccords = true }) {
   const img = bottleUrl(f);
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
@@ -77,6 +77,12 @@ function Card({ f }) {
 
           <div className="mt-1 text-xs text-gray-500">Fragrance Name</div>
           <div className="font-medium">{f.name || '—'}</div>
+
+          {showAccords && (
+            <div className="mt-2 text-xs text-gray-500">
+              Accords: <span className="font-mono">{toText(f.accords) || '—'}</span>
+            </div>
+          )}
 
           <div className="mt-3">
             <Link href={`/fragrance/${f.id}`} className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50">
@@ -117,11 +123,7 @@ export default function NotesPage() {
 
       try {
         const res = await fetch(url, {
-          headers: {
-            apikey: anon,
-            Authorization: `Bearer ${anon}`,
-          },
-          // Force a fresh client-side request
+          headers: { apikey: anon, Authorization: `Bearer ${anon}` },
           cache: 'no-store',
         });
 
@@ -152,14 +154,14 @@ export default function NotesPage() {
   }, [rows, q]);
 
   // Strict bucketing by substrings on `fragrances.accords`
-  const grouped = useMemo(() => {
-    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
+  const { vanilla, florals, whiteFlorals, fruity, uncategorized } = useMemo(() => {
+    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [], uncategorized: [] };
     const sort = (a, b) =>
       (a.brand || '').localeCompare(b.brand || '') ||
       (a.name || '').localeCompare(b.name || '');
 
     filtered.forEach((f) => {
-      const a = f.accords;
+      const a = f.accords; // can be string/array/json → our helpers normalize
       const isWhite = has(a, 'White Floral');
       const isFloral = has(a, 'Floral') && !isWhite; // "Floral" but not "White Floral"
       const isVanilla = has(a, 'Vanilla');
@@ -169,18 +171,12 @@ export default function NotesPage() {
       if (isFloral) buckets.florals.push(f);
       if (isWhite) buckets.whiteFlorals.push(f);
       if (isFruity) buckets.fruity.push(f);
+      if (!isVanilla && !isFloral && !isWhite && !isFruity) buckets.uncategorized.push(f);
     });
 
     Object.values(buckets).forEach((arr) => arr.sort(sort));
     return buckets;
   }, [filtered]);
-
-  const allFourEmpty =
-    filtered.length > 0 &&
-    !grouped.vanilla.length &&
-    !grouped.florals.length &&
-    !grouped.whiteFlorals.length &&
-    !grouped.fruity.length;
 
   const Column = ({ title, list }) => (
     <div className="space-y-4">
@@ -189,6 +185,8 @@ export default function NotesPage() {
       {list.map((f) => <Card key={f.id} f={f} />)}
     </div>
   );
+
+  const sampleAccords = rows.slice(0, 5).map((r) => toText(r.accords) || '—');
 
   return (
     <div className="min-h-screen bg-white">
@@ -200,29 +198,33 @@ export default function NotesPage() {
         {/* Debug strip */}
         <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-white px-3 py-2 text-xs text-gray-700">
           Loaded <b>{rows.length}</b> fragrances{q ? <> · after search: <b>{filtered.length}</b></> : null}.
+          {!!sampleAccords.length && (
+            <div className="mt-1">Sample accords: <code>{sampleAccords.join('  |  ')}</code></div>
+          )}
           {hint && <div className="mt-1 text-amber-800 bg-amber-50 border rounded px-2 py-1">{hint}</div>}
           {loadError && <div className="mt-1 text-red-700">{loadError}</div>}
         </div>
 
         {/* 4 columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
-          <Column title="VANILLA / GOURMAND" list={grouped.vanilla} />
-          <Column title="FLORALS" list={grouped.florals} />
-          <Column title="WHITE FLORALS" list={grouped.whiteFlorals} />
-          <Column title="FRUITY" list={grouped.fruity} />
+          <Column title="VANILLA / GOURMAND" list={vanilla} />
+          <Column title="FLORALS" list={florals} />
+          <Column title="WHITE FLORALS" list={whiteFlorals} />
+          <Column title="FRUITY" list={fruity} />
         </div>
 
-        {/* Fallback: show all if none matched any bucket */}
-        {allFourEmpty && (
-          <div className="mt-10 space-y-4">
-            <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
-              All fragrances (no column matches)
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filtered.map((f) => <Card key={f.id} f={f} />)}
-            </div>
+        {/* Always show Uncategorized so we can see what didn't match */}
+        <div className="mt-10 space-y-4">
+          <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
+            Uncategorized
           </div>
-        )}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {uncategorized.map((f) => <Card key={f.id} f={f} />)}
+            {uncategorized.length === 0 && (
+              <div className="text-xs text-gray-400 px-1">Nothing uncategorized 🎉</div>
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );
