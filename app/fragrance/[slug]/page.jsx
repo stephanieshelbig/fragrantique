@@ -1,29 +1,23 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
-// ---------- utils ----------
+/* ------------ utils ------------ */
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function makeSlug(brand = '', name = '') {
   const joined = `${brand || ''}-${name || ''}`;
-  return joined
-    .replace(/[^0-9A-Za-z]+/g, '-') // non-alphanumerics -> hyphen
-    .replace(/^-+|-+$/g, '');       // trim hyphens
+  return joined.replace(/[^0-9A-Za-z]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 function bottleUrl(f) {
   return f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 }
 
-// Create client lazily (client-only)
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -31,17 +25,17 @@ function getSupabase() {
   return createClient(url, anon);
 }
 
-// ---------- page ----------
+/* ------------ page ------------ */
 export default function FragranceDetail({ params }) {
   const router = useRouter();
-  const slugParam = decodeURIComponent(params.slug || '');
+  // Works for either [id] or [slug] folder names:
+  const routeParam = decodeURIComponent(params?.slug ?? params?.id ?? '');
 
   const [frag, setFrag] = useState(null);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Load fragrance by slug (preferred) or by legacy UUID (then redirect)
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -50,10 +44,8 @@ export default function FragranceDetail({ params }) {
 
       const sb = getSupabase();
       if (!sb) {
-        setError('Missing Supabase env vars.');
-        setHint(
-          'Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel for this environment.'
-        );
+        setError('Missing Supabase environment variables.');
+        setHint('Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel (Preview/Production).');
         setLoading(false);
         return;
       }
@@ -61,52 +53,42 @@ export default function FragranceDetail({ params }) {
       try {
         let f = null;
 
-        if (UUID_RE.test(slugParam)) {
-          // legacy URL with id
+        if (UUID_RE.test(routeParam)) {
+          // Legacy URL with UUID id
           const { data, error } = await sb
             .from('fragrances')
-            .select(
-              'id, brand, name, slug, image_url, image_url_transparent, fragrantica_url, notes'
-            )
-            .eq('id', slugParam)
+            .select('id, brand, name, slug, image_url, image_url_transparent, fragrantica_url, notes')
+            .eq('id', routeParam)
             .maybeSingle();
           if (error) throw error;
           f = data || null;
 
           if (f) {
-            const desired = f.slug?.trim()
-              ? f.slug
-              : makeSlug(f.brand, f.name);
-
-            // redirect to pretty slug if needed
-            if (desired && desired !== slugParam) {
+            const desired = f.slug?.trim() ? f.slug : makeSlug(f.brand, f.name);
+            if (desired && desired !== routeParam) {
               router.replace(`/fragrance/${encodeURIComponent(desired)}`);
             }
           }
         } else {
-          // pretty URL with slug (case-insensitive match)
+          // Pretty URL with slug (case-insensitive)
           const { data, error } = await sb
             .from('fragrances')
-            .select(
-              'id, brand, name, slug, image_url, image_url_transparent, fragrantica_url, notes'
-            )
-            .ilike('slug', slugParam) // ILIKE without wildcards -> case-insensitive equality
+            .select('id, brand, name, slug, image_url, image_url_transparent, fragrantica_url, notes')
+            .ilike('slug', routeParam) // case-insensitive equality
             .maybeSingle();
           if (error) throw error;
 
-          // fallback to exact eq if ilike doesn’t match (rare)
-          if (!data) {
+          f = data || null;
+
+          // Fallback exact match if needed
+          if (!f) {
             const { data: eqRow, error: eqErr } = await sb
               .from('fragrances')
-              .select(
-                'id, brand, name, slug, image_url, image_url_transparent, fragrantica_url, notes'
-              )
-              .eq('slug', slugParam)
+              .select('id, brand, name, slug, image_url, image_url_transparent, fragrantica_url, notes')
+              .eq('slug', routeParam)
               .maybeSingle();
             if (eqErr) throw eqErr;
             f = eqRow || null;
-          } else {
-            f = data;
           }
         }
 
@@ -119,7 +101,7 @@ export default function FragranceDetail({ params }) {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slugParam]);
+  }, [routeParam]);
 
   if (loading) return <div className="p-6">Loading…</div>;
 
@@ -128,14 +110,8 @@ export default function FragranceDetail({ params }) {
       <div className="max-w-3xl mx-auto p-6 space-y-3">
         <div className="text-lg font-semibold">Fragrance not found</div>
         {error && <div className="text-sm text-red-700">{error}</div>}
-        {hint && (
-          <div className="text-sm text-amber-800 bg-amber-50 border rounded px-3 py-2">
-            {hint}
-          </div>
-        )}
-        <Link href="/brand" className="underline text-sm">
-          ← Back to Brand Index
-        </Link>
+        {hint && <div className="text-sm text-amber-800 bg-amber-50 border rounded px-3 py-2">{hint}</div>}
+        <Link href="/brand" className="underline text-sm">← Back to Brand Index</Link>
       </div>
     );
   }
@@ -143,16 +119,9 @@ export default function FragranceDetail({ params }) {
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <Link href="/brand" className="underline text-sm">
-          ← Back to Brand Index
-        </Link>
+        <Link href="/brand" className="underline text-sm">← Back to Brand Index</Link>
         {frag.fragrantica_url && (
-          <a
-            href={frag.fragrantica_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm underline"
-          >
+          <a href={frag.fragrantica_url} target="_blank" rel="noreferrer" className="text-sm underline">
             View on Fragrantica ↗
           </a>
         )}
@@ -165,10 +134,7 @@ export default function FragranceDetail({ params }) {
             src={bottleUrl(frag)}
             alt={frag.name}
             className="absolute inset-0 w-full h-full object-contain"
-            style={{
-              mixBlendMode: 'multiply',
-              filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.18))',
-            }}
+            style={{ mixBlendMode: 'multiply', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.18))' }}
             onError={(e) => {
               const el = e.currentTarget;
               if (!el.dataset.fallback) {
@@ -187,11 +153,7 @@ export default function FragranceDetail({ params }) {
 
           <div className="p-3 rounded border bg-white">
             <div className="font-medium">Fragrance Notes</div>
-            <div
-              className={`mt-1 text-sm whitespace-pre-wrap ${
-                frag.notes ? '' : 'opacity-60'
-              }`}
-            >
+            <div className={`mt-1 text-sm whitespace-pre-wrap ${frag.notes ? '' : 'opacity-60'}`}>
               {frag.notes || 'No notes provided.'}
             </div>
           </div>
