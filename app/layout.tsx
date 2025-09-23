@@ -1,6 +1,9 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import ShowNavbar from "@/components/ShowNavbar";
+import dynamic from "next/dynamic";
+
+// Load the navbar *only on the client* to avoid server render errors.
+const ShowNavbar = dynamic(() => import("@/components/ShowNavbar"), { ssr: false });
 
 export const metadata: Metadata = {
   title: "Fragrantique",
