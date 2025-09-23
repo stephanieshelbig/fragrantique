@@ -1,38 +1,37 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 // ---------- Helpers ----------
-const bottleUrl = (f) => f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+const bottleUrl = (f) =>
+  f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-function toText(v) {
-  if (v == null) return '';
-  if (Array.isArray(v)) return v.filter(Boolean).join(', ');
-  if (typeof v === 'object') {
-    try { return JSON.stringify(v); } catch { return String(v); }
-  }
-  return String(v);
+function makeSlug(brand = '', name = '') {
+  const joined = `${brand || ''}-${name || ''}`;
+  return joined
+    .replace(/[^0-9A-Za-z]+/g, '-') // non-alphanumerics -> hyphen
+    .replace(/^-+|-+$/g, '');       // trim hyphens
 }
 
-// Parse accords into an array of lowercased names: ["fruity","floral", ...]
+// Parse `accords` into an array of lowercased names: ["fruity","floral", ...]
 function parseAccordNames(accords) {
   try {
-    // If it's a string that looks like JSON, parse it.
     if (typeof accords === 'string') {
-      const trimmed = accords.trim();
-      if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
-        const j = JSON.parse(trimmed);
-        return parseAccordNames(j);
+      const s = accords.trim();
+      // JSON string?
+      if ((s.startsWith('[') && s.endsWith(']')) || (s.startsWith('{') && s.endsWith('}'))) {
+        return parseAccordNames(JSON.parse(s));
       }
-      // Otherwise treat as plain text; split on commas.
-      return trimmed
+      // Plain text list
+      return s
         .split(/[,\|]/)
-        .map((s) => s.trim().toLowerCase())
+        .map((x) => x.trim().toLowerCase())
         .filter(Boolean);
     }
-
-    // If it's an array: elements can be strings or objects with .name
     if (Array.isArray(accords)) {
       return accords
         .map((x) => {
@@ -42,19 +41,16 @@ function parseAccordNames(accords) {
         })
         .filter(Boolean);
     }
-
-    // If it's a single object with .name
     if (accords && typeof accords === 'object' && 'name' in accords) {
       return [String(accords.name).toLowerCase().trim()];
     }
-
     return [];
   } catch {
     return [];
   }
 }
 
-const contains = (names, target) => names.includes(target.toLowerCase());
+const hasAccord = (names, target) => names.includes(target.toLowerCase());
 
 // ---------- UI ----------
 function HeaderNav() {
@@ -88,9 +84,14 @@ function SearchBar({ value, onChange, onReload }) {
   );
 }
 
-function Card({ f, showAccords = true }) {
+function Card({ f }) {
   const img = bottleUrl(f);
-  const accordNames = parseAccordNames(f.accords);
+  // Prefer DB slug; else compute from brand+name; final fallback: id
+  const pretty = f.slug && f.slug.trim().length
+    ? f.slug
+    : (f.brand || f.name ? makeSlug(f.brand, f.name) : f.id);
+  const href = `/fragrance/${encodeURIComponent(pretty)}`;
+
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
       <div className="flex items-start gap-3">
@@ -111,6 +112,7 @@ function Card({ f, showAccords = true }) {
             }}
           />
         </div>
+
         <div className="flex-1">
           <div className="text-xs text-gray-500">Brand</div>
           <div className="font-medium">{f.brand || '—'}</div>
@@ -118,14 +120,8 @@ function Card({ f, showAccords = true }) {
           <div className="mt-1 text-xs text-gray-500">Fragrance Name</div>
           <div className="font-medium">{f.name || '—'}</div>
 
-          {showAccords && (
-            <div className="mt-2 text-xs text-gray-500">
-              Accords: <span className="font-mono">{accordNames.join(', ') || '—'}</span>
-            </div>
-          )}
-
           <div className="mt-3">
-            <Link href={`/fragrance/${f.id}`} className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50">
+            <Link href={href} className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50">
               Info
             </Link>
           </div>
@@ -139,26 +135,24 @@ function Card({ f, showAccords = true }) {
 export default function NotesPage() {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
-  const [hint, setHint] = useState(null);
-  const [loadError, setLoadError] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     (async () => {
-      setLoadError(null);
-      setHint(null);
+      setLoadError('');
 
       const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
       if (!base || !anon) {
-        setHint('Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in this environment.');
+        setLoadError('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not set.');
         setRows([]);
         return;
       }
 
       const url =
         `${base}/rest/v1/fragrances` +
-        `?select=id,brand,name,accords,image_url,image_url_transparent` +
+        `?select=id,brand,name,slug,accords,image_url,image_url_transparent` +
         `&order=brand.asc&order=name.asc`;
 
       try {
@@ -174,50 +168,46 @@ export default function NotesPage() {
 
         const data = await res.json();
         setRows(Array.isArray(data) ? data : []);
-        if (!data?.length) {
-          setHint('Query returned 0 rows. Verify the RLS SELECT policy on public.fragrances allows anon.');
-        }
       } catch (err) {
-        console.error('REST fetch error:', err);
-        setLoadError(`Fragrances query failed: ${err?.message || 'unknown error'}`);
+        console.error('Fragrances fetch error:', err);
+        setLoadError(err?.message || 'Unknown error fetching fragrances.');
         setRows([]);
       }
     })();
   }, []);
 
-  // Search (brand/name/accords text)
+  // Search (brand / name / accords)
   const filtered = useMemo(() => {
     const s = (q || '').toLowerCase();
     if (!s) return rows;
     return rows.filter((f) => {
-      const accordsNames = parseAccordNames(f.accords).join(' ');
+      const acc = parseAccordNames(f.accords).join(' ');
       return (
         (f.brand || '').toLowerCase().includes(s) ||
         (f.name || '').toLowerCase().includes(s) ||
-        accordsNames.includes(s)
+        acc.includes(s)
       );
     });
   }, [rows, q]);
 
-  // Bucketing using parsed accord names
-  const { vanilla, florals, whiteFlorals, fruity, uncategorized } = useMemo(() => {
-    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [], uncategorized: [] };
+  // Bucketing using parsed accord names (can appear in multiple)
+  const { vanilla, florals, whiteFlorals, fruity } = useMemo(() => {
+    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
     const sort = (a, b) =>
       (a.brand || '').localeCompare(b.brand || '') ||
       (a.name || '').localeCompare(b.name || '');
 
     filtered.forEach((f) => {
       const names = parseAccordNames(f.accords);
-      const isWhite = contains(names, 'white floral');
-      const isFloral = contains(names, 'floral') && !isWhite; // Floral but not White Floral
-      const isVanilla = contains(names, 'vanilla');
-      const isFruity = contains(names, 'fruity');
+      const isWhite = hasAccord(names, 'white floral');
+      const isFloral = hasAccord(names, 'floral') && !isWhite; // Floral but not White Floral
+      const isVanilla = hasAccord(names, 'vanilla');
+      const isFruity = hasAccord(names, 'fruity');
 
       if (isVanilla) buckets.vanilla.push(f);
       if (isFloral) buckets.florals.push(f);
       if (isWhite) buckets.whiteFlorals.push(f);
       if (isFruity) buckets.fruity.push(f);
-      if (!isVanilla && !isFloral && !isWhite && !isFruity) buckets.uncategorized.push(f);
     });
 
     Object.values(buckets).forEach((arr) => arr.sort(sort));
@@ -232,8 +222,6 @@ export default function NotesPage() {
     </div>
   );
 
-  const sampleAccords = rows.slice(0, 5).map((r) => parseAccordNames(r.accords).join(', ') || '—');
-
   return (
     <div className="min-h-screen bg-white">
       <HeaderNav />
@@ -241,33 +229,17 @@ export default function NotesPage() {
       <main className="mx-auto max-w-7xl px-4 pb-20">
         <SearchBar value={q} onChange={setQ} onReload={() => location.reload()} />
 
-        {/* Debug strip */}
-        <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-white px-3 py-2 text-xs text-gray-700">
-          Loaded <b>{rows.length}</b> fragrances{q ? <> · after search: <b>{filtered.length}</b></> : null}.
-          {!!sampleAccords.length && (
-            <div className="mt-1">Sample parsed accords: <code>{sampleAccords.join('  |  ')}</code></div>
-          )}
-          {hint && <div className="mt-1 text-amber-800 bg-amber-50 border rounded px-2 py-1">{hint}</div>}
-          {loadError && <div className="mt-1 text-red-700">{loadError}</div>}
-        </div>
+        {loadError && (
+          <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-700">
+            {loadError}
+          </div>
+        )}
 
-        {/* 4 columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
           <Column title="VANILLA / GOURMAND" list={vanilla} />
           <Column title="FLORALS" list={florals} />
           <Column title="WHITE FLORALS" list={whiteFlorals} />
           <Column title="FRUITY" list={fruity} />
-        </div>
-
-        {/* Uncategorized for anything that didn't match */}
-        <div className="mt-10 space-y-4">
-          <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">
-            Uncategorized
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {uncategorized.map((f) => <Card key={f.id} f={f} />)}
-            {uncategorized.length === 0 && <div className="text-xs text-gray-400 px-1">Nothing uncategorized 🎉</div>}
-          </div>
         </div>
       </main>
     </div>
