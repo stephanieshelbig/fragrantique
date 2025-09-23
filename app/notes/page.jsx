@@ -1,8 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
@@ -12,9 +9,7 @@ const bottleUrl = (f) =>
 
 function makeSlug(brand = '', name = '') {
   const joined = `${brand || ''}-${name || ''}`;
-  return joined
-    .replace(/[^0-9A-Za-z]+/g, '-') // non-alphanumerics -> hyphen
-    .replace(/^-+|-+$/g, '');       // trim hyphens
+  return joined.replace(/[^0-9A-Za-z]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 // Parse `accords` into an array of lowercased names: ["fruity","floral", ...]
@@ -22,24 +17,16 @@ function parseAccordNames(accords) {
   try {
     if (typeof accords === 'string') {
       const s = accords.trim();
-      // JSON string?
       if ((s.startsWith('[') && s.endsWith(']')) || (s.startsWith('{') && s.endsWith('}'))) {
         return parseAccordNames(JSON.parse(s));
       }
-      // Plain text list
-      return s
-        .split(/[,\|]/)
-        .map((x) => x.trim().toLowerCase())
-        .filter(Boolean);
+      return s.split(/[,\|]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
     }
     if (Array.isArray(accords)) {
       return accords
-        .map((x) => {
-          if (typeof x === 'string') return x.toLowerCase().trim();
-          if (x && typeof x === 'object' && x.name) return String(x.name).toLowerCase().trim();
-          return null;
-        })
-        .filter(Boolean);
+        .map((x) => (typeof x === 'string' ? x : x?.name))
+        .filter(Boolean)
+        .map((n) => String(n).toLowerCase().trim());
     }
     if (accords && typeof accords === 'object' && 'name' in accords) {
       return [String(accords.name).toLowerCase().trim()];
@@ -49,7 +36,6 @@ function parseAccordNames(accords) {
     return [];
   }
 }
-
 const hasAccord = (names, target) => names.includes(target.toLowerCase());
 
 // ---------- UI ----------
@@ -86,10 +72,7 @@ function SearchBar({ value, onChange, onReload }) {
 
 function Card({ f }) {
   const img = bottleUrl(f);
-  // Prefer DB slug; else compute from brand+name; final fallback: id
-  const pretty = f.slug && f.slug.trim().length
-    ? f.slug
-    : (f.brand || f.name ? makeSlug(f.brand, f.name) : f.id);
+  const pretty = f.slug?.trim() ? f.slug : (f.brand || f.name ? makeSlug(f.brand, f.name) : f.id);
   const href = `/fragrance/${encodeURIComponent(pretty)}`;
 
   return (
@@ -143,10 +126,8 @@ export default function NotesPage() {
 
       const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
       if (!base || !anon) {
         setLoadError('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not set.');
-        setRows([]);
         return;
       }
 
@@ -160,12 +141,10 @@ export default function NotesPage() {
           headers: { apikey: anon, Authorization: `Bearer ${anon}` },
           cache: 'no-store',
         });
-
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`);
         }
-
         const data = await res.json();
         setRows(Array.isArray(data) ? data : []);
       } catch (err) {
@@ -176,7 +155,6 @@ export default function NotesPage() {
     })();
   }, []);
 
-  // Search (brand / name / accords)
   const filtered = useMemo(() => {
     const s = (q || '').toLowerCase();
     if (!s) return rows;
@@ -190,7 +168,7 @@ export default function NotesPage() {
     });
   }, [rows, q]);
 
-  // Bucketing using parsed accord names (can appear in multiple)
+  // Bucketing (can appear in multiple)
   const { vanilla, florals, whiteFlorals, fruity } = useMemo(() => {
     const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
     const sort = (a, b) =>
@@ -225,7 +203,6 @@ export default function NotesPage() {
   return (
     <div className="min-h-screen bg-white">
       <HeaderNav />
-
       <main className="mx-auto max-w-7xl px-4 pb-20">
         <SearchBar value={q} onChange={setQ} onReload={() => location.reload()} />
 
