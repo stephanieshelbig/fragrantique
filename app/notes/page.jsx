@@ -63,8 +63,8 @@ function HeaderNav() {
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
         <Link href="/" className="text-2xl font-semibold">Fragrantique</Link>
         <nav className="flex items-center gap-6">
-          <Link href="/brand-index" className="hover:underline">Brand Index</Link>
-          <Link href="/contact" className="hover:underline">Contact Me</Link>
+          <Link href="/brand" className="hover:underline">Brand Index</Link>
+          <Link href="/chat" className="hover:underline">Contact Me</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
         </nav>
       </div>
