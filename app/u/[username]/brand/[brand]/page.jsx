@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 // Normalization helpers (match boutique page)
@@ -28,16 +29,42 @@ function canonicalBrandKey(b) {
 }
 
 export default function BrandPage({ params }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const username = decodeURIComponent(params.username);
   const urlStrictKey = decodeURIComponent(params.brand || ''); // <- use params.brand
 
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const [viewer, setViewer] = useState(null);
   const [owner, setOwner] = useState({ id: null, username });
+  const [isOwner, setIsOwner] = useState(false);
+
+  const [arrange, setArrange] = useState(false);
+
   const [frags, setFrags] = useState([]);
+
+  // keep ?arrange=1 in sync with local state
+  function setEditParam(on) {
+    const sp = new URLSearchParams(window.location.search);
+    if (on) sp.set('arrange', '1'); else sp.delete('arrange');
+    const qs = sp.toString();
+    router.replace(qs ? `?${qs}` : `?`, { scroll: false });
+  }
 
   useEffect(() => {
     (async () => {
+      // initialize arrange from URL
+      const initialArrange = searchParams?.get('arrange') === '1';
+      setArrange(initialArrange);
+
+      // auth + viewer
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth?.user || null;
+      setViewer(user);
+
       await supabase.auth.getSession();
       setAuthReady(true);
 
@@ -55,6 +82,7 @@ export default function BrandPage({ params }) {
         return;
       }
       setOwner(prof);
+      setIsOwner(!!(user && user.id === prof.id));
 
       // 2) Load all fragrances for that owner; filter in JS by normalized brand
       const { data: rows } = await supabase
@@ -69,6 +97,7 @@ export default function BrandPage({ params }) {
       setFrags(items);
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, urlStrictKey]);
 
   // Normalize and match both strict + canonical keys, then sort alphabetically
@@ -108,6 +137,29 @@ export default function BrandPage({ params }) {
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-4">
+
+      {/* Header Links */}
+      <div className="flex justify-end gap-4 py-3 text-sm font-medium">
+        <Link href="/brand" className="hover:underline">Sort By Brand</Link>
+        <Link href="/chat" className="hover:underline">Contact Me</Link>
+        <Link href="/cart" className="hover:underline">Cart</Link>
+        {isOwner && (
+          <button
+            onClick={() => { const next = !arrange; setArrange(next); setEditParam(next); }}
+            className="px-3 py-1 rounded text-white bg-black/70 hover:bg-black/80"
+          >
+            {arrange ? 'Arranging… (drag)' : 'Arrange'}
+          </button>
+        )}
+      </div>
+
+      {/* link to /decants */}
+      <div className="mb-3 text-center text-sm">
+        <Link href="/decants" className="font-semibold underline">
+          click here for all available decants
+        </Link>
+      </div>
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">
           {displayBrand} — <span className="font-normal opacity-70">@{owner.username}</span>
