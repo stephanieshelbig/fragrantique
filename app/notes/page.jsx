@@ -59,7 +59,7 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by brand, fragrance, or notes (e.g., white floral, vanilla, smoky)…"
+        placeholder="Search by brand, fragrance, notes, or accords (e.g., white floral, vanilla, smoky)…"
         className="w-full rounded-xl border px-4 py-2"
       />
       <button onClick={onReload} className="rounded-xl border px-3 py-2 hover:bg-gray-50">
@@ -134,7 +134,7 @@ export default function NotesPage() {
 
       const url =
         `${base}/rest/v1/fragrances` +
-        `?select=id,brand,name,slug,accords,image_url,image_url_transparent` +
+        `?select=id,brand,name,slug,accords,notes,image_url,image_url_transparent` + // include notes
         `&order=brand.asc&order=name.asc`;
 
       try {
@@ -156,16 +156,18 @@ export default function NotesPage() {
     })();
   }, []);
 
-  // Filter across brand, name, and accords text
+  // Filter across brand, name, accords text, and notes text
   const filtered = useMemo(() => {
     const s = (q || '').toLowerCase();
     if (!s) return rows;
     return rows.filter((f) => {
       const acc = parseAccordNames(f.accords).join(' ');
+      const notesText = (f.notes ?? '').toString().toLowerCase();
       return (
         (f.brand || '').toLowerCase().includes(s) ||
         (f.name || '').toLowerCase().includes(s) ||
-        acc.includes(s)
+        acc.includes(s) ||
+        notesText.includes(s)
       );
     });
   }, [rows, q]);
@@ -188,8 +190,7 @@ export default function NotesPage() {
             {filtered.length} result{filtered.length === 1 ? '' : 's'}
           </div>
           <div className="opacity-60">
-            Try notes like
-            {' '}
+            Try notes like{' '}
             <span className="font-medium">"white floral"</span>,{' '}
             <span className="font-medium">"vanilla"</span>, or{' '}
             <span className="font-medium">"smoky"</span>
@@ -199,7 +200,7 @@ export default function NotesPage() {
         {/* Results grid */}
         {filtered.length === 0 ? (
           <div className="p-4 border rounded bg-white text-sm opacity-80">
-            No matches. Try a different brand, fragrance name, or note keyword.
+            No matches. Try a different brand, fragrance name, note keyword, or accord.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
