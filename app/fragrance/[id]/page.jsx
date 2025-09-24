@@ -21,6 +21,7 @@ export default function FragranceDetail({ params }) {
   const [viewer, setViewer] = useState(null);
   const [owner, setOwner] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // NEW: detect admin
 
   const [frag, setFrag] = useState(null);
   const [options, setOptions] = useState([]);
@@ -49,6 +50,18 @@ export default function FragranceDetail({ params }) {
       const user = auth?.user || null;
       setViewer(user);
 
+      // Check if the viewer is admin
+      if (user?.id) {
+        const { data: myProf } = await supabase
+          .from('profiles')
+          .select('id, is_admin')
+          .eq('id', user.id)
+          .maybeSingle();
+        setIsAdmin(!!myProf?.is_admin);
+      } else {
+        setIsAdmin(false);
+      }
+
       // Owner = @stephanie
       const { data: ownerProf } = await supabase
         .from('profiles')
@@ -70,7 +83,7 @@ export default function FragranceDetail({ params }) {
       try {
         const { data: ds, error: de } = await supabase
           .from('decants')
-          .select('id, label, price_cents, size_ml, currency, in_stock, quantity') // quantity already supported
+          .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
           .eq('fragrance_id', id)
           .order('size_ml', { ascending: true });
         if (!de && Array.isArray(ds)) {
@@ -78,7 +91,7 @@ export default function FragranceDetail({ params }) {
             ...d,
             currency: (d.currency || 'usd').toLowerCase(),
             in_stock: d.in_stock ?? true,
-            quantity: (d.quantity ?? null) === null ? null : Number(d.quantity), // normalize
+            quantity: (d.quantity ?? null) === null ? null : Number(d.quantity),
           }));
           setOptions(mapped);
           if (!selectedId && mapped.length) setSelectedId(String(mapped[0].id));
@@ -100,6 +113,8 @@ export default function FragranceDetail({ params }) {
     () => options.find((o) => String(o.id) === String(selectedId)),
     [options, selectedId]
   );
+
+  const canAdmin = isOwner || isAdmin; // NEW: owner OR admin can see Edit link
 
   // ---------- CART ----------
   function loadCart() {
@@ -150,11 +165,11 @@ export default function FragranceDetail({ params }) {
 
   // ---------- ADMIN: manage options ----------
   async function saveOption(row) {
-    if (!isOwner || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
+    if (!canAdmin || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
     const up = {
       id: row.id || undefined,
       fragrance_id: frag.id,
-      seller_user_id: owner.id,               // IMPORTANT
+      seller_user_id: owner.id,
       label: row.label?.trim() || 'Option',
       price_cents:
         typeof row.price_cents === 'number'
@@ -166,7 +181,7 @@ export default function FragranceDetail({ params }) {
       quantity:
         row.quantity === '' || row.quantity === null || row.quantity === undefined
           ? null
-          : Math.max(0, Number(row.quantity) || 0), // write quantity
+          : Math.max(0, Number(row.quantity) || 0),
     };
     const { data, error } = await supabase
       .from('decants')
@@ -180,10 +195,10 @@ export default function FragranceDetail({ params }) {
   }
 
   async function addNewOption() {
-    if (!isOwner || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
+    if (!canAdmin || !owner?.id || !frag?.id) { setMsg('Not authorized'); return; }
     const payload = {
       fragrance_id: frag.id,
-      seller_user_id: owner.id,               // IMPORTANT
+      seller_user_id: owner.id,
       label: newLabel?.trim() || 'Option',
       price_cents: dollarsToCents(newPrice),
       size_ml: newSize ? Number(newSize) : null,
@@ -192,7 +207,7 @@ export default function FragranceDetail({ params }) {
       quantity:
         newQuantity === '' || newQuantity === null || newQuantity === undefined
           ? null
-          : Math.max(0, Number(newQuantity) || 0), // NEW: start quantity (blank = unlimited)
+          : Math.max(0, Number(newQuantity) || 0),
     };
     const { data, error } = await supabase
       .from('decants')
@@ -202,17 +217,18 @@ export default function FragranceDetail({ params }) {
     if (error) { setMsg(error.message); return; }
     setOptions((prev) => [...prev, data]);
     setSelectedId(String(data.id));
-    setNewLabel(''); setNewPrice(''); setNewSize(''); setNewCurrency('usd'); setNewQuantity(''); // clear NEW
+    setNewLabel(''); setNewPrice(''); setNewSize(''); setNewCurrency('usd'); setNewQuantity('');
     setMsg('Added option ✓');
   }
 
   async function deleteOption(idToDelete) {
-    if (!isOwner) return;
+    if (!canAdmin) return;
     const { error } = await supabase.from('decants').delete().eq('id', idToDelete);
     if (error) { setMsg(error.message); return; }
     setOptions((prev) => prev.filter((o) => o.id !== idToDelete));
     if (String(selectedId) === String(idToDelete)) {
-      setSelectedId(options.length ? String(options[0].id) : '');
+      const next = options.filter((o) => o.id !== idToDelete);
+      setSelectedId(next.length ? String(next[0].id) : '');
     }
     setMsg('Deleted option ✓');
   }
@@ -231,11 +247,30 @@ export default function FragranceDetail({ params }) {
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <Link href="/u/stephanie" className="underline text-sm">← Back to boutique</Link>
-        {frag.fragrantica_url && (
-          <a href={frag.fragrantica_url} target="_blank" rel="noreferrer" className="text-sm underline">
-            View on Fragrantica ↗
-          </a>
-        )}
+
+        <div className="flex items-center gap-4">
+          {frag.fragrantica_url && (
+            <a
+              href={frag.fragrantica_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm underline"
+            >
+              View on Fragrantica ↗
+            </a>
+          )}
+
+          {/* NEW: Edit link for owner/admin */}
+          {canAdmin && (
+            <Link
+              href={`/fragrance/${frag.id}/edit`}
+              className="text-sm rounded border px-2 py-1 hover:bg-gray-50"
+              title="Edit this fragrance"
+            >
+              Edit
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-6">
@@ -267,12 +302,12 @@ export default function FragranceDetail({ params }) {
             </div>
           </div>
 
-          {/* Purchase panel (no prices for visitors) */}
+          {/* Purchase panel */}
           <div className="p-3 rounded border bg-white space-y-3">
             <div className="font-medium">Choose an option</div>
 
             {/* Visitor view */}
-            {!isOwner && (
+            {!canAdmin && (
               <>
                 <div>
                   <label className="block text-sm font-medium mb-1">Option</label>
@@ -318,13 +353,13 @@ export default function FragranceDetail({ params }) {
             )}
 
             {/* Admin view (with prices & stock) */}
-            {isOwner && (
+            {canAdmin && (
               <div className="space-y-4">
                 <div className="text-sm opacity-70">Create options like <b>5 mL decant</b>, <b>10 mL decant</b>, or <b>Full Bottle</b>.</div>
 
                 <div className="border rounded divide-y">
                   {options.map((o) => (
-                    <div key={o.id} className="p-3 grid sm:grid-cols-7 gap-3 items-end">{/* +1 column for Quantity */}
+                    <div key={o.id} className="p-3 grid sm:grid-cols-7 gap-3 items-end">
                       <div className="sm:col-span-2">
                         <label className="block text-xs font-medium mb-1">Label</label>
                         <input
@@ -378,7 +413,7 @@ export default function FragranceDetail({ params }) {
                         </select>
                       </div>
 
-                      {/* Owner-only: Quantity */}
+                      {/* Quantity */}
                       <div>
                         <label className="block text-xs font-medium mb-1">Quantity</label>
                         <input
@@ -436,7 +471,7 @@ export default function FragranceDetail({ params }) {
 
                 <div className="p-3 border rounded space-y-2">
                   <div className="font-medium text-sm">Add a new option</div>
-                  <div className="grid sm:grid-cols-7 gap-3 items-end">{/* +1 column for new Quantity */}
+                  <div className="grid sm:grid-cols-7 gap-3 items-end">
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-medium mb-1">Label</label>
                       <input
@@ -517,7 +552,7 @@ export default function FragranceDetail({ params }) {
         </div>
       </div>
 
-      {!isOwner && <div className="text-sm"><Link className="underline" href="/cart">Go to cart →</Link></div>}
+      {!canAdmin && <div className="text-sm"><Link className="underline" href="/cart">Go to cart →</Link></div>}
     </div>
   );
 }
