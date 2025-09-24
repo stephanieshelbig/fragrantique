@@ -362,6 +362,13 @@ export default function UserBoutiquePage({ params }) {
         </Link>
       </div>
 
+      {/* NEW: link to /notes */}
+      <div className="mb-3 text-center text-sm">
+        <Link href="/notes" className="font-semibold underline">
+          Click here to search by notes
+        </Link>
+      </div>
+      
       {/* Boutique background + bottles */}
       <div className="relative w-full" ref={rootRef} style={{ aspectRatio: CANVAS_ASPECT }}>
         <Image
