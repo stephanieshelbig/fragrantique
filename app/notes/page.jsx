@@ -7,11 +7,6 @@ import Link from 'next/link';
 const bottleUrl = (f) =>
   f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-function makeSlug(brand = '', name = '') {
-  const joined = `${brand || ''}-${name || ''}`;
-  return joined.replace(/[^0-9A-Za-z]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
 // Parse `accords` into an array of lowercased names: ["fruity","floral", ...]
 function parseAccordNames(accords) {
   try {
@@ -71,10 +66,7 @@ function SearchBar({ value, onChange, onReload }) {
 
 function Card({ f }) {
   const img = bottleUrl(f);
-  const pretty = f.slug?.trim()
-    ? f.slug
-    : (f.brand || f.name ? makeSlug(f.brand, f.name) : f.id);
-  const href = `/fragrance/${encodeURIComponent(pretty)}`;
+  const href = `/fragrance/${encodeURIComponent(f.id)}`; // <-- link by ID
 
   return (
     <div className="rounded-2xl border p-4 shadow-sm bg-white">
@@ -134,7 +126,7 @@ export default function NotesPage() {
 
       const url =
         `${base}/rest/v1/fragrances` +
-        `?select=id,brand,name,slug,accords,notes,image_url,image_url_transparent` + // include notes
+        `?select=id,brand,name,slug,accords,notes,image_url,image_url_transparent` +
         `&order=brand.asc&order=name.asc`;
 
       try {
