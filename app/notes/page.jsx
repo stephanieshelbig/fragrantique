@@ -36,7 +36,6 @@ function parseAccordNames(accords) {
     return [];
   }
 }
-const hasAccord = (names, target) => names.includes(target.toLowerCase());
 
 // ---------- UI ----------
 function HeaderNav() {
@@ -60,7 +59,7 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by brand, fragrance, or type (white floral, vanilla, smoky, etc)…"
+        placeholder="Search by brand, fragrance, or notes (e.g., white floral, vanilla, smoky)…"
         className="w-full rounded-xl border px-4 py-2"
       />
       <button onClick={onReload} className="rounded-xl border px-3 py-2 hover:bg-gray-50">
@@ -72,7 +71,9 @@ function SearchBar({ value, onChange, onReload }) {
 
 function Card({ f }) {
   const img = bottleUrl(f);
-  const pretty = f.slug?.trim() ? f.slug : (f.brand || f.name ? makeSlug(f.brand, f.name) : f.id);
+  const pretty = f.slug?.trim()
+    ? f.slug
+    : (f.brand || f.name ? makeSlug(f.brand, f.name) : f.id);
   const href = `/fragrance/${encodeURIComponent(pretty)}`;
 
   return (
@@ -155,6 +156,7 @@ export default function NotesPage() {
     })();
   }, []);
 
+  // Filter across brand, name, and accords text
   const filtered = useMemo(() => {
     const s = (q || '').toLowerCase();
     if (!s) return rows;
@@ -168,38 +170,6 @@ export default function NotesPage() {
     });
   }, [rows, q]);
 
-  // Bucketing (can appear in multiple)
-  const { vanilla, florals, whiteFlorals, fruity } = useMemo(() => {
-    const buckets = { vanilla: [], florals: [], whiteFlorals: [], fruity: [] };
-    const sort = (a, b) =>
-      (a.brand || '').localeCompare(b.brand || '') ||
-      (a.name || '').localeCompare(b.name || '');
-
-    filtered.forEach((f) => {
-      const names = parseAccordNames(f.accords);
-      const isWhite = hasAccord(names, 'white floral');
-      const isFloral = hasAccord(names, 'floral') && !isWhite; // Floral but not White Floral
-      const isVanilla = hasAccord(names, 'vanilla');
-      const isFruity = hasAccord(names, 'fruity');
-
-      if (isVanilla) buckets.vanilla.push(f);
-      if (isFloral) buckets.florals.push(f);
-      if (isWhite) buckets.whiteFlorals.push(f);
-      if (isFruity) buckets.fruity.push(f);
-    });
-
-    Object.values(buckets).forEach((arr) => arr.sort(sort));
-    return buckets;
-  }, [filtered]);
-
-  const Column = ({ title, list }) => (
-    <div className="space-y-4">
-      <div className="rounded-xl bg-gray-50 border px-4 py-2 text-sm font-semibold">{title}</div>
-      {list.length === 0 && <div className="text-xs text-gray-400 px-1">No matches</div>}
-      {list.map((f) => <Card key={f.id} f={f} />)}
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-white">
       <HeaderNav />
@@ -212,12 +182,30 @@ export default function NotesPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2">
-          <Column title="VANILLA / GOURMAND" list={vanilla} />
-          <Column title="FLORALS" list={florals} />
-          <Column title="WHITE FLORALS" list={whiteFlorals} />
-          <Column title="FRUITY" list={fruity} />
+        {/* Toolbar: results summary & hint */}
+        <div className="mx-auto max-w-7xl mt-2 mb-4 flex items-center justify-between text-sm">
+          <div className="opacity-70">
+            {filtered.length} result{filtered.length === 1 ? '' : 's'}
+          </div>
+          <div className="opacity-60">
+            Try notes like
+            {' '}
+            <span className="font-medium">"white floral"</span>,{' '}
+            <span className="font-medium">"vanilla"</span>, or{' '}
+            <span className="font-medium">"smoky"</span>
+          </div>
         </div>
+
+        {/* Results grid */}
+        {filtered.length === 0 ? (
+          <div className="p-4 border rounded bg-white text-sm opacity-80">
+            No matches. Try a different brand, fragrance name, or note keyword.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
+            {filtered.map((f) => <Card key={f.id} f={f} />)}
+          </div>
+        )}
       </main>
     </div>
   );
