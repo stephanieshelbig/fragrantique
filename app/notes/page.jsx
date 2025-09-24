@@ -60,7 +60,7 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by brand, fragrance, or accords…"
+        placeholder="Search by brand, fragrance, or type (white floral, vanilla, smoky, etc)…"
         className="w-full rounded-xl border px-4 py-2"
       />
       <button onClick={onReload} className="rounded-xl border px-3 py-2 hover:bg-gray-50">
