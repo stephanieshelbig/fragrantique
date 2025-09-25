@@ -128,6 +128,9 @@ export default function AllDecantsPage() {
     <div className="mx-auto max-w-5xl w-full px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">All Available Decants</h1>
+        <p className="opacity-90 text-sm">
+        If you find a decant with a lower price somewhere else, message me and I'll match it.
+      </p>
         <div className="flex gap-4 text-sm">
           <Link href="/brand" className="underline">← Back to Brand Index</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
