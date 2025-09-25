@@ -107,8 +107,8 @@ export default function BrandIndex() {
         <Link href="/decants" className="font-semibold underline">
           Click here to view all available decants
         </Link>
-        {/* NEW: search link */}
-        <Link href="/notes" className="font-semibold underline">
+        {/* Moved to the right */}
+        <Link href="/notes" className="font-semibold underline ml-auto">
           Click here to search by name, brand, or notes
         </Link>
       </div>
