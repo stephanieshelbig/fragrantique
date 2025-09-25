@@ -14,7 +14,7 @@ function addToCartV1({ name, unit_amount, currency = 'usd', quantity = 1 }) {
     const arr = raw ? JSON.parse(raw) : [];
     const items = Array.isArray(arr) ? arr : [];
 
-    // Merge by (name + unit_amount + currency) — simple & stable for your cart
+    // Merge by (name + unit_amount + currency)
     const idx = items.findIndex(
       (it) =>
         it &&
@@ -128,10 +128,17 @@ export default function AllDecantsPage() {
     <div className="mx-auto max-w-5xl w-full px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">All Available Decants</h1>
-      <div className="flex gap-4 text-sm">
-          <Link href="/brand" className="underline">← Back to Brand Index</Link>
+        {/* Top-right header links (Brand Index, Contact Me, Cart) */}
+        <div className="flex gap-4 text-sm">
+          <Link href="/brand" className="hover:underline">Brand Index</Link>
+          <Link href="/chat" className="hover:underline">Contact Me</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
         </div>
+      </div>
+
+      {/* NEW note under the heading */}
+      <div className="text-sm opacity-80">
+        If you find a lower price, message me and I'll try to match it
       </div>
 
       {loading && <div>Loading in-stock decants…</div>}
