@@ -128,15 +128,16 @@ export default function AllDecantsPage() {
     <div className="mx-auto max-w-5xl w-full px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">All Available Decants</h1>
-        {/* Top-right header links (Brand Index, Contact Me, Cart) */}
+        {/* Top-right header links (Brand Index, Search, Contact Me, Cart) */}
         <div className="flex gap-4 text-sm">
           <Link href="/brand" className="hover:underline">Brand Index</Link>
+          <Link href="/notes" className="hover:underline">Search</Link>
           <Link href="/chat" className="hover:underline">Contact Me</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
         </div>
       </div>
 
-      {/* NEW note under the heading */}
+      {/* Note under the heading */}
       <div className="text-sm opacity-80">
         If you find a lower price, message me and I'll try to match it
       </div>
