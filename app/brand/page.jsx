@@ -102,10 +102,14 @@ export default function BrandIndex() {
         />
       </div>
 
-      {/* NEW: link to all in-stock decants */}
-      <div className="p-3 rounded border bg-white">
+      {/* White bar with links */}
+      <div className="p-3 rounded border bg-white flex flex-wrap items-center gap-5">
         <Link href="/decants" className="font-semibold underline">
           Click here to view all available decants
+        </Link>
+        {/* NEW: search link */}
+        <Link href="/notes" className="font-semibold underline">
+          Click here to search by name, brand, or notes
         </Link>
       </div>
 
