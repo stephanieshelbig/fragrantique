@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState('stephanie@fragrantique.net'); // prefill with your admin email
+  const [email, setEmail] = useState('stephanieshelbig@gmail.com'); // prefill with your admin email
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
