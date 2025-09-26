@@ -1,9 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
-
-// Load the navbar *only on the client* to avoid server render errors.
-const ShowNavbar = dynamic(() => import("@/components/ShowNavbar"), { ssr: false });
+import ShowNavbar from "@/components/ShowNavbar";
+import AuthHashHandler from "@/components/AuthHashHandler"; // ← add this
 
 export const metadata: Metadata = {
   title: "Fragrantique",
@@ -14,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-[#fdfcf9] text-gray-900">
-        {/* Navbar appears on all pages except "/" */}
+        <AuthHashHandler />   {/* ← add this */}
         <ShowNavbar />
         {children}
       </body>
