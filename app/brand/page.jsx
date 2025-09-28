@@ -91,14 +91,15 @@ export default function BrandIndex() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-4">
-      {/* Boutique Header */}
-      <div className="relative w-full h-40 mb-4">
+      {/* Boutique Header (moved down & not cropped) */}
+      <div className="relative w-full h-52 pt-2 mb-4">
         <Image
           src="/StephaniesBoutiqueHeader.png"
           alt="Stephanie's Boutique Header"
           fill
-          className="object-cover"
+          className="object-contain"
           priority
+          sizes="100vw"
         />
       </div>
 
@@ -112,7 +113,6 @@ export default function BrandIndex() {
           <Link href="/notes" className="font-semibold underline">
             Click here to search by name, brand, or notes
           </Link>
-          {/* NEW: recommendations link under search */}
           <Link href="/recommendations" className="font-semibold underline">
             Click here for some recommendations
           </Link>
