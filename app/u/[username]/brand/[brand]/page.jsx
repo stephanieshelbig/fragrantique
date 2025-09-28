@@ -107,10 +107,7 @@ export default function BrandPage({ params }) {
     <div className="max-w-5xl mx-auto p-6 space-y-4">
 
       {/* Header Links (Arrange button removed) */}
-      <div className="flex justify-end gap-4 py-3 text-sm font-medium">
-        <Link href="/brand" className="hover:underline">Sort By Brand</Link>
-      </div>
-
+      
       {/* link to /decants */}
       <div className="mb-1 text-center text-sm">
         <Link href="/decants" className="font-semibold underline">
