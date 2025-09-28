@@ -86,7 +86,7 @@ export default function MuskAnosmiaPage() {
       <p>
         In summary, OR5AN1 is a crucial macrocyclic and nitro musk receptor in
         humans, and genetic variation appears to cause variable responsiveness
-        to macrocyclic musks in in vitro assay. Significant differences were
+        to macrocyclic musks in in-vitro assay. Significant differences were
         observed among OR5AN1 genotypes in musk odor perception; genetic
         variation of OR5AN1 affects the perceived intensity of exaltolide and
         ethylene brassylate, and the detection threshold for muscone.
