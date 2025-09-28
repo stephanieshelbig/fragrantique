@@ -342,9 +342,6 @@ export default function UserBoutiquePage({ params }) {
 
       {/* Header Links */}
       <div className="flex justify-end gap-4 py-3 text-sm font-medium">
-        <Link href="/brand" className="hover:underline">Sort By Brand</Link>
-        <Link href="/chat" className="hover:underline">Contact Me</Link>
-        <Link href="/cart" className="hover:underline">Cart</Link>
         {isOwner && (
           <button
             onClick={() => { const next = !arrange; setArrange(next); setEditParam(next); }}
