@@ -19,18 +19,36 @@ export default function ExploreBoutiquesPage() {
         />
       </div>
 
-      {/* Single boutique logo that links to Stephanie's boutique */}
+      {/* Boutique logo with two static images to its right */}
       <div className="flex flex-col items-center mt-10 px-6">
-        <Link href="/u/stephanie" aria-label="Open Stephanie's boutique">
+        <div className="flex items-center gap-6 flex-wrap justify-center">
+          <Link href="/u/stephanie" aria-label="Open Stephanie's boutique">
+            <Image
+              src="/BoutiqueLogo.png"
+              alt="Stephanie's Boutique"
+              width={420}
+              height={420}
+              className="w-[280px] md:w-[380px] lg:w-[420px] h-auto hover:scale-[1.02] transition"
+              priority
+            />
+          </Link>
+
+          {/* Two non-linked boutique preview images */}
           <Image
-            src="/BoutiqueLogo.png"
-            alt="Stephanie's Boutique"
-            width={420}
-            height={420}
-            className="w-[280px] md:w-[380px] lg:w-[420px] h-auto hover:scale-[1.02] transition"
-            priority
+            src="/boutiques.bmp"
+            alt="Boutique preview"
+            width={280}
+            height={280}
+            className="w-[180px] md:w-[240px] lg:w-[280px] h-auto rounded-md shadow-sm"
           />
-        </Link>
+          <Image
+            src="/boutiques.bmp"
+            alt="Boutique preview"
+            width={280}
+            height={280}
+            className="w-[180px] md:w-[240px] lg:w-[280px] h-auto rounded-md shadow-sm"
+          />
+        </div>
 
         <p className="mt-6 text-gray-600 text-base">
           More Boutiques coming soon...
