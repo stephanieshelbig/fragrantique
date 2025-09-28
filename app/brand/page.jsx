@@ -90,57 +90,60 @@ export default function BrandIndex() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-4">
-      {/* Boutique Header (moved down & not cropped) */}
-      <div className="relative w-full h-52 pt-2 mb-4">
+    <div className="min-h-screen">
+      {/* Full-width banner header (stretched across the top) */}
+      <div className="relative w-full h-40 sm:h-56 md:h-64 lg:h-72">
         <Image
           src="/FragrantiqueHeader.png"
-          alt="Stephanie's Boutique Header"
+          alt="Fragrantique"
           fill
-          className="object-contain"
+          className="object-cover"
           priority
           sizes="100vw"
         />
       </div>
 
-      {/* White bar with links */}
-      <div className="p-3 rounded border bg-white flex flex-wrap items-center gap-5">
-        <Link href="/decants" className="font-semibold underline">
-          Click here to view all available decants
-        </Link>
-        {/* Right-side block with stacked links */}
-        <div className="ml-auto flex flex-col items-start sm:items-end gap-1">
-          <Link href="/notes" className="font-semibold underline">
-            Click here to search by name, brand, or notes
+      {/* Centered page content */}
+      <div className="max-w-5xl mx-auto p-6 space-y-4">
+        {/* White bar with links */}
+        <div className="p-3 rounded border bg-white flex flex-wrap items-center gap-5">
+          <Link href="/decants" className="font-semibold underline">
+            Click here to view all available decants
           </Link>
-          <Link href="/recommendations" className="font-semibold underline">
-            Click here for some recommendations
-          </Link>
-        </div>
-      </div>
-
-      <h1 className="text-2xl font-bold">Brand index</h1>
-      <p className="opacity-70 text-sm">
-        Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
-      </p>
-
-      {!brands.length && (
-        <div className="p-4 border rounded bg-white">No brands yet.</div>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {brands.map(([canon, meta]) => {
-          const href = `/u/${encodeURIComponent(owner.username)}/brand/${meta.strict}`;
-          return (
-            <Link
-              key={canon}
-              href={href}
-              className="px-3 py-2 rounded bg-black text-white hover:opacity-90 text-sm"
-            >
-              {meta.display} <span className="opacity-70">({meta.count})</span>
+          {/* Right-side block with stacked links */}
+          <div className="ml-auto flex flex-col items-start sm:items-end gap-1">
+            <Link href="/notes" className="font-semibold underline">
+              Click here to search by name, brand, or notes
             </Link>
-          );
-        })}
+            <Link href="/recommendations" className="font-semibold underline">
+              Click here for some recommendations
+            </Link>
+          </div>
+        </div>
+
+        <h1 className="text-2xl font-bold">Brand index</h1>
+        <p className="opacity-70 text-sm">
+          Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
+        </p>
+
+        {!brands.length && (
+          <div className="p-4 border rounded bg-white">No brands yet.</div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {brands.map(([canon, meta]) => {
+            const href = `/u/${encodeURIComponent(owner.username)}/brand/${meta.strict}`;
+            return (
+              <Link
+                key={canon}
+                href={href}
+                className="px-3 py-2 rounded bg-black text-white hover:opacity-90 text-sm"
+              >
+                {meta.display} <span className="opacity-70">({meta.count})</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
