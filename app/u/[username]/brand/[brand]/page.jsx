@@ -111,17 +111,23 @@ export default function BrandPage({ params }) {
       {/* link to /decants */}
       <div className="mb-1 text-center text-sm">
         <Link href="/decants" className="font-semibold underline">
-          click here for all available decants
+          Click here for all available decants
         </Link>
       </div>
 
       {/* NEW: link to /notes */}
       <div className="mb-3 text-center text-sm">
         <Link href="/notes" className="font-semibold underline">
-          Click here to search by notes
+          Click here to search by notes, brand, or name
         </Link>
       </div>
-
+      
+      <div className="mb-1 text-center text-sm">
+        <Link href="/recommendations" className="font-semibold underline">
+          Click here for Recommendations
+        </Link>
+      </div>
+      
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">
           {displayBrand} — <span className="font-normal opacity-70">@{owner.username}</span>
