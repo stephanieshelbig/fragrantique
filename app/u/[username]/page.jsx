@@ -355,7 +355,7 @@ export default function UserBoutiquePage({ params }) {
       {/* link to /decants */}
       <div className="mb-3 text-center text-sm">
         <Link href="/decants" className="font-semibold underline">
-          click here for all available decants
+          Click here for all available decants
         </Link>
       </div>
 
