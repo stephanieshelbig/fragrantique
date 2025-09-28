@@ -109,8 +109,6 @@ export default function BrandPage({ params }) {
       {/* Header Links (Arrange button removed) */}
       <div className="flex justify-end gap-4 py-3 text-sm font-medium">
         <Link href="/brand" className="hover:underline">Sort By Brand</Link>
-        <Link href="/chat" className="hover:underline">Contact Me</Link>
-        <Link href="/cart" className="hover:underline">Cart</Link>
       </div>
 
       {/* link to /decants */}
