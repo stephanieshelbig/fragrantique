@@ -94,7 +94,7 @@ export default function BrandIndex() {
       {/* Boutique Header (moved down & not cropped) */}
       <div className="relative w-full h-52 pt-2 mb-4">
         <Image
-          src="/StephaniesBoutiqueHeader.png"
+          src="/FragrantiqueHeader.png"
           alt="Stephanie's Boutique Header"
           fill
           className="object-contain"
