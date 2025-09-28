@@ -34,7 +34,7 @@ export default function FragranceDetail({ params }) {
   const [added, setAdded] = useState(false);
 
   // Admin add/edit option
-  const [newLabel, setNewLabel] = useState('');
+  the [newLabel, setNewLabel] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newSize, setNewSize] = useState('');
   const [newCurrency, setNewCurrency] = useState('usd');
@@ -245,10 +245,16 @@ export default function FragranceDetail({ params }) {
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
+      {/* Header bar */}
       <div className="flex items-center justify-between">
         <Link href="/u/stephanie" className="underline text-sm">← Back to boutique</Link>
 
         <div className="flex items-center gap-4">
+          {/* Added top-right links */}
+          <Link href="/brand" className="text-sm hover:underline">Brand Index</Link>
+          <Link href="/chat" className="text-sm hover:underline">Contact Me</Link>
+          <Link href="/cart" className="text-sm hover:underline">Cart</Link>
+
           {frag.fragrantica_url && (
             <a
               href={frag.fragrantica_url}
@@ -260,7 +266,7 @@ export default function FragranceDetail({ params }) {
             </a>
           )}
 
-          {/* NEW: Edit link for owner/admin */}
+          {/* Edit link for owner/admin */}
           {canAdmin && (
             <Link
               href={`/fragrance/${frag.id}/edit`}
@@ -548,6 +554,14 @@ export default function FragranceDetail({ params }) {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Price-match note directly under options box */}
+          <div className="text-sm opacity-80 leading-relaxed">
+            These are fragrances from my personal collection. I'm selling decants of some of each fragrance to earn some extra money.
+            I don't do this as a for-profit business, so my prices will be lower than decant sites like ScentsAngel and DecantX.
+            If you find a lower price for these decants, send me a message through the 'Contact Me' link at the top of the page,
+            and I will try to match the price.
           </div>
         </div>
       </div>
