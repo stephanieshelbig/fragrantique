@@ -21,7 +21,7 @@ export default function FragranceDetail({ params }) {
   const [viewer, setViewer] = useState(null);
   const [owner, setOwner] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false); // NEW: detect admin
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [frag, setFrag] = useState(null);
   const [options, setOptions] = useState([]);
@@ -33,12 +33,12 @@ export default function FragranceDetail({ params }) {
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
 
-  // Admin add/edit option
-  the [newLabel, setNewLabel] = useState('');
+  // Admin add/edit option (FIXED: 'const', not 'the')
+  const [newLabel, setNewLabel] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newSize, setNewSize] = useState('');
   const [newCurrency, setNewCurrency] = useState('usd');
-  const [newQuantity, setNewQuantity] = useState(''); // NEW
+  const [newQuantity, setNewQuantity] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -114,7 +114,7 @@ export default function FragranceDetail({ params }) {
     [options, selectedId]
   );
 
-  const canAdmin = isOwner || isAdmin; // NEW: owner OR admin can see Edit link
+  const canAdmin = isOwner || isAdmin;
 
   // ---------- CART ----------
   function loadCart() {
@@ -250,7 +250,7 @@ export default function FragranceDetail({ params }) {
         <Link href="/u/stephanie" className="underline text-sm">← Back to boutique</Link>
 
         <div className="flex items-center gap-4">
-          {/* Added top-right links */}
+          {/* Top-right links */}
           <Link href="/brand" className="text-sm hover:underline">Brand Index</Link>
           <Link href="/chat" className="text-sm hover:underline">Contact Me</Link>
           <Link href="/cart" className="text-sm hover:underline">Cart</Link>
@@ -267,7 +267,7 @@ export default function FragranceDetail({ params }) {
           )}
 
           {/* Edit link for owner/admin */}
-          {canAdmin && (
+          {(isOwner || isAdmin) && (
             <Link
               href={`/fragrance/${frag.id}/edit`}
               className="text-sm rounded border px-2 py-1 hover:bg-gray-50"
@@ -313,7 +313,7 @@ export default function FragranceDetail({ params }) {
             <div className="font-medium">Choose an option</div>
 
             {/* Visitor view */}
-            {!canAdmin && (
+            {!(isOwner || isAdmin) && (
               <>
                 <div>
                   <label className="block text-sm font-medium mb-1">Option</label>
@@ -359,7 +359,7 @@ export default function FragranceDetail({ params }) {
             )}
 
             {/* Admin view (with prices & stock) */}
-            {canAdmin && (
+            {(isOwner || isAdmin) && (
               <div className="space-y-4">
                 <div className="text-sm opacity-70">Create options like <b>5 mL decant</b>, <b>10 mL decant</b>, or <b>Full Bottle</b>.</div>
 
