@@ -28,7 +28,7 @@ export default function ExploreBoutiquesPage() {
               alt="Stephanie's Boutique"
               width={420}
               height={420}
-              className="w-[280px] md:w-[380px] lg:w-[420px] h-auto hover:scale-[1.02] transition"
+              className="w-[180px] md:w-[240px] lg:w-[280px] h-auto hover:scale-[1.50] transition"
               priority
             />
           </Link>
