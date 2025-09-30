@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 
-// Same normalization helpers used on the boutique page
+// --- helpers (unchanged) ---
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -20,6 +20,7 @@ const STOPWORDS = new Set([
   'inc','ltd','llc','co','company','laboratories','laboratory','lab','labs',
   'edition','editions','house','maison','atelier','collection','collections'
 ]);
+
 function canonicalBrandKey(b) {
   const strict = brandKey(b);
   const parts = strict.split('-').filter(Boolean);
@@ -29,65 +30,52 @@ function canonicalBrandKey(b) {
 }
 
 export default function BrandIndex() {
-  const [authReady, setAuthReady] = useState(false);
-  const [viewer, setViewer] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [owner, setOwner] = useState({ id: null, username: 'stephanie' }); // default to your boutique
+  // keep initial UI stable and predictable
+  const [owner, setOwner] = useState({ id: null, username: 'stephanie' });
   const [links, setLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      await supabase.auth.getSession();
-      const { data: session } = await supabase.auth.getUser();
-      setViewer(session?.user || null);
-      setAuthReady(true);
-
       // Resolve the default owner (stephanie)
-      const { data: prof } = await supabase
+      const { data: prof, error: profErr } = await supabase
         .from('profiles')
         .select('id, username')
         .eq('username', 'stephanie')
         .maybeSingle();
 
-      if (!prof?.id) {
+      if (cancelled) return;
+
+      if (!profErr && prof?.id) {
+        setOwner(prof);
+        const { data: rows } = await supabase
+          .from('user_fragrances')
+          .select('fragrance:fragrances(id, brand, name)')
+          .eq('user_id', prof.id);
+
+        if (!cancelled) setLinks((rows || []).map(r => r.fragrance).filter(Boolean));
+      } else {
         setOwner({ id: null, username: 'stephanie' });
-        setLoading(false);
-        return;
       }
-      setOwner(prof);
 
-      // Pull all user_fragrances for the owner (public SELECT should be allowed by your RLS)
-      const { data: rows } = await supabase
-        .from('user_fragrances')
-        .select('fragrance:fragrances(id, brand, name)')
-        .eq('user_id', prof.id);
-
-      const items = (rows || [])
-        .map(r => r.fragrance)
-        .filter(Boolean);
-
-      setLinks(items);
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const brands = useMemo(() => {
     const map = new Map(); // canon -> { display, strict, count }
     for (const f of links) {
-      const disp = f.brand || 'Unknown';
+      const disp = f?.brand || 'Unknown';
       const strict = brandKey(disp);
       const canon  = canonicalBrandKey(disp);
       if (!map.has(canon)) map.set(canon, { display: disp, strict, count: 0 });
       map.get(canon).count += 1;
     }
-    // Sort by display name
     return Array.from(map.entries())
       .sort((a, b) => a[1].display.toLowerCase().localeCompare(b[1].display.toLowerCase()));
   }, [links]);
-
-  if (!authReady || loading) {
-    return <div className="max-w-5xl mx-auto p-6">Loading brand index…</div>;
-  }
 
   return (
     <div className="min-h-screen">
@@ -110,7 +98,6 @@ export default function BrandIndex() {
           <Link href="/decants" className="font-semibold underline">
             Click here to view all available decants
           </Link>
-          {/* Right-side block with stacked links */}
           <div className="ml-auto flex flex-col items-start sm:items-end gap-1">
             <Link href="/notes" className="font-semibold underline">
               Click here to search by name, brand, or notes
@@ -126,12 +113,24 @@ export default function BrandIndex() {
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        {!brands.length && (
-          <div className="p-4 border rounded bg-white">No brands yet.</div>
-        )}
-
+        {/* Brands grid / skeleton */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          {brands.map(([canon, meta]) => {
+          {loading && (
+            // lightweight skeleton that preserves the grid structure
+            Array.from({ length: 12 }).map((_, i) => (
+              <div
+                key={`s-${i}`}
+                className="px-3 py-2 rounded bg-gray-200 animate-pulse h-8"
+                aria-hidden
+              />
+            ))
+          )}
+
+          {!loading && brands.length === 0 && (
+            <div className="col-span-full p-4 border rounded bg-white">No brands yet.</div>
+          )}
+
+          {!loading && brands.length > 0 && brands.map(([canon, meta]) => {
             const href = `/u/${encodeURIComponent(owner.username)}/brand/${meta.strict}`;
             return (
               <Link
