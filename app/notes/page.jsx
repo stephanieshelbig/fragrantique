@@ -66,7 +66,7 @@ function Card({ f }) {
   const href = `/fragrance/${encodeURIComponent(f.id)}`; // <-- link by ID
 
   return (
-    <div className="rounded-2xl border p-4 shadow-sm bg-white">
+    <div className="rounded-2xl border p-3 shadow-sm bg-white">
       <div className="flex items-start gap-3">
         <div className="w-16 h-20 rounded overflow-hidden border bg-gray-100 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
