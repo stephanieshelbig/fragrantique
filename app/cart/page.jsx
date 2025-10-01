@@ -16,7 +16,7 @@ export default function CartPage() {
   });
   const [msg, setMsg] = useState('');
 
-  // Discount state
+  // Discount state (if you already have discount logic)
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [discountMsg, setDiscountMsg] = useState('');
@@ -48,6 +48,12 @@ export default function CartPage() {
     if (next) localStorage.setItem('cart_discount_v1', JSON.stringify(next));
     else localStorage.removeItem('cart_discount_v1');
     setAppliedDiscount(next);
+  }
+
+  // 🔹 NEW — remove item helper
+  function removeItem(index) {
+    const next = items.filter((_, i) => i !== index);
+    persist(next);
   }
 
   const subtotalCents = useMemo(
@@ -135,12 +141,23 @@ export default function CartPage() {
       {items.length > 0 && (
         <>
           {items.map((it, i) => (
-            <div key={i} className="p-3 border rounded bg-white flex justify-between">
+            <div key={i} className="p-3 border rounded bg-white flex justify-between items-center">
               <div>
                 <div className="font-medium">{it.name}</div>
                 <div className="text-sm">${fmt(it.unit_amount)} ea</div>
               </div>
-              <div>x {it.quantity}</div>
+
+              <div className="flex items-center gap-3">
+                <div>x {it.quantity}</div>
+                {/* 🔹 NEW remove button */}
+                <button
+                  onClick={() => removeItem(i)}
+                  className="border rounded px-2 py-1 text-xs hover:bg-gray-50"
+                  aria-label={`Remove ${it.name}`}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))}
 
