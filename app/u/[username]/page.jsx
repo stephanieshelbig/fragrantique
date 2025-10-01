@@ -362,7 +362,7 @@ export default function UserBoutiquePage({ params }) {
       {/* NEW: link to /notes */}
       <div className="mb-3 text-center text-sm">
         <Link href="/notes" className="font-semibold underline">
-          Click here to search by notes
+          Click here to search my collection (easy viewing for mobile users)
         </Link>
       </div>
       
