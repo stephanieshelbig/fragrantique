@@ -22,7 +22,7 @@ export default function ExploreBoutiquesPage() {
       {/* Boutique logo with two static images to its right */}
       <div className="flex flex-col items-center mt-10 px-6">
         <div className="flex items-center gap-6 flex-wrap justify-center">
-          <Link href="/notes" aria-label="Open Stephanie's boutique">
+          <Link href="/u/stephanie" aria-label="Open Stephanie's boutique">
             <Image
               src="/BoutiqueLogo.png"
               alt="Stephanie's Boutique"
