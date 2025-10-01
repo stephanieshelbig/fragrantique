@@ -179,10 +179,7 @@ export default function NotesPage() {
             {filtered.length} result{filtered.length === 1 ? '' : 's'}
           </div>
           <div className="opacity-60">
-            Try notes like{' '}
-            <span className="font-medium">"white floral"</span>,{' '}
-            <span className="font-medium">"vanilla"</span>, or{' '}
-            <span className="font-medium">"smoky"</span>
+            MOBILE USERS - TURN YOUR DEVICE TO VIEW IN LANDSCAPE MODE
           </div>
         </div>
 
