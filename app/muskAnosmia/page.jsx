@@ -14,13 +14,13 @@ export default function MuskAnosmiaPage() {
 
       <p>
         Musk anosmia is a genetic condition where the person is unable to
-        perceive musk. There aren't a lot of studies about it, but they estimate
-        that at least 7% of people have it. Because of the size of musk
-        molecules, if a fragrance contains musk, I am unable to perceive it AND
-        any of the other notes in that fragrance. The exception is sandalwood.
-        If the fragrance contains sandalwood then that is all I smell, and it is
-        VERY strong. It comes off smelling like a sharp wet ashtray. Without
-        musk, the sandalwood is more subdued so it smells nice.
+        perceive certain musks. It's a genetic variation that affects at
+        least 7% of the US population. Because of the size of the molecules, 
+        if a fragrance contains macrocyclic musks, I am unable to perceive it
+        AND any of the other notes in the fragrance. The exception is 
+        sandalwood.  If the fragrance contains sandalwood then that is all I 
+        smell, and it is VERY strong. It comes off smelling like a wet ashtray.
+        Without musk, the sandalwood is more subdued so it smells nice.
       </p>
 
       <p>
