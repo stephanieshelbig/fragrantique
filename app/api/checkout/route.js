@@ -1,137 +1,152 @@
+// app/checkout/route.js
 import Stripe from 'stripe';
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic'; // avoid caching issues for POST handlers
+export const runtime = 'nodejs';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-06-20',
 });
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+/**
+ * Resolve a human discount code (e.g., "FALL20") into something Stripe understands.
+ * You have THREE common options below. Use ONE and remove the others:
+ *
+ * A) You already created Promotion Codes in Stripe Dashboard
+ *    - Search for an active promotion_code by its "code" value and return its id.
+ *
+ * B) You mapped your own codes to Stripe COUPON IDs (e.g., in env or DB)
+ *    - Return { coupon: 'coupon_...' } directly from your mapping.
+ *
+ * C) You manage your own percent/amount rules outside Stripe
+ *    - Create a one-off Coupon (duration: 'once') on the fly and return it.
+ *      (Better: create/store once and reuse, but on-the-fly works if needed.)
+ */
+async function resolveStripeDiscount(discountCode) {
+  if (!discountCode) return null;
+
+  const code = String(discountCode).trim();
+
+  // -------- OPTION A: Use existing Promotion Codes in Stripe --------
+  // try {
+  //   const promoList = await stripe.promotionCodes.list({
+  //     code,
+  //     active: true,
+  //     limit: 1,
+  //   });
+  //   const promo = promoList.data[0];
+  //   if (promo) return { promotion_code: promo.id };
+  // } catch (err) {
+  //   console.error('Error looking up promotion code:', err);
+  // }
+
+  // -------- OPTION B: Map your own codes to Stripe Coupon IDs --------
+  // const COUPON_MAP = {
+  //   FALL20: 'coupon_123',     // 20% off coupon created in Stripe
+  //   TENOFF: 'coupon_abc',     // $10 off coupon created in Stripe
+  // };
+  // const couponId = COUPON_MAP[code.toUpperCase()];
+  // if (couponId) return { coupon: couponId };
+
+  // -------- OPTION C: Create a one-off Coupon on the fly ------------
+  // Replace this with your own validation logic (e.g., check DB).
+  // Example: treat codes ending with "20" as 20% off; "TENOFF" as $10 off.
+  const fauxValidated = validateCustomCode(code);
+  if (fauxValidated?.type === 'percent') {
+    const coupon = await stripe.coupons.create({
+      percent_off: fauxValidated.value, // e.g., 20 for 20%
+      duration: 'once',
+      name: code,
+    });
+    return { coupon: coupon.id };
+  } else if (fauxValidated?.type === 'amount') {
+    const coupon = await stripe.coupons.create({
+      amount_off: fauxValidated.value,  // integer cents
+      currency: 'usd',
+      duration: 'once',
+      name: code,
+    });
+    return { coupon: coupon.id };
+  }
+
+  // If nothing matched, return null so no discount is applied.
+  return null;
+}
+
+// Dummy validator for OPTION C. Replace with your real logic.
+function validateCustomCode(code) {
+  const up = code.toUpperCase();
+  if (up === 'FALL20') return { type: 'percent', value: 20 };
+  if (up === 'TENOFF') return { type: 'amount', value: 1000 }; // $10 in cents
+  return null;
+}
 
 export async function POST(req) {
   try {
-    const { items = [], buyer = {}, discount } = await req.json();
+    const body = await req.json();
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Cart is empty.' }, { status: 400 });
-    }
+    // Expected body:
+    // {
+    //   items: [{ price: 'price_...', quantity: 1 }, ...] OR [{ name, unit_amount, quantity, currency }],
+    //   success_url: 'https://your-site/success',
+    //   cancel_url: 'https://your-site/cancel',
+    //   discountCode: 'FALL20' // optional
+    // }
 
-    // Build Stripe line_items from the cart (no metadata bloat)
-    const productLineItems = items.map((it) => {
-      const qty = Math.max(1, parseInt(it.quantity ?? 1, 10) || 1);
+    const {
+      items = [],
+      success_url,
+      cancel_url,
+      discountCode,
+      customer_email,       // optional: if you collect it beforehand
+      customer,             // optional: Stripe customer id
+      mode = 'payment',     // default to 'payment'
+    } = body || {};
+
+    // Build line_items. Support both price IDs and price_data objects.
+    const line_items = items.map((it) => {
+      if (it.price) {
+        return { price: it.price, quantity: it.quantity ?? 1 };
+      }
+      // fallback to price_data path
       return {
-        quantity: qty,
+        quantity: it.quantity ?? 1,
         price_data: {
-          currency: (it.currency || 'usd').toLowerCase(),
-          unit_amount: Number(it.unit_amount),
-          product_data: {
-            name: it.name?.slice(0, 250) || 'Fragrance decant',
-          },
+          currency: it.currency ?? 'usd',
+          product_data: { name: it.name ?? 'Item' },
+          unit_amount: it.unit_amount, // integer cents
         },
       };
     });
 
-    // Calculate server-side subtotal
-    const subtotalCents = items.reduce(
-      (sum, it) => sum + Number(it.unit_amount || 0) * Math.max(1, parseInt(it.quantity ?? 1, 10) || 1),
-      0
-    );
+    // Resolve discount into Stripe format
+    const discountForStripe = await resolveStripeDiscount(discountCode);
 
-    // --- 🔹 DISCOUNT CODE VALIDATION (added) ---
-    let appliedDiscount = null;
-    if (discount?.code) {
-      const { data, error } = await supabaseAdmin
-        .from('discount_codes')
-        .select('code, type, value, active, expires_at, min_subtotal_cents')
-        .eq('code', String(discount.code).toUpperCase())
-        .maybeSingle();
+    const sessionParams = {
+      mode,
+      line_items,
+      success_url,
+      cancel_url,
+      // If you want customers to also enter promotion codes on Stripe page:
+      // allow_promotion_codes: true,
+      ...(customer ? { customer } : {}),
+      ...(customer_email ? { customer_email } : {}),
+      ...(discountForStripe ? { discounts: [discountForStripe] } : {}),
+      // Keep metadata small to avoid hitting Stripe limits
+      // metadata: { order_id: 'abc123' },
+    };
 
-      if (
-        data &&
-        !error &&
-        data.active === true &&
-        (!data.expires_at || new Date(data.expires_at) > new Date()) &&
-        subtotalCents >= Number(data.min_subtotal_cents || 0) &&
-        ['percent', 'fixed', 'free_shipping'].includes(data.type)
-      ) {
-        appliedDiscount = {
-          code: data.code.toUpperCase(),
-          type: data.type,
-          value: data.value ?? null,
-        };
-      }
-    }
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
-    const BASE_SHIPPING_CENTS = 500; // $5 flat rate (matches UI)
-    const TAX_RATE = 0.07;
-
-    const discountCents =
-      appliedDiscount?.type === 'percent'
-        ? Math.floor((subtotalCents * Math.max(0, Math.min(100, Number(appliedDiscount.value || 0)))) / 100)
-        : appliedDiscount?.type === 'fixed'
-          ? Math.min(Math.max(0, Number(appliedDiscount.value || 0)), subtotalCents)
-          : 0;
-
-    const discountedSubtotal = Math.max(0, subtotalCents - discountCents);
-    const shippingCents = appliedDiscount?.type === 'free_shipping' ? 0 : BASE_SHIPPING_CENTS;
-    const taxCents = Math.round(discountedSubtotal * TAX_RATE);
-
-    const currency = (items[0]?.currency || 'usd').toLowerCase();
-
-    // Build updated shipping/tax lines
-    const shippingLine = shippingCents
-      ? {
-          quantity: 1,
-          price_data: {
-            currency,
-            unit_amount: shippingCents,
-            product_data: { name: 'Flat-rate shipping' },
-          },
-        }
-      : null;
-
-    const taxLine = taxCents
-      ? {
-          quantity: 1,
-          price_data: {
-            currency,
-            unit_amount: taxCents,
-            product_data: { name: 'Sales tax (7%)' },
-          },
-        }
-      : null;
-
-    const origin =
-      req.headers.get('origin') ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      'https://fragrantique.net';
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [
-        ...productLineItems,
-        ...(shippingLine ? [shippingLine] : []),
-        ...(taxLine ? [taxLine] : []),
-      ],
-      shipping_address_collection: {
-        allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'NL', 'SE', 'IT', 'ES'],
-      },
-      success_url: `${origin}/thank-you?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/cart`,
-      metadata: {
-        discount_code: appliedDiscount?.code || '',
-      },
+    return new Response(JSON.stringify({ id: session.id, url: session.url }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
     });
-
-    return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error('Checkout error:', err);
-    return NextResponse.json(
-      { error: err?.message || 'Checkout failed.' },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({ error: { message: err.message } }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }
