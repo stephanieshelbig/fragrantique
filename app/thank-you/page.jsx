@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-// Outer wrapper provides the required Suspense boundary
 export default function Page() {
   return (
     <Suspense fallback={<div className="max-w-3xl mx-auto p-6">Loading…</div>}>
@@ -64,7 +63,6 @@ function ThankYouInner() {
         return;
       }
 
-      // After ~5 tries (~10s), call the fallback API to ensure the order
       if (tries >= 5 && !forced) {
         try {
           const res = await fetch('/api/orders/ensure', {
@@ -74,7 +72,6 @@ function ThankYouInner() {
           });
           const j = await res.json().catch(() => ({}));
           if (j?.ok) {
-            // Re-fetch from DB
             const { data } = await supabase
               .from('orders')
               .select('*')
@@ -88,7 +85,7 @@ function ThankYouInner() {
             }
           }
         } catch {
-          // ignore; will keep trying a bit more
+          // ignore
         } finally {
           setForced(true);
         }
@@ -122,7 +119,6 @@ function ThankYouInner() {
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-4">
       <h1 className="text-2xl font-bold">Thank you for your order! 🧾</h1>
-
       <p className="text-sm text-gray-600">
         We’ve emailed you a receipt. You’ll get tracking info as soon as your order ships.
       </p>
@@ -131,12 +127,7 @@ function ThankYouInner() {
         <div className="p-4 border rounded bg-white">No Stripe session id found in the URL.</div>
       )}
 
-      {loading && sid && (
-        <div className="p-4 border rounded bg-white">
-          Processing your payment… If this takes more than a few seconds, it may be waiting for
-          Stripe to notify us or we’re confirming it directly. This page will auto-refresh.
-        </div>
-      )}
+      {/* Removed the loading message block */}
 
       {!loading && sid && !order && (
         <div className="p-4 border rounded bg-white">
@@ -166,8 +157,7 @@ function ThankYouInner() {
             <ul className="list-disc pl-5 mt-1 text-sm">
               {items.map((it, i) => (
                 <li key={i}>
-                  <span className="font-medium">{it.name || 'Item'}</span> · qty{' '}
-                  {it.quantity || 1}
+                  <span className="font-medium">{it.name || 'Item'}</span> · qty {it.quantity || 1}
                 </li>
               ))}
             </ul>
