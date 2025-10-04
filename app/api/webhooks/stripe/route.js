@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getStripeClient, getWebhookSecret } from '@/lib/stripe';
-import { sendOrderEmail, renderOrderHtml } from '@/lib/email';
+import { sendOrderEmail, renderOrderHtml, renderCustomerOrderHtml } from '@/lib/email';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -148,7 +148,7 @@ export async function POST(req) {
         }
       }
 
-      // ---- 6) Send notification email (same as before) ----
+      // ---- 6) Send notification email (admin) ----
       const html = renderOrderHtml({
         sessionId: session.id,
         buyerEmail: payload.buyer_email,
@@ -163,6 +163,24 @@ export async function POST(req) {
         subject: 'Fragrantique — New order received',
         html,
       });
+
+      // ---- 7) Send customer confirmation (new) ----
+      if (payload.buyer_email) {
+        const customerHtml = renderCustomerOrderHtml({
+          sessionId: session.id,
+          amountTotal: payload.amount_total,
+          currency: payload.currency,
+          items: payload.items,
+          shipping,
+        });
+
+        await sendOrderEmail({
+          to: payload.buyer_email,
+          subject: 'Your Fragrantique order confirmation',
+          html: customerHtml,
+          replyTo: process.env.SUPPORT_EMAIL || process.env.FROM_EMAIL,
+        });
+      }
     }
 
     return NextResponse.json({ received: true });
