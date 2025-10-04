@@ -172,7 +172,7 @@ export async function POST(req) {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'NL', 'SE', 'IT', 'ES'],
       },
       ...(discounts ? { discounts } : {}),
-      success_url: `${origin}/thank-you?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/cart`,
       metadata: {
         discount_code: appliedDiscount?.code || '',
