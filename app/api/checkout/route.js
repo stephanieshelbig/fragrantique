@@ -1,125 +1,125 @@
-// app/checkout/route.js
+// app/api/checkout/route.js
 import Stripe from 'stripe';
 
-export const dynamic = 'force-dynamic'; // avoid caching issues for POST handlers
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-06-20',
 });
 
-/**
- * Resolve a human discount code (e.g., "FALL20") into something Stripe understands.
- * You have THREE common options below. Use ONE and remove the others:
- *
- * A) You already created Promotion Codes in Stripe Dashboard
- *    - Search for an active promotion_code by its "code" value and return its id.
- *
- * B) You mapped your own codes to Stripe COUPON IDs (e.g., in env or DB)
- *    - Return { coupon: 'coupon_...' } directly from your mapping.
- *
- * C) You manage your own percent/amount rules outside Stripe
- *    - Create a one-off Coupon (duration: 'once') on the fly and return it.
- *      (Better: create/store once and reuse, but on-the-fly works if needed.)
- */
-async function resolveStripeDiscount(discountCode) {
-  if (!discountCode) return null;
-
-  const code = String(discountCode).trim();
-
-  // -------- OPTION A: Use existing Promotion Codes in Stripe --------
-  // try {
-  //   const promoList = await stripe.promotionCodes.list({
-  //     code,
-  //     active: true,
-  //     limit: 1,
-  //   });
-  //   const promo = promoList.data[0];
-  //   if (promo) return { promotion_code: promo.id };
-  // } catch (err) {
-  //   console.error('Error looking up promotion code:', err);
-  // }
-
-  // -------- OPTION B: Map your own codes to Stripe Coupon IDs --------
-  // const COUPON_MAP = {
-  //   FALL20: 'coupon_123',     // 20% off coupon created in Stripe
-  //   TENOFF: 'coupon_abc',     // $10 off coupon created in Stripe
-  // };
-  // const couponId = COUPON_MAP[code.toUpperCase()];
-  // if (couponId) return { coupon: couponId };
-
-  // -------- OPTION C: Create a one-off Coupon on the fly ------------
-  // Replace this with your own validation logic (e.g., check DB).
-  // Example: treat codes ending with "20" as 20% off; "TENOFF" as $10 off.
-  const fauxValidated = validateCustomCode(code);
-  if (fauxValidated?.type === 'percent') {
-    const coupon = await stripe.coupons.create({
-      percent_off: fauxValidated.value, // e.g., 20 for 20%
-      duration: 'once',
-      name: code,
-    });
-    return { coupon: coupon.id };
-  } else if (fauxValidated?.type === 'amount') {
-    const coupon = await stripe.coupons.create({
-      amount_off: fauxValidated.value,  // integer cents
-      currency: 'usd',
-      duration: 'once',
-      name: code,
-    });
-    return { coupon: coupon.id };
-  }
-
-  // If nothing matched, return null so no discount is applied.
-  return null;
-}
-
-// Dummy validator for OPTION C. Replace with your real logic.
+// --- Replace this with your real validation / lookup ---
 function validateCustomCode(code) {
-  const up = code.toUpperCase();
+  if (!code) return null;
+  const up = String(code).trim().toUpperCase();
   if (up === 'FALL20') return { type: 'percent', value: 20 };
   if (up === 'TENOFF') return { type: 'amount', value: 1000 }; // $10 in cents
   return null;
 }
 
+async function resolveStripeDiscount(discountCode) {
+  if (!discountCode) return null;
+
+  // OPTION A: existing Promotion Code in Stripe
+  // try {
+  //   const promo = (await stripe.promotionCodes.list({ code: discountCode, active: true, limit: 1 })).data[0];
+  //   if (promo) return { promotion_code: promo.id };
+  // } catch (e) { /* swallow */ }
+
+  // OPTION B: your mapping from code -> coupon id
+  // const COUPON_MAP = { FALL20: 'coupon_123', TENOFF: 'coupon_abc' };
+  // const m = COUPON_MAP[String(discountCode).trim().toUpperCase()];
+  // if (m) return { coupon: m };
+
+  // OPTION C: create a one-off coupon based on your own logic
+  const rule = validateCustomCode(discountCode);
+  if (!rule) return null;
+
+  if (rule.type === 'percent') {
+    const coupon = await stripe.coupons.create({
+      percent_off: rule.value,
+      duration: 'once',
+      name: String(discountCode).trim(),
+    });
+    return { coupon: coupon.id };
+  } else if (rule.type === 'amount') {
+    const coupon = await stripe.coupons.create({
+      amount_off: rule.value,
+      currency: 'usd',
+      duration: 'once',
+      name: String(discountCode).trim(),
+    });
+    return { coupon: coupon.id };
+  }
+  return null;
+}
+
+function toIntCents(v) {
+  if (v == null) return null;
+  const n = typeof v === 'string' ? Number(v) : v;
+  if (!Number.isFinite(n)) return null;
+  // Accept either cents (integer) or dollars (>=1 with decimals); prefer cents if looks like int >= 50.
+  if (Number.isInteger(n)) return n; // assume already cents
+  return Math.round(n * 100);
+}
+
+function normalizeLineItem(it) {
+  // Supports either `price` (Price ID) or raw price_data
+  if (it.price) {
+    return { price: it.price, quantity: it.quantity ?? 1 };
+  }
+  const quantity = it.quantity ?? 1;
+  const currency = (it.currency || 'usd').toLowerCase();
+  const unit_amount = toIntCents(it.unit_amount);
+  if (!unit_amount || unit_amount < 1) {
+    throw new Error('Invalid unit_amount for line item (must be integer cents).');
+  }
+  const name = it.name || 'Item';
+  return {
+    quantity,
+    price_data: {
+      currency,
+      product_data: { name },
+      unit_amount,
+    },
+  };
+}
+
 export async function POST(req) {
   try {
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: { message: 'Invalid JSON body.' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    // Expected body:
-    // {
-    //   items: [{ price: 'price_...', quantity: 1 }, ...] OR [{ name, unit_amount, quantity, currency }],
-    //   success_url: 'https://your-site/success',
-    //   cancel_url: 'https://your-site/cancel',
-    //   discountCode: 'FALL20' // optional
-    // }
+    const origin = req.headers.get('origin') || 'https://www.fragrantique.net';
 
     const {
       items = [],
-      success_url,
-      cancel_url,
+      success_url = `${origin}/checkout/success`,
+      cancel_url = `${origin}/checkout/cancel`,
       discountCode,
-      customer_email,       // optional: if you collect it beforehand
-      customer,             // optional: Stripe customer id
-      mode = 'payment',     // default to 'payment'
+      customer_email,
+      customer,
+      mode = 'payment',
+      allow_promotion_codes = false, // set true if you want Stripe’s code field, too
     } = body || {};
 
-    // Build line_items. Support both price IDs and price_data objects.
-    const line_items = items.map((it) => {
-      if (it.price) {
-        return { price: it.price, quantity: it.quantity ?? 1 };
-      }
-      // fallback to price_data path
-      return {
-        quantity: it.quantity ?? 1,
-        price_data: {
-          currency: it.currency ?? 'usd',
-          product_data: { name: it.name ?? 'Item' },
-          unit_amount: it.unit_amount, // integer cents
-        },
-      };
-    });
+    if (!Array.isArray(items) || items.length === 0) {
+      return new Response(JSON.stringify({ error: { message: 'No items to checkout.' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    // Resolve discount into Stripe format
+    const line_items = items.map(normalizeLineItem);
+
+    // Resolve discount (if any)
     const discountForStripe = await resolveStripeDiscount(discountCode);
 
     const sessionParams = {
@@ -127,15 +127,13 @@ export async function POST(req) {
       line_items,
       success_url,
       cancel_url,
-      // If you want customers to also enter promotion codes on Stripe page:
-      // allow_promotion_codes: true,
+      allow_promotion_codes,
       ...(customer ? { customer } : {}),
       ...(customer_email ? { customer_email } : {}),
       ...(discountForStripe ? { discounts: [discountForStripe] } : {}),
-      // Keep metadata small to avoid hitting Stripe limits
-      // metadata: { order_id: 'abc123' },
     };
 
+    // Create the Checkout Session
     const session = await stripe.checkout.sessions.create(sessionParams);
 
     return new Response(JSON.stringify({ id: session.id, url: session.url }), {
@@ -144,9 +142,10 @@ export async function POST(req) {
     });
   } catch (err) {
     console.error('Checkout error:', err);
-    return new Response(
-      JSON.stringify({ error: { message: err.message } }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    const message = err?.raw?.message || err?.message || 'Checkout failed.';
+    return new Response(JSON.stringify({ error: { message } }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
