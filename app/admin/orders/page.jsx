@@ -9,7 +9,6 @@ export default function AdminOrders() {
   const [viewer, setViewer] = useState(null);
   const [orders, setOrders] = useState([]);
   const [msg, setMsg] = useState('');
-  const [creating, setCreating] = useState({}); // { [orderId]: true } - label creation
   const [saving, setSaving] = useState({});     // { [orderId]: true } - fulfilled toggle
   const [savingNote, setSavingNote] = useState({}); // { [orderId]: true } - comment save
 
@@ -57,32 +56,6 @@ export default function AdminOrders() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
-
-  async function createLabel(orderId) {
-    setMsg('');
-    setCreating(prev => ({ ...prev, [orderId]: true }));
-    try {
-      const res = await fetch('/api/shipping/create-label', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId }),
-      });
-      const j = await res.json();
-      if (!res.ok) {
-        setMsg(j?.error || 'Failed to create label');
-      } else {
-        if (j.label_url) window.open(j.label_url, '_blank');
-        await loadOrders();
-      }
-    } catch (e) {
-      setMsg(e.message || 'Failed to create label');
-    } finally {
-      setCreating(prev => {
-        const { [orderId]: _, ...rest } = prev;
-        return rest;
-      });
-    }
-  }
 
   async function toggleFulfilled(order, nextValue) {
     setMsg('');
@@ -146,14 +119,6 @@ export default function AdminOrders() {
     }
   }
 
-  function copyToClipboard(text) {
-    try {
-      navigator.clipboard.writeText(String(text || ''));
-      setMsg('Copied to clipboard');
-      setTimeout(() => setMsg(''), 1200);
-    } catch {}
-  }
-
   if (loading) return <div className="p-6">Loading…</div>;
 
   if (!viewer) {
@@ -202,17 +167,6 @@ export default function AdminOrders() {
           const items = Array.isArray(o.items) ? o.items : [];
           const currency = (o.currency || 'USD').toUpperCase();
 
-          const labelUrl = o.shipping_label_url;
-          const tracking = o.tracking_number;
-          const carrier = o.carrier || '';
-          const service = o.service || '';
-          const labelCost = typeof o.label_cost_cents === 'number'
-            ? (o.label_cost_cents / 100).toFixed(2)
-            : null;
-          const labelStatus = o.label_status || 'none';
-
-          const canCreate = o.status === 'paid';
-          const busyCreate = !!creating[o.id];
           const busySaveFulfilled = !!saving[o.id];
           const busySaveNote = !!savingNote[o.id];
 
@@ -224,11 +178,6 @@ export default function AdminOrders() {
                   <span className={`px-2 py-0.5 rounded text-xs ${o.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
                     {o.status}
                   </span>
-                  {labelStatus && labelStatus !== 'none' && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
-                      label: {labelStatus.toLowerCase()}
-                    </span>
-                  )}
                   <label className="flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 px-2 py-1 rounded">
                     <input
                       type="checkbox"
@@ -281,77 +230,6 @@ export default function AdminOrders() {
               {/* Stripe session id */}
               <div className="mt-2 text-xs opacity-70">
                 Stripe session: {o.stripe_session_id}
-              </div>
-
-              {/* Shipping label block */}
-              <div className="mt-3 p-3 border rounded bg-gray-50 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">USPS Label</div>
-                  <div className="flex items-center gap-2">
-                    {labelUrl ? (
-                      <>
-                        <a
-                          href={labelUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2 py-1 rounded border bg-white hover:bg-gray-100"
-                          title="Open PDF label in a new tab"
-                        >
-                          View Label
-                        </a>
-                        <button
-                          onClick={() => createLabel(o.id)}
-                          className="px-2 py-1 rounded border bg-white hover:bg-gray-100"
-                          disabled={busyCreate}
-                          title="Purchase a new label (e.g., reprint/replace)"
-                        >
-                          {busyCreate ? 'Working…' : 'Reprint Label'}
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => createLabel(o.id)}
-                        className={`px-3 py-1.5 rounded border ${canCreate ? 'bg-white hover:bg-gray-100' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                        disabled={!canCreate || busyCreate}
-                        title={canCreate ? 'Buy USPS label for this order' : 'Label available after payment'}
-                      >
-                        {busyCreate ? 'Working…' : 'Create USPS Label'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {labelUrl && (
-                  <div className="mt-2 grid sm:grid-cols-2 gap-y-1">
-                    <div><b>Carrier:</b> {carrier || 'USPS'}</div>
-                    <div><b>Service:</b> {service || '—'}</div>
-                    <div className="flex items-center gap-2">
-                      <span><b>Tracking:</b> {tracking || '—'}</span>
-                      {tracking && (
-                        <>
-                          <button
-                            className="px-2 py-0.5 rounded border bg-white hover:bg-gray-100 text-xs"
-                            onClick={() => copyToClipboard(tracking)}
-                          >
-                            Copy
-                          </button>
-                          <a
-                            href={`https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(tracking)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2 py-0.5 rounded border bg-white hover:bg-gray-100 text-xs"
-                          >
-                            Track
-                          </a>
-                        </>
-                      )}
-                    </div>
-                    <div>
-                      <b>Label Cost:</b>{' '}
-                      {labelCost != null ? `$${labelCost} ${currency}` : '—'}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           );
