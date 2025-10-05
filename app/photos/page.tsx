@@ -17,8 +17,7 @@ export default function MyCollectionPage() {
     <main className="mx-auto max-w-6xl w-full px-3 py-6">
       <h1 className="text-2xl font-semibold mb-2">Here are some pics of my collection</h1>
       <p className="text-sm text-gray-600 mb-6">
-        This page lives at <span className="font-mono">/photos</span>.{' '}
-        <Link href="/photos" className="underline">Direct link</Link>
+        
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
