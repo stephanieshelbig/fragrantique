@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 // ---- helpers ----
 const CATEGORY_LABELS = {
   fruity_floral: 'Fruity/Floral',
-  gourmand: 'Gourmand',
+  gourmand: 'Gourmand/Vanilla',
   unique: 'Unique',
 };
 const CATEGORY_KEYS = ['fruity_floral', 'gourmand', 'unique'];
