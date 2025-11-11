@@ -49,7 +49,9 @@ export default function ChatPage() {
         <p className="text-center text-sm text-gray-600 mt-1">
           I’ll receive your message by email and reply as soon as I can.
         </p>
-
+        <p className="text-center text-sm text-gray-600 mt-1">
+          Also find me on TikTok @fragrantique.net and Instagram @fragrantique_net.
+        </p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Your name</label>
