@@ -8,7 +8,7 @@ export default function HeaderBar() {
       <div className="mx-auto max-w-6xl w-full px-3 py-3 flex items-center justify-between">
         {/* Left: brand text */}
         <div className="text-[15px] font-semibold">
-          Fragrantique <span className="font-normal">- the Fragrance Boutique  TikTok @fragrantique.net Insta @fragrantique_net</span>
+          Fragrantique <span className="font-normal">- the Fragrance Boutique...   TikTok @fragrantique.net Insta @fragrantique_net</span>
         </div>
 
         {/* Right: nav links */}
