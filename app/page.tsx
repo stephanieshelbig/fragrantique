@@ -25,12 +25,7 @@ export default function HomePage() {
           </button>
         </Link>
 
-        {/* New Musk Anosmia button */}
-        <Link href="/muskAnosmia">
-          <button className="px-6 py-3 bg-pink-700 text-white rounded-xl shadow hover:bg-pink-800 transition">
-            Musk Anosmia
-          </button>
-        </Link>
+        
       </div>
     </main>
   );
