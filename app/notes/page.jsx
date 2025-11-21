@@ -35,7 +35,7 @@ function parseAccordNames(accords) {
 // ---------- UI ----------
 function HeaderNav() {
   return (
-    <header className="sticky top-0 z-10 border-b bg-[#0E1A27]/90 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
         {/* Left side: Enlarged Logo (4× size) */}
