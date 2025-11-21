@@ -38,17 +38,17 @@ function HeaderNav() {
     <header className="sticky top-0 z-10 border-b bg-[#0E1A27]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
-        {/* Left side: Logo */}
+        {/* Left side: Enlarged Logo (4× size) */}
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/FragrantiqueLogo2.png"
+            src="/FragrantiqueLogo.png"
             alt="Fragrantique Logo"
-            className="h-12 w-auto"
+            className="h-48 w-auto"
           />
         </div>
 
-        {/* Right side: Site Title */}
+        {/* Right side: Text */}
         <Link href="/" className="text-2xl font-semibold text-[#F2D2A4]">
           Fragrantique
         </Link>
