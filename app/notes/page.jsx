@@ -42,7 +42,7 @@ function HeaderNav() {
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/FragrantiqueLogo2.png"
+            src="/FragrantiqueLogo3.png"
             alt="Fragrantique Logo"
             className="h-48 w-auto"
           />
