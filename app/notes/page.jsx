@@ -35,14 +35,14 @@ function parseAccordNames(accords) {
 // ---------- UI ----------
 function HeaderNav() {
   return (
-    <header className="sticky top-0 z-10 border-b bg-[#0E1A27]/90 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
-        {/* Left side: Enlarged Logo (4× size) */}
+        {/* Left side: Enlarged Logo */}
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/FragrantiqueLogo2.png"
+            src="/FragrantiqueLogo.png"
             alt="Fragrantique Logo"
             className="h-48 w-auto"
           />
@@ -179,7 +179,7 @@ export default function NotesPage() {
   }, [rows, q]);
 
   return (
-    <div className="min-h-screen bg-[#0E1A27] text-white">
+    <div className="min-h-screen bg-[#182A39] text-white">
       <HeaderNav />
 
       <main className="mx-auto max-w-7xl px-4 pb-20">
