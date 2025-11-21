@@ -7,7 +7,7 @@ import Link from 'next/link';
 const bottleUrl = (f) =>
   f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-// Parse `accords` into an array of lowercased names: ["fruity","floral", ...]
+// Parse `accords` into an array of lowercased names
 function parseAccordNames(accords) {
   try {
     if (typeof accords === 'string') {
@@ -35,11 +35,23 @@ function parseAccordNames(accords) {
 // ---------- UI ----------
 function HeaderNav() {
   return (
-    <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+    <header className="sticky top-0 z-10 border-b bg-[#0E1A27]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-2xl font-semibold">Fragrantique</Link>
-        <nav className="flex items-center gap-6">
-        </nav>
+
+        {/* Left side: Logo */}
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/FragrantiqueLogo.png"
+            alt="Fragrantique Logo"
+            className="h-12 w-auto"
+          />
+        </div>
+
+        {/* Right side: Site Title */}
+        <Link href="/" className="text-2xl font-semibold text-[#F2D2A4]">
+          Fragrantique
+        </Link>
       </div>
     </header>
   );
@@ -51,10 +63,13 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by brand, fragrance, notes, or accords (e.g., white floral, vanilla, smoky)…"
-        className="w-full rounded-xl border px-4 py-2"
+        placeholder="Search by brand, fragrance, notes, or accords…"
+        className="w-full rounded-xl border px-4 py-2 bg-white text-black"
       />
-      <button onClick={onReload} className="rounded-xl border px-3 py-2 hover:bg-gray-50">
+      <button
+        onClick={onReload}
+        className="rounded-xl border px-3 py-2 bg-white text-black hover:bg-gray-100"
+      >
         Reload
       </button>
     </div>
@@ -63,7 +78,7 @@ function SearchBar({ value, onChange, onReload }) {
 
 function Card({ f }) {
   const img = bottleUrl(f);
-  const href = `/fragrance/${encodeURIComponent(f.id)}`; // <-- link by ID
+  const href = `/fragrance/${encodeURIComponent(f.id)}`;
 
   return (
     <div className="rounded-2xl border p-3 shadow-sm bg-white">
@@ -87,14 +102,17 @@ function Card({ f }) {
         </div>
 
         <div className="flex-1">
-          <div className="text-xs text-gray-500">Brand</div>
-          <div className="font-medium">{f.brand || '—'}</div>
+          <div className="text-xs text-gray-600">Brand</div>
+          <div className="font-medium text-black">{f.brand || '—'}</div>
 
-          <div className="mt-1 text-xs text-gray-500">Fragrance Name</div>
-          <div className="font-medium">{f.name || '—'}</div>
+          <div className="mt-1 text-xs text-gray-600">Fragrance Name</div>
+          <div className="font-medium text-black">{f.name || '—'}</div>
 
           <div className="mt-3">
-            <Link href={href} className="text-sm rounded-lg border px-3 py-1.5 hover:bg-gray-50">
+            <Link
+              href={href}
+              className="text-sm rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-100 text-black"
+            >
               Info
             </Link>
           </div>
@@ -145,7 +163,6 @@ export default function NotesPage() {
     })();
   }, []);
 
-  // Filter across brand, name, accords text, and notes text
   const filtered = useMemo(() => {
     const s = (q || '').toLowerCase();
     if (!s) return rows;
@@ -162,35 +179,34 @@ export default function NotesPage() {
   }, [rows, q]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#0E1A27] text-white">
       <HeaderNav />
+
       <main className="mx-auto max-w-7xl px-4 pb-20">
         <SearchBar value={q} onChange={setQ} onReload={() => location.reload()} />
 
         {loadError && (
-          <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-red-50 px-3 py-2 text-xs text-red-700">
+          <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-red-200 px-3 py-2 text-xs text-red-900">
             {loadError}
           </div>
         )}
 
-        {/* Toolbar: results summary & hint */}
-        <div className="mx-auto max-w-7xl mt-2 mb-4 flex items-center justify-between text-sm">
-          <div className="opacity-70">
+        <div className="mx-auto max-w-7xl mt-2 mb-4 flex items-center justify-between text-sm text-white/70">
+          <div>
             {filtered.length} result{filtered.length === 1 ? '' : 's'}
           </div>
-          <div className="opacity-60">
-            MOBILE USERS - TURN YOUR DEVICE TO VIEW IN LANDSCAPE MODE
-          </div>
+          <div>MOBILE USERS - TURN YOUR DEVICE TO VIEW IN LANDSCAPE MODE</div>
         </div>
 
-        {/* Results grid */}
         {filtered.length === 0 ? (
-          <div className="p-4 border rounded bg-white text-sm opacity-80">
-            No matches. Try a different brand, fragrance name, note keyword, or accord.
+          <div className="p-4 border rounded bg-white text-black text-sm opacity-80">
+            No matches. Try searching by brand, fragrance name, notes, or accord keywords.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 pt-2">
-            {filtered.map((f) => <Card key={f.id} f={f} />)}
+            {filtered.map((f) => (
+              <Card key={f.id} f={f} />
+            ))}
           </div>
         )}
       </main>
