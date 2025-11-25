@@ -108,16 +108,7 @@ export default function BrandClient() {
   return (
     <div className="min-h-screen">
       {/* Banner */}
-      <div className="relative w-full h-40 sm:h-56 md:h-64 lg:h-72">
-        <Image
-          src="/FragrantiqueHeader.png"
-          alt="Fragrantique"
-          fill
-          className="object-cover"
-          priority
-          sizes="100vw"
-        />
-      </div>
+      
 
       {/* Content */}
       <div className="max-w-5xl mx-auto p-6 space-y-4">
