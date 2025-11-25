@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 export default function HeaderBar() {
   return (
-      <div className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
+    <div className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
         {/* Left side: Enlarged Logo */}
@@ -17,15 +17,16 @@ export default function HeaderBar() {
           />
         </div>
 
-        {/* Right side: Text */}
-         <nav className="flex items-center gap-4 text-[15px] font-medium text-[#F2D2A4]">
+        {/* Right side: Text (STACKED VERTICALLY) */}
+        <nav className="flex flex-col items-end gap-2 text-[15px] font-medium text-[#F2D2A4]">
           <Link href="/muskAnosmia" className="hover:underline">Musk Anosmia</Link>
           <Link href="/photos" className="hover:underline">My Collection</Link>
           <Link href="/brand" className="hover:underline">Brand Index</Link>
           <Link href="/chat" className="hover:underline">Contact Me</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
         </nav>
-</div>
+
+      </div>
     </div>
   );
 }
