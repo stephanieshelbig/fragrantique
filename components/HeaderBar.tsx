@@ -18,7 +18,7 @@ export default function HeaderBar() {
         </div>
 
         {/* Right side: Text */}
-         <nav className="flex items-center gap-4 text-[15px] font-medium">
+         <nav className="flex items-center gap-4 text-[15px] font-medium text-[#F2D2A4]">
           <Link href="/muskAnosmia" className="hover:underline">Musk Anosmia</Link>
           <Link href="/photos" className="hover:underline">My Collection</Link>
           <Link href="/brand" className="hover:underline">Brand Index</Link>
