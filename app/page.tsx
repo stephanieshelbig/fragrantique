@@ -3,55 +3,96 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#fdfcf9] flex flex-col items-center py-12 px-4">
-
-      {/* Welcome Message */}
-      <div className="max-w-2xl text-center mb-10">
-        <h1 className="text-2xl font-bold text-[#182A39] mb-4">
-          Welcome to Fragrantique 🌸
-        </h1>
-        <p className="text-lg text-[#182A39]/90 leading-relaxed">
-          Thank you so much for viewing my page!  
-          I have a large fragrance collection, and I sell decants of it to pay for school... 
-          and more fragrances!  
-          Click one of the buttons below to start browsing my collection.  
-          Feel free to contact me using the <span className="font-semibold">'Contact Me'</span> link at the top of the page.💕
-        </p>
-      </div>
-
-      {/* Buttons Container */}
-      <div className="flex flex-col gap-6 w-full max-w-sm">
-
-        {/* Search Collection */}
-        <Link href="/notes">
-          <div className="flex items-center gap-4 px-6 py-4 bg-[#b5985a] text-white rounded-xl shadow hover:bg-[#a2834d] transition cursor-pointer">
-            <span className="text-2xl">🔍</span>
-            <span className="text-lg font-semibold">
-              Search My Collection
-            </span>
+    <main className="min-h-screen bg-[#fdfcf9] flex justify-center px-4 py-12">
+      <div className="w-full max-w-3xl">
+        {/* Luxe intro card */}
+        <div className="rounded-3xl border border-[#d9c39a] bg-gradient-to-b from-white via-[#fdf7ee] to-[#f7e8d4] shadow-xl px-8 py-10">
+          {/* Logo / hero */}
+          <div className="flex justify-center mb-6">
+            <div className="rounded-full border border-[#e3cfaa] bg-white/70 shadow-md px-6 py-4">
+              <Image
+                src="/FragrantiqueLogo3.png"
+                alt="Fragrantique Logo"
+                width={190}
+                height={80}
+                priority
+              />
+            </div>
           </div>
-        </Link>
 
-        {/* Recommendations */}
-        <Link href="/recommendations">
-          <div className="flex items-center gap-4 px-6 py-4 bg-[#b5985a] text-white rounded-xl shadow hover:bg-[#a2834d] transition cursor-pointer">
-            <span className="text-2xl">✨</span>
-            <span className="text-lg font-semibold">
-              Get Recommendations
-            </span>
+          {/* Text */}
+          <div className="text-center space-y-4">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
+              Welcome to Fragrantique 🌸
+            </h1>
+            <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
+              Thank you so much for viewing my page! I have a large fragrance collection,
+              and I sell decants of it to pay for school... and more fragrances! Click one
+              of the buttons below to start browsing my collection. Feel free to contact me
+              using the <span className="font-semibold">'Contact Me'</span> link at the top
+              of the page.💕
+            </p>
           </div>
-        </Link>
 
-        {/* Boutiques */}
-        <Link href="/u">
-          <div className="flex items-center gap-4 px-6 py-4 bg-[#b5985a] text-white rounded-xl shadow hover:bg-[#a2834d] transition cursor-pointer">
-            <span className="text-2xl">🏬</span>
-            <span className="text-lg font-semibold">
-              Browse Fragrance Boutiques
-            </span>
+          {/* Divider */}
+          <div className="mt-8 mb-6 flex justify-center">
+            <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
           </div>
-        </Link>
- 
+
+          {/* Buttons */}
+          <div className="grid gap-4">
+            {/* Search Collection */}
+            <Link href="/notes">
+              <div className="group flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:bg-[#f8efe2] transition-transform duration-200 cursor-pointer">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#f5e2c3] to-[#d9b675] shadow-inner">
+                  <span className="text-xl">🔍</span>
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-base md:text-lg font-semibold text-[#182A39]">
+                    Search My Collection
+                  </span>
+                  <span className="text-xs md:text-sm text-[#182A39]/70">
+                    Best for easy viewing on mobile
+                  </span>
+                </div>
+              </div>
+            </Link>
+
+            {/* Recommendations */}
+            <Link href="/recommendations">
+              <div className="group flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:bg-[#f8efe2] transition-transform duration-200 cursor-pointer">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
+                  <span className="text-xl">✨</span>
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-base md:text-lg font-semibold text-[#182A39]">
+                    Get Recommendations
+                  </span>
+                  <span className="text-xs md:text-sm text-[#182A39]/70">
+                    Let me suggest something you might love
+                  </span>
+                </div>
+              </div>
+            </Link>
+
+            {/* Boutiques */}
+            <Link href="/u">
+              <div className="group flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:bg-[#f8efe2] transition-transform duration-200 cursor-pointer">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0] shadow-inner">
+                  <span className="text-xl">🏬</span>
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-base md:text-lg font-semibold text-[#182A39]">
+                    Browse Fragrance Boutiques
+                  </span>
+                  <span className="text-xs md:text-sm text-[#182A39]/70">
+                    Explore my virtual shelves and bottles
+                  </span>
+                </div>
+              </div>
+            </Link>
+          </div>
+        </div>
       </div>
     </main>
   );
