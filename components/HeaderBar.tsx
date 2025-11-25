@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 export default function HeaderBar() {
   const pathname = usePathname();
   const isNotesPage = pathname?.startsWith('/notes');
+  const isRecommendationsPage = pathname?.startsWith('/recommendations');
 
   const containerClasses = isNotesPage
     ? 'relative z-10 border-b bg-[#182A39]/90 backdrop-blur'
