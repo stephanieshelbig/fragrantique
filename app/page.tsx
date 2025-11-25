@@ -6,14 +6,7 @@ export default function HomePage() {
     <main className="min-h-screen bg-[#fdfcf9] flex flex-col items-center">
       {/* Header banner from /public */}
       <div className="w-full">
-        <Image
-          src="/Header.png"
-          alt="Fragrantique Header"
-          width={1600}
-          height={300}
-          priority
-          className="w-full object-cover"
-        />
+        
       </div>
 
       {/* CTA Buttons */}
