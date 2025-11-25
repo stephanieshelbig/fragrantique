@@ -1,10 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function HeaderBar() {
+  const pathname = usePathname();
+  const isNotesPage = pathname?.startsWith('/notes');
+
+  const containerClasses = isNotesPage
+    ? 'relative z-10 border-b bg-[#182A39]/90 backdrop-blur'
+    : 'sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur';
+
   return (
-    <div className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
+    <div className={containerClasses}>
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
         {/* Left side: Clickable Logo */}
