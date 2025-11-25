@@ -247,7 +247,7 @@ export default function FragranceDetail({ params }) {
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       {/* Local page bar: keep back link, Fragrantica & Edit; remove duplicated nav links */}
       <div className="flex items-center justify-between">
-        <Link href="/u/stephanie" className="underline text-sm">← Back to boutique</Link>
+       
 
         <div className="flex items-center gap-4">
           {frag.fragrantica_url && (
