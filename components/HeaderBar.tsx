@@ -1,4 +1,10 @@
-  <header className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
+'use client';
+
+import Link from 'next/link';
+
+export default function HeaderBar() {
+  return (
+      <div className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
         {/* Left side: Enlarged Logo */}
@@ -19,6 +25,7 @@
           <Link href="/chat" className="hover:underline">Contact Me</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
         </nav>
-
-      </div>
-    </header>
+</div>
+    </div>
+  );
+}
