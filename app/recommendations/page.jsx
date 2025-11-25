@@ -206,12 +206,7 @@ export default function RecommendationsPage() {
   return (
     <div className="min-h-screen bg-[#fdfcf9]">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-semibold">Fragrantique</Link>
-          
-        </div>
-      </header>
+      
 
       <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
         {/* Lead */}
