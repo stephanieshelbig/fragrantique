@@ -47,8 +47,9 @@ export default function HomePage() {
             <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
           </div>
 
-          {/* Buttons (no boutiques button) */}
+          {/* Buttons */}
           <div className="grid gap-4">
+
             {/* Search Collection */}
             <Link href="/notes">
               <div className="group flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:bg-[#f8efe2] transition-transform duration-200 cursor-pointer">
@@ -61,6 +62,23 @@ export default function HomePage() {
                   </span>
                   <span className="text-xs md:text-sm text-[#182A39]/70">
                     Best for easy viewing on mobile
+                  </span>
+                </div>
+              </div>
+            </Link>
+
+            {/* NEW — Sort by Brand */}
+            <Link href="/brand">
+              <div className="group flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:bg-[#f8efe2] transition-transform duration-200 cursor-pointer">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0] shadow-inner">
+                  <span className="text-xl">🏷️</span>
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-base md:text-lg font-semibold text-[#182A39]">
+                    Sort by Brand
+                  </span>
+                  <span className="text-xs md:text-sm text-[#182A39]/70">
+                    Display my collection by Brand Name
                   </span>
                 </div>
               </div>
@@ -82,6 +100,7 @@ export default function HomePage() {
                 </div>
               </div>
             </Link>
+
           </div>
         </div>
       </div>
