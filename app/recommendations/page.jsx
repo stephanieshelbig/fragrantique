@@ -205,14 +205,7 @@ export default function RecommendationsPage() {
 
   return (
     <div className="min-h-screen bg-[#fdfcf9]">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-semibold">Fragrantique</Link>
-          
-        </div>
-      </header>
-
+      {/* Main content (no extra white Fragrantique header) */}
       <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
         {/* Lead */}
         <div className="p-3 rounded border bg-white">
@@ -331,7 +324,7 @@ export default function RecommendationsPage() {
                           {!!accords.length && (
                             <div className="mt-2 flex flex-wrap gap-1">
                               {accords.map((a, i) => (
-                                <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border bg-white">
+                                <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border bg:white">
                                   {a}
                                 </span>
                               ))}
@@ -370,7 +363,7 @@ export default function RecommendationsPage() {
 
                             <button
                               onClick={() => saveRec(r.id, { comment: r.comment ?? null, category: r.category })}
-                              className="px-3 py-1.5 rounded bg-black text-white text-xs hover:opacity-90"
+                              className="px-3 py-1.5 rounded bg-black text:white text-xs hover:opacity-90"
                             >
                               Save
                             </button>
