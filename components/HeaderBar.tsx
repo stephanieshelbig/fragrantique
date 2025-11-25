@@ -5,10 +5,12 @@ import { usePathname } from 'next/navigation';
 
 export default function HeaderBar() {
   const pathname = usePathname();
-  const isNotesPage = pathname?.startsWith('/notes');
-  const isRecommendationsPage = pathname?.startsWith('/recommendations');
 
-  const containerClasses = isNotesPage
+  // Pages where the header should NOT be sticky
+  const isNonStickyPage =
+    pathname?.startsWith('/notes') || pathname?.startsWith('/recommendations');
+
+  const containerClasses = isNonStickyPage
     ? 'relative z-10 border-b bg-[#182A39]/90 backdrop-blur'
     : 'sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur';
 
@@ -28,11 +30,21 @@ export default function HeaderBar() {
 
         {/* Right side: Stacked vertical links */}
         <nav className="flex flex-col items-end gap-2 text-[15px] font-medium text-[#F2D2A4]">
-          <Link href="/muskAnosmia" className="hover:underline">Musk Anosmia</Link>
-          <Link href="/photos" className="hover:underline">My Collection</Link>
-          <Link href="/brand" className="hover:underline">Brand Index</Link>
-          <Link href="/chat" className="hover:underline">Contact Me</Link>
-          <Link href="/cart" className="hover:underline">Cart</Link>
+          <Link href="/muskAnosmia" className="hover:underline">
+            Musk Anosmia
+          </Link>
+          <Link href="/photos" className="hover:underline">
+            My Collection
+          </Link>
+          <Link href="/brand" className="hover:underline">
+            Brand Index
+          </Link>
+          <Link href="/chat" className="hover:underline">
+            Contact Me
+          </Link>
+          <Link href="/cart" className="hover:underline">
+            Cart
+          </Link>
         </nav>
 
       </div>
