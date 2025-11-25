@@ -51,7 +51,7 @@ export default function HomePage() {
             </span>
           </div>
         </Link>
-
+ 
       </div>
     </main>
   );
