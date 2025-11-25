@@ -33,7 +33,9 @@ function parseAccordNames(accords) {
 }
 
 // ---------- UI ----------
-
+function HeaderNav() {
+  
+}
 
 function SearchBar({ value, onChange, onReload }) {
   return (
