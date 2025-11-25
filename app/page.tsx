@@ -3,19 +3,27 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#fdfcf9] flex justify-center px-4 py-12">
+    <main
+      className="min-h-screen flex justify-center px-4 py-12 bg-[#fdfcf9]"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle at top, #f5ebdc 0, #fdfcf9 40%, #fdfcf9 100%), repeating-linear-gradient(45deg, rgba(217,195,154,0.08), rgba(217,195,154,0.08) 6px, transparent 6px, transparent 12px)",
+        backgroundBlendMode: "soft-light",
+      }}
+    >
       <div className="w-full max-w-3xl">
         {/* Luxe intro card */}
         <div className="rounded-3xl border border-[#d9c39a] bg-gradient-to-b from-white via-[#fdf7ee] to-[#f7e8d4] shadow-xl px-8 py-10">
           {/* Logo / hero */}
           <div className="flex justify-center mb-6">
-            <div className="rounded-full border border-[#e3cfaa] bg-white/70 shadow-md px-6 py-4">
+            <div className="rounded-full border border-[#e3cfaa] bg-white/80 shadow-md px-6 py-4 transform transition-transform duration-700 hover:scale-105 hover:shadow-2xl animate-pulse">
               <Image
                 src="/FragrantiqueLogo3.png"
                 alt="Fragrantique Logo"
                 width={190}
                 height={80}
                 priority
+                className="block"
               />
             </div>
           </div>
@@ -39,7 +47,7 @@ export default function HomePage() {
             <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
           </div>
 
-          {/* Buttons */}
+          {/* Buttons (no boutiques button) */}
           <div className="grid gap-4">
             {/* Search Collection */}
             <Link href="/notes">
@@ -70,23 +78,6 @@ export default function HomePage() {
                   </span>
                   <span className="text-xs md:text-sm text-[#182A39]/70">
                     Let me suggest something you might love
-                  </span>
-                </div>
-              </div>
-            </Link>
-
-            {/* Boutiques */}
-            <Link href="/u">
-              <div className="group flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:bg-[#f8efe2] transition-transform duration-200 cursor-pointer">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0] shadow-inner">
-                  <span className="text-xl">🏬</span>
-                </div>
-                <div className="flex flex-col text-left">
-                  <span className="text-base md:text-lg font-semibold text-[#182A39]">
-                    Browse Fragrance Boutiques
-                  </span>
-                  <span className="text-xs md:text-sm text-[#182A39]/70">
-                    Explore my virtual shelves and bottles
                   </span>
                 </div>
               </div>
