@@ -33,29 +33,7 @@ function parseAccordNames(accords) {
 }
 
 // ---------- UI ----------
-function HeaderNav() {
-  return (
-    <header className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
-      <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
-        {/* Left side: Enlarged Logo */}
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/FragrantiqueLogo3.png"
-            alt="Fragrantique Logo"
-            className="h-48 w-auto"
-          />
-        </div>
-
-        {/* Right side: Text */}
-        <Link href="/" className="text-2xl font-semibold text-[#F2D2A4]">
-          Fragrantique
-        </Link>
-      </div>
-    </header>
-  );
-}
 
 function SearchBar({ value, onChange, onReload }) {
   return (
