@@ -7,17 +7,17 @@ export default function HeaderBar() {
     <div className="sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
-        {/* Left side: Enlarged Logo */}
-        <div className="flex items-center gap-3">
+        {/* Left side: Clickable Logo */}
+        <Link href="/" className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/FragrantiqueLogo3.png"
             alt="Fragrantique Logo"
-            className="h-48 w-auto"
+            className="h-48 w-auto cursor-pointer"
           />
-        </div>
+        </Link>
 
-        {/* Right side: Text (STACKED VERTICALLY) */}
+        {/* Right side: Stacked vertical links */}
         <nav className="flex flex-col items-end gap-2 text-[15px] font-medium text-[#F2D2A4]">
           <Link href="/muskAnosmia" className="hover:underline">Musk Anosmia</Link>
           <Link href="/photos" className="hover:underline">My Collection</Link>
