@@ -113,9 +113,7 @@ export default function BrandClient() {
       {/* Content */}
       <div className="max-w-5xl mx-auto p-6 space-y-4">
         <div className="p-3 rounded border bg-white flex flex-wrap items-center gap-5">
-          <Link href="/decants" className="font-semibold underline">
-            Click here to view all available decants
-          </Link>
+          
           <div className="ml-auto flex flex-col items-start sm:items-end gap-1">
             <Link href="/notes" className="font-semibold underline">
               Click here to search by name, brand, or notes
