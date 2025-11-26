@@ -29,7 +29,7 @@ export default function HeaderBar() {
         </Link>
 
         {/* Right side: Stacked vertical links */}
-        <nav className="flex flex-col items-end gap-2 text-[15px] font-medium text-[#F2D2A4]">
+        <nav className="flex flex-col items-end gap-2 text-[15px] font-medium text-[#D4A774]">
           <Link href="/muskAnosmia" className="hover:underline">
             Musk Anosmia
           </Link>
