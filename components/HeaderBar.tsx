@@ -1,21 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
 export default function HeaderBar() {
-  const pathname = usePathname();
-
-  // Pages where the header should NOT be sticky
-  const isNonStickyPage =
-    pathname?.startsWith('/notes') || pathname?.startsWith('/recommendations');
-
-  const containerClasses = isNonStickyPage
-    ? 'relative z-10 border-b bg-[#182A39]'
-    : 'sticky top-0 z-10 border-b bg-[#182A39]';
-
   return (
-    <div className={containerClasses}>
+    <div className="relative z-10 border-b bg-[#182A39]">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
         {/* Left side: Clickable Logo */}
