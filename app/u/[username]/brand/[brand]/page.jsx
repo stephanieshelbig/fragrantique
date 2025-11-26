@@ -132,9 +132,7 @@ export default function BrandPage({ params }) {
         <h1 className="text-2xl font-bold">
           {displayBrand} — <span className="font-normal opacity-70">@{owner.username}</span>
         </h1>
-        <Link href={`/u/${encodeURIComponent(owner.username)}`} className="text-sm underline">
-          ← Back to boutique
-        </Link>
+        
       </div>
 
       {!filtered.length && (
