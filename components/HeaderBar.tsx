@@ -11,8 +11,8 @@ export default function HeaderBar() {
     pathname?.startsWith('/notes') || pathname?.startsWith('/recommendations');
 
   const containerClasses = isNonStickyPage
-    ? 'relative z-10 border-b bg-[#182A39]/90 backdrop-blur'
-    : 'sticky top-0 z-10 border-b bg-[#182A39]/90 backdrop-blur';
+    ? 'relative z-10 border-b bg-[#182A39]'
+    : 'sticky top-0 z-10 border-b bg-[#182A39]';
 
   return (
     <div className={containerClasses}>
