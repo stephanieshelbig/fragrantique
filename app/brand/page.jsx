@@ -144,7 +144,7 @@ export default function BrandClient() {
               <Link
                 key={canon}
                 href={href}
-                className="px-3 py-2 rounded bg-black text-white hover:opacity-90 text-sm"
+                className="px-3 py-2 rounded bg-[#182A39] text-[#D4A774] hover:opacity-90 text-sm"
               >
                 {meta.display} <span className="opacity-70">({meta.count})</span>
               </Link>
