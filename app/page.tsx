@@ -48,7 +48,7 @@ export default function HomePage() {
             {/* Text */}
             <div className="text-center space-y-4">
               <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
-                Welcome to Fragrantique 🌸
+                Welcome to Fragrantique
               </h1>
               <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
                 Thank you so much for viewing my page! I have a large fragrance collection,
