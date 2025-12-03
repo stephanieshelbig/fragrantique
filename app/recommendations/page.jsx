@@ -210,8 +210,8 @@ export default function RecommendationsPage() {
         {/* Lead */}
         <div className="p-3 rounded border bg-white">
           <div className="text-base sm:text-lg">
-            <span className="font-semibold">Having trouble deciding?</span>{' '}
-            Here are some of my recommendations based on fragrance types.
+            <span className="font-semibold">Here are some of my recommendations based on fragrance types.</span>{' '}
+            View in Landscape Mode to see the 3 columns.
           </div>
         </div>
 
