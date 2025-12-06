@@ -60,7 +60,8 @@ export default function BrandPage({ params }) {
           id,
           fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
         `)
-        .eq('user_id', prof.id);
+        .eq('user_id', prof.id)
+        .limit(5000);
 
       const items = (rows || []).map(r => r.fragrance).filter(Boolean);
       setFrags(items);
