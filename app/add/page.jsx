@@ -1,3 +1,5 @@
+
+
 'use client';
 
 import { useState } from 'react';
@@ -17,16 +19,12 @@ export default function AddFragrance() {
   const [message, setMessage] = useState('');
   const [newId, setNewId] = useState(null);
 
-  const update = (k, v) =>
-    setForm((s) => ({
-      ...s,
-      [k]: v,
-    }));
+  const update = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
   async function submit() {
     setMessage('');
 
-    // 1) Insert fragrance into catalog
+    // 1) Insert fragrance
     const accords = form.accords
       .split(',')
       .map((x) => x.trim())
@@ -55,34 +53,19 @@ export default function AddFragrance() {
 
     setNewId(ins.id);
 
-    // 2) Require login (same behavior as before)
+    // 2) Auto-link to the current user's shelves at the last position
     const { data: userRes } = await supabase.auth.getUser();
     const userId = userRes?.user?.id;
     if (!userId) {
-      // unchanged: still just save, but do NOT touch shelves
       setMessage('Saved. Please log in to add it to your shelves.');
       return;
     }
 
-    // 3) Look up the @stephanie profile and always add to her shelves
-    const { data: owner, error: ownerErr } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .eq('username', 'stephanie')
-      .maybeSingle();
-
-    if (ownerErr || !owner?.id) {
-      setMessage('Saved, but could not find @stephanie profile to add it to shelves.');
-      return;
-    }
-
-    const ownerId = owner.id;
-
-    // 4) Find next position for Stephanie's shelves (append at end)
+    // Find next position (append)
     const { data: positions, error: posErr } = await supabase
       .from('user_fragrances')
       .select('position')
-      .eq('user_id', ownerId)
+      .eq('user_id', userId)
       .order('position', { ascending: false })
       .limit(1);
 
@@ -96,7 +79,7 @@ export default function AddFragrance() {
     const { error: linkErr } = await supabase
       .from('user_fragrances')
       .insert({
-        user_id: ownerId,
+        user_id: userId,
         fragrance_id: ins.id,
         position: nextPos,
       });
@@ -104,9 +87,7 @@ export default function AddFragrance() {
     if (linkErr) {
       setMessage(`Saved, but couldn’t add to shelves: ${linkErr.message}`);
     } else {
-      setMessage(
-        'Saved and added to Stephanie’s shelves ✨ You can remove the background to make it float.'
-      );
+      setMessage('Saved and added to your shelves ✨ You can remove the background to make it float.');
     }
   }
 
@@ -140,70 +121,30 @@ export default function AddFragrance() {
     <div className="max-w-xl mx-auto glass-card p-6 space-y-3">
       <h2 className="text-2xl font-semibold mb-2">Add a Fragrance</h2>
 
-      <input
-        className="w-full border rounded-lg px-3 py-2"
-        placeholder="Name"
-        onChange={(e) => update('name', e.target.value)}
-      />
-      <input
-        className="w-full border rounded-lg px-3 py-2"
-        placeholder="Brand"
-        onChange={(e) => update('brand', e.target.value)}
-      />
-      <input
-        className="w-full border rounded-lg px-3 py-2"
-        placeholder="Image URL"
-        onChange={(e) => update('image_url', e.target.value)}
-      />
-      <input
-        className="w-full border rounded-lg px-3 py-2"
-        placeholder="Fragrantica URL"
-        onChange={(e) => update('fragrantica_url', e.target.value)}
-      />
-      <textarea
-        className="w-full border rounded-lg px-3 py-2"
-        placeholder="Notes / Comments"
-        onChange={(e) => update('notes', e.target.value)}
-      />
-      <input
-        className="w-full border rounded-lg px-3 py-2"
-        placeholder="Accords (comma separated)"
-        onChange={(e) => update('accords', e.target.value)}
-      />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Name" onChange={(e) => update('name', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Brand" onChange={(e) => update('brand', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL" onChange={(e) => update('image_url', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Fragrantica URL" onChange={(e) => update('fragrantica_url', e.target.value)} />
+      <textarea className="w-full border rounded-lg px-3 py-2" placeholder="Notes / Comments" onChange={(e) => update('notes', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Accords (comma separated)" onChange={(e) => update('accords', e.target.value)} />
 
       <div className="grid grid-cols-2 gap-3">
-        <input
-          className="border rounded-lg px-3 py-2"
-          placeholder="Decant price (USD)"
-          onChange={(e) => update('decant_price', e.target.value)}
-        />
-        <input
-          className="border rounded-lg px-3 py-2"
-          placeholder="Payment link (Stripe, etc.)"
-          onChange={(e) => update('decant_payment_link', e.target.value)}
-        />
+        <input className="border rounded-lg px-3 py-2" placeholder="Decant price (USD)" onChange={(e) => update('decant_price', e.target.value)} />
+        <input className="border rounded-lg px-3 py-2" placeholder="Payment link (Stripe, etc.)" onChange={(e) => update('decant_payment_link', e.target.value)} />
       </div>
 
-      <button
-        onClick={submit}
-        className="w-full bg-[var(--gold)] text-white rounded-lg py-2"
-      >
+      <button onClick={submit} className="w-full bg-[var(--gold)] text-white rounded-lg py-2">
         Save (and add to my shelves)
       </button>
 
       {newId && (
-        <button
-          onClick={removeBackground}
-          className="w-full bg-black text-white rounded-lg py-2"
-        >
+        <button onClick={removeBackground} className="w-full bg-black text-white rounded-lg py-2">
           Remove background (make transparent PNG)
         </button>
       )}
 
       {message && <p className="text-sm">{message}</p>}
-      <p className="text-xs opacity-60">
-        Tip: high-contrast images remove backgrounds best.
-      </p>
+      <p className="text-xs opacity-60">Tip: high-contrast images remove backgrounds best.</p>
     </div>
   );
 }
