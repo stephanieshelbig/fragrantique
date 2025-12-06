@@ -20,7 +20,8 @@ export default function BrandDetailPage({ params }) {
         .from('fragrances')
         .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
         .ilike('brand', brandParam)
-        .order('name', { ascending: true });
+        .order('name', { ascending: true })
+        .limit(5000);
 
       // 2) If nothing comes back (brand capitalization/spacing quirks), try contains
       if (!error && (!data || data.length === 0)) {
@@ -28,7 +29,8 @@ export default function BrandDetailPage({ params }) {
           .from('fragrances')
           .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
           .ilike('brand', `%${brandParam}%`)
-          .order('name', { ascending: true });
+          .order('name', { ascending: true })
+          .limit(5000);
 
         if (!fallback.error && fallback.data) data = fallback.data;
       }
