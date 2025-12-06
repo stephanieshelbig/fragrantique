@@ -129,13 +129,9 @@ export default function BrandPage({ params }) {
       </div>
       
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
-          {displayBrand} — <span className="font-normal opacity-70">@{owner.username}</span>
+       <h1 className="text-2xl font-bold">
+          {displayBrand} <span className="font-normal opacity-70"></span>
         </h1>
-        <Link href={`/u/${encodeURIComponent(owner.username)}`} className="text-sm underline">
-          ← Back to boutique
-        </Link>
-
         
       </div>
 
