@@ -702,11 +702,12 @@ export default function FragranceDetail({ params }) {
           {/* Price-match note directly under options box */}
           <div className="text-sm opacity-80 leading-relaxed">
             These are fragrances from my personal collection. I'm selling decants of
-            some of each fragrance to earn some extra money. I don't do this as a
-            for-profit business, so my prices will be lower than decant sites like
-            ScentsAngel and DecantX. If you find a lower price for these decants,
-            send me a message through the &apos;Contact Me&apos; link at the top of
-            the page, and I will try to match the price.
+            some of each fragrance to earn some extra money. I don't do this strictly
+            for profit, meaning I don't buy fragrances just to sell them, so my prices 
+            will be lower than decant sites like ScentsAngel and DecantX. If you find 
+            a lower price for these decants, send me a message through the 
+            &apos;Contact Me&apos; link at the top of the page, and I will try to match 
+            the price.
           </div>
         </div>
       </div>
