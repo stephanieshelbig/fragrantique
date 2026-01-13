@@ -46,12 +46,32 @@ export default function ChatPage() {
     <main className="min-h-screen bg-[#fdfcf9] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl bg-white border rounded-2xl shadow p-6">
         <h1 className="text-2xl font-bold text-center">Send me a message</h1>
+
         <p className="text-center text-sm text-gray-600 mt-1">
           I’ll receive your message by email and reply as soon as I can.
         </p>
-        <p className="text-center text-sm text-gray-600 mt-1">
-          Also find me on TikTok @fragrantique.net and Instagram @fragrantique_net.
-        </p>
+
+        {/* Social buttons */}
+        <div className="mt-4 flex justify-center gap-4">
+          <a
+            href="https://www.tiktok.com/@fragrantique.net"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-full border border-black px-5 py-2 text-sm font-medium text-black hover:opacity-70 transition"
+          >
+            Follow on TikTok
+          </a>
+
+          <a
+            href="https://www.instagram.com/fragrantique_net"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-full border border-black px-5 py-2 text-sm font-medium text-black hover:opacity-70 transition"
+          >
+            Follow on Instagram
+          </a>
+        </div>
+
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Your name</label>
