@@ -118,9 +118,11 @@ function ThankYouInner() {
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Thank you for your order! 🧾</h1>
+      <h1 className="text-2xl font-bold">Thanks for your order! 🧾</h1>
       <p className="text-sm text-gray-600">
-        We’ve emailed you a receipt. You’ll get tracking info as soon as your order ships.
+        I've just emailed you a receipt. Please check the email to be sure your mailing address is correct.  
+        If the email is not in your inbox, check your spam / junk folder.
+        I'll send a separate email with tracking info as soon as your order ships.
       </p>
 
       {!sid && (
