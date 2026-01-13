@@ -120,10 +120,17 @@ function ThankYouInner() {
     <div className="max-w-3xl mx-auto p-6 space-y-4">
       <h1 className="text-2xl font-bold">Thanks for your order! 🥰 </h1>
       <p className="text-sm text-gray-600">
-        I've just emailed you a receipt. Please check the email to be sure your mailing address is correct.  
+        I've just emailed you a receipt. Please check it to be sure your mailing address is correct.  
+        </p>
+      <p className="text-sm text-gray-600">
         If the email is not in your inbox, check your spam / junk folder.
+        </p>
+      <p className="text-sm text-gray-600">
         I'll send a separate email with tracking info as soon as your order ships.
       </p>
+      <p className="text-sm text-gray-600">
+        -Stephanie💕
+        </p>
 
       {!sid && (
         <div className="p-4 border rounded bg-white">No Stripe session id found in the URL.</div>
@@ -174,7 +181,7 @@ function ThankYouInner() {
       {msg && <div className="p-3 border rounded bg-white">{msg}</div>}
 
       <div className="pt-2">
-        <Link href="/u/stephanie" className="underline">
+        <Link href="/" className="underline">
           ← Back to boutique
         </Link>
       </div>
