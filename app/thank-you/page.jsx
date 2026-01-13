@@ -121,8 +121,6 @@ function ThankYouInner() {
       <h1 className="text-2xl font-bold">Thanks for your order! 🥰 </h1>
       <p className="text-sm text-gray-600">
         I've just emailed you a receipt. Please check it to be sure your mailing address is correct.  
-        </p>
-      <p className="text-sm text-gray-600">
         If the email is not in your inbox, check your spam / junk folder.
         </p>
       <p className="text-sm text-gray-600">
