@@ -52,7 +52,7 @@ export default function HomePage() {
               </h1>
               <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
                 Thank you so much for viewing my page! I have a large fragrance collection,
-                and I sell decants of it to pay for school... and more fragrances! Click one
+                and I sell decants of it to make some extra money. Click one
                 of the buttons below to start browsing my collection. Feel free to contact me
                 using the <span className="font-semibold">'Contact Me'</span> link at the top
                 of the page.💕
