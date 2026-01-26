@@ -55,7 +55,7 @@ export default function HomePage() {
                 and I sell decants of it to make some extra money. Click one
                 of the buttons below to start browsing my collection. Feel free to contact me
                 using the <span className="font-semibold">'Contact Me'</span> link at the top
-                of the page.💕
+                of the page💕
               </p>
               </div>
             <div className="text-center space-y-4">
