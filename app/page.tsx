@@ -56,7 +56,10 @@ export default function HomePage() {
                 of the buttons below to start browsing my collection. Feel free to contact me
                 using the <span className="font-semibold">'Contact Me'</span> link at the top
                 of the page.💕
-
+              </p>
+              </div>
+            <div className="text-center space-y-4">
+           <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
                 *** I am in the US and can only ship to addresses in the US... for now.
               </p>
             </div>
