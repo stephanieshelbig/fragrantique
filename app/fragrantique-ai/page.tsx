@@ -1,192 +1,311 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+"use client";
 
-type FragranceRow = {
+import Image from "next/image";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+
+type RecommendedFragrance = {
   id: string | number;
-  brand: string | null;
-  name: string | null;
-  accords: any | null;
-  image_url: string | null;
+  brand?: string | null;
+  name?: string | null;
+  image_url?: string | null;
+  accords?: any;
+  reason?: string | null;
 };
 
-function safeTrim(s: any) {
-  return typeof s === "string" ? s.trim() : "";
-}
-
-function normalizeList(list: any): string[] {
-  if (!Array.isArray(list)) return [];
-  return list
-    .map((x) => safeTrim(x))
+function parseLines(input: string): string[] {
+  return input
+    .split(/\r?\n|,/g)
+    .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 25);
 }
 
-function summarizeAccords(accords: any): string {
+function accordsToText(accords: any): string {
   if (!accords) return "";
   if (Array.isArray(accords)) {
-    return accords
+    const names = accords
       .map((a) => (typeof a?.name === "string" ? a.name.trim() : ""))
-      .filter(Boolean)
-      .slice(0, 8)
-      .join(", ");
+      .filter(Boolean);
+    return names.slice(0, 8).join(" • ");
   }
   return "";
 }
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const likes = normalizeList(body?.likes);
-    const dislikes = normalizeList(body?.dislikes);
-    const limit = Math.max(1, Math.min(20, Number(body?.limit || 12)));
+export default function FragrantiqueAIPage() {
+  const [likesText, setLikesText] = useState("");
+  const [dislikesText, setDislikesText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<RecommendedFragrance[]>([]);
+  const [showInputs, setShowInputs] = useState(false);
+
+  const likes = useMemo(() => parseLines(likesText), [likesText]);
+  const dislikes = useMemo(() => parseLines(dislikesText), [dislikesText]);
+
+  async function handleRecommend() {
+    setError(null);
+    setResults([]);
 
     if (likes.length === 0 && dislikes.length === 0) {
-      return NextResponse.json({ error: "Please provide likes or dislikes." }, { status: 400 });
+      setError("Please enter at least one fragrance you like or dislike.");
+      return;
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
-
-    if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Missing Supabase server credentials. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment variables.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Missing OPENAI_API_KEY. Add it in Vercel Environment Variables (or .env.local) to enable Fragrantique AI.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false },
-    });
-
-    // Pull a reasonable pool. If you have thousands of fragrances, we keep it capped for token safety.
-    const { data, error } = await supabase
-      .from("fragrances")
-      .select("id, brand, name, accords, image_url")
-      .order("created_at", { ascending: false })
-      .limit(600);
-
-    if (error) {
-      return NextResponse.json({ error: `Supabase error: ${error.message}` }, { status: 500 });
-    }
-
-    const fragrances: FragranceRow[] = Array.isArray(data) ? (data as any) : [];
-    if (fragrances.length === 0) {
-      return NextResponse.json({ error: "No fragrances found in your database." }, { status: 404 });
-    }
-
-    // Create a compact catalog for the model
-    const catalog = fragrances.map((f) => {
-      const brand = safeTrim(f.brand) || "Unknown brand";
-      const name = safeTrim(f.name) || "Unknown name";
-      const accords = summarizeAccords(f.accords);
-      return {
-        id: f.id,
-        brand,
-        name,
-        accords,
-      };
-    });
-
-    // We ask for IDs so we can map back to your DB rows.
-    const system = `You are Fragrantique AI, a fragrance expert.
-You must recommend ONLY from the provided catalog. Return JSON only.`;
-
-    const user = {
-      likes,
-      dislikes,
-      request: `Pick ${limit} fragrances from the catalog that best match the user's likes and avoid their dislikes.
-Consider style, notes/accords, and overall vibe. Return a JSON object:
-{
-  "recommendations": [
-    { "id": <id from catalog>, "reason": "short reason (1 sentence)" }
-  ]
-}
-Rules:
-- Use only IDs that exist in the catalog.
-- Do not recommend duplicates.
-- Keep reasons short and helpful.`,
-      catalog,
-    };
-
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: JSON.stringify(user) },
-        ],
-      }),
-    });
-
-    if (!aiRes.ok) {
-      const t = await aiRes.text().catch(() => "");
-      return NextResponse.json(
-        { error: `OpenAI error: ${aiRes.status} ${aiRes.statusText}${t ? ` — ${t}` : ""}` },
-        { status: 500 }
-      );
-    }
-
-    const aiJson = await aiRes.json();
-    const content = aiJson?.choices?.[0]?.message?.content;
-
-    let parsed: any = null;
+    setLoading(true);
     try {
-      parsed = typeof content === "string" ? JSON.parse(content) : content;
-    } catch {
-      parsed = null;
-    }
-
-    const recsRaw: any[] = Array.isArray(parsed?.recommendations) ? parsed.recommendations : [];
-    const byId = new Map<string, FragranceRow>();
-    for (const f of fragrances) byId.set(String(f.id), f);
-
-    // Build final results in the same order AI returned
-    const final = [];
-    const used = new Set<string>();
-
-    for (const r of recsRaw) {
-      const id = String(r?.id ?? "");
-      if (!id || used.has(id)) continue;
-      const f = byId.get(id);
-      if (!f) continue;
-
-      used.add(id);
-      final.push({
-        id: f.id,
-        brand: f.brand,
-        name: f.name,
-        image_url: f.image_url,
-        accords: f.accords,
-        reason: typeof r?.reason === "string" ? r.reason : null,
+      const res = await fetch("/api/fragrantique-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ likes, dislikes, limit: 12 }),
       });
 
-      if (final.length >= limit) break;
-    }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to generate recommendations.");
 
-    return NextResponse.json({ recommendations: final });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unexpected server error." }, { status: 500 });
+      setResults(Array.isArray(data?.recommendations) ? data.recommendations : []);
+    } catch (e: any) {
+      setError(e?.message || "Unexpected error.");
+    } finally {
+      setLoading(false);
+    }
   }
+
+  return (
+    <>
+      <main
+        className="min-h-screen flex justify-center px-4 py-12 bg-[#fdfcf9]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at top, #f5ebdc 0, #fdfcf9 40%, #fdfcf9 100%), repeating-linear-gradient(45deg, rgba(217,195,154,0.08), rgba(217,195,154,0.08) 6px, transparent 6px, transparent 12px)",
+          backgroundBlendMode: "soft-light",
+        }}
+      >
+        <div className="w-full max-w-3xl">
+          <div
+            className="rounded-3xl border border-[#d9c39a] shadow-xl px-6 md:px-8 py-10 bg-white/95"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at top, #fff7ec 0, #fdf7ee 40%, #f7e8d4 100%), repeating-linear-gradient(135deg, rgba(217,195,154,0.10), rgba(217,195,154,0.10) 8px, transparent 8px, transparent 16px)",
+              backgroundBlendMode: "soft-light",
+            }}
+          >
+            {/* Logo */}
+            <div className="flex justify-center mb-6">
+              <div
+                className="rounded-full border border-[#e3cfaa] bg-white/80 shadow-md px-6 py-4 transform transition-transform duration-700 hover:scale-105 hover:shadow-2xl"
+                style={{ animation: "floatLogo 6s ease-in-out infinite, logoGlow 6s ease-in-out infinite" }}
+              >
+                <Image
+                  src="/FragrantiqueLogo3.png"
+                  alt="Fragrantique Logo"
+                  width={190}
+                  height={80}
+                  priority
+                  className="block"
+                />
+              </div>
+            </div>
+
+            <div className="text-center space-y-3">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
+                Fragrantique AI
+              </h1>
+              <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
+                Tell me what you <span className="font-semibold">love</span> and what you{" "}
+                <span className="font-semibold">don’t</span>, and I’ll suggest fragrances from my collection you
+                might like.
+              </p>
+            </div>
+
+            <div className="mt-8 mb-6 flex justify-center">
+              <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
+            </div>
+
+            <div className="grid gap-5">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 shadow-sm">
+                  <div className="text-sm font-semibold text-[#182A39] mb-2">Fragrances you like</div>
+                  <textarea
+                    value={likesText}
+                    onChange={(e) => setLikesText(e.target.value)}
+                    placeholder={`Examples:\nMind Games - The Forward\nParfums de Marly - Delina\nNishane - Ani`}
+                    className="w-full min-h-[140px] rounded-xl border border-[#ead9b8] bg-white px-3 py-2 text-sm text-[#182A39] outline-none focus:ring-2 focus:ring-[#d9c39a]/60"
+                  />
+                  <div className="mt-2 text-xs text-[#182A39]/70">One per line or comma-separated. {likes.length}/25</div>
+                </div>
+
+                <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 shadow-sm">
+                  <div className="text-sm font-semibold text-[#182A39] mb-2">Fragrances you dislike</div>
+                  <textarea
+                    value={dislikesText}
+                    onChange={(e) => setDislikesText(e.target.value)}
+                    placeholder={`Examples:\nAnything too smoky\nOverly sweet vanilla bombs\nStrong patchouli`}
+                    className="w-full min-h-[140px] rounded-xl border border-[#ead9b8] bg-white px-3 py-2 text-sm text-[#182A39] outline-none focus:ring-2 focus:ring-[#d9c39a]/60"
+                  />
+                  <div className="mt-2 text-xs text-[#182A39]/70">You can describe notes/styles too. {dislikes.length}/25</div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <button
+                  onClick={handleRecommend}
+                  disabled={loading}
+                  className="w-full sm:w-auto rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-3 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(120deg, rgba(248,239,223,0.7), rgba(255,255,255,0.95), rgba(248,239,223,0.7))",
+                    backgroundSize: "200% 100%",
+                    animation: loading ? "none" : "buttonShimmer 6s ease-in-out infinite",
+                  }}
+                >
+                  <span className="font-semibold text-[#182A39]">{loading ? "Thinking…" : "Suggest fragrances"}</span>
+                </button>
+
+                <div className="flex items-center gap-3 text-sm text-[#182A39]/80">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showInputs}
+                      onChange={(e) => setShowInputs(e.target.checked)}
+                      className="accent-[#d9c39a]"
+                    />
+                    Show my inputs
+                  </label>
+
+                  <Link href="/" className="underline hover:no-underline">
+                    Back to Home
+                  </Link>
+                </div>
+              </div>
+
+              {showInputs && (
+                <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 text-sm text-[#182A39]">
+                  <div className="font-semibold mb-2">What you entered</div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-[#182A39]/60 mb-1">Likes</div>
+                      <div className="whitespace-pre-wrap">{likes.join("\n") || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-[#182A39]/60 mb-1">Dislikes</div>
+                      <div className="whitespace-pre-wrap">{dislikes.join("\n") || "—"}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              {results.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-center mb-4">
+                    <h2 className="text-xl font-semibold text-[#182A39]">Suggestions</h2>
+                    <p className="text-sm text-[#182A39]/75">
+                      Based on your likes/dislikes, here are fragrances from my collection you may enjoy.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {results.map((f, idx) => {
+                      const accordsText = accordsToText(f.accords);
+                      return (
+                        <div
+                          key={`${f.id}-${idx}`}
+                          className="rounded-2xl border border-[#ead9b8] bg-white/90 p-4 shadow-sm"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(120deg, rgba(248,239,223,0.45), rgba(255,255,255,0.98), rgba(248,239,223,0.45))",
+                          }}
+                        >
+                          <div className="flex gap-4 items-start">
+                            <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#ead9b8] bg-white shrink-0">
+                              {f.image_url ? (
+                                <Image
+                                  src={f.image_url}
+                                  alt={`${f.brand || ""} ${f.name || ""}`.trim() || "Fragrance"}
+                                  fill
+                                  sizes="64px"
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-xs text-[#182A39]/50">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-[#182A39]/70">{f.brand || "—"}</div>
+                              <div className="text-base font-semibold text-[#182A39]">{f.name || "—"}</div>
+
+                              {accordsText && <div className="mt-1 text-xs text-[#182A39]/70">{accordsText}</div>}
+
+                              {f.reason && (
+                                <div className="mt-2 text-sm text-[#182A39]/90 leading-relaxed">
+                                  <span className="font-semibold">Why:</span> {f.reason}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-10 grid gap-3">
+              <div className="flex justify-center">
+                <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-3">
+                <Link
+                  href="/notes"
+                  className="text-center rounded-2xl border border-[#ead9b8] bg-white/85 px-4 py-3 text-sm text-[#182A39] hover:shadow-md"
+                >
+                  Search My Collection
+                </Link>
+                <Link
+                  href="/brand"
+                  className="text-center rounded-2xl border border-[#ead9b8] bg-white/85 px-4 py-3 text-sm text-[#182A39] hover:shadow-md"
+                >
+                  Brand Index
+                </Link>
+                <Link
+                  href="/recommendations"
+                  className="text-center rounded-2xl border border-[#ead9b8] bg-white/85 px-4 py-3 text-sm text-[#182A39] hover:shadow-md"
+                >
+                  Recommendations
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <style jsx global>{`
+        @keyframes floatLogo {
+          0% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+          100% { transform: translateY(0); }
+        }
+        @keyframes logoGlow {
+          0%,100% { box-shadow: 0 10px 24px rgba(0,0,0,0.08), 0 0 0 0 rgba(217,195,154,0.4); }
+          50% { box-shadow: 0 14px 36px rgba(0,0,0,0.12), 0 0 18px 4px rgba(217,195,154,0.6); }
+        }
+        @keyframes buttonShimmer {
+          0% { background-position: 0% 0%; }
+          50% { background-position: 100% 0%; }
+          100% { background-position: 0% 0%; }
+        }
+      `}</style>
+    </>
+  );
 }
