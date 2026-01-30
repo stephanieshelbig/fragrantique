@@ -9,7 +9,7 @@ type RecommendedFragrance = {
   brand?: string | null;
   name?: string | null;
   image_url?: string | null;
-  accords?: any;
+  accords?: any; // JSON in your DB (often an array of { name, strength })
   reason?: string | null;
 };
 
@@ -38,10 +38,13 @@ export default function FragrantiqueAIPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<RecommendedFragrance[]>([]);
-  const [showInputs, setShowInputs] = useState(false);
+  const [rawPromptPreview, setRawPromptPreview] = useState(false);
 
   const likes = useMemo(() => parseLines(likesText), [likesText]);
   const dislikes = useMemo(() => parseLines(dislikesText), [dislikesText]);
+
+  // If your fragrance detail route is different, change this:
+  const FRAGRANCE_DETAIL_BASE = "/fragrance"; // ← change if needed (ex: "/fragrances" or "/u/stephanie/fragrance")
 
   async function handleRecommend() {
     setError(null);
@@ -57,11 +60,17 @@ export default function FragrantiqueAIPage() {
       const res = await fetch("/api/fragrantique-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ likes, dislikes, limit: 12 }),
+        body: JSON.stringify({
+          likes,
+          dislikes,
+          limit: 12,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to generate recommendations.");
+      if (!res.ok) {
+        throw new Error(data?.error || "Something went wrong generating recommendations.");
+      }
 
       setResults(Array.isArray(data?.recommendations) ? data.recommendations : []);
     } catch (e: any) {
@@ -94,7 +103,9 @@ export default function FragrantiqueAIPage() {
             <div className="flex justify-center mb-6">
               <div
                 className="rounded-full border border-[#e3cfaa] bg-white/80 shadow-md px-6 py-4 transform transition-transform duration-700 hover:scale-105 hover:shadow-2xl"
-                style={{ animation: "floatLogo 6s ease-in-out infinite, logoGlow 6s ease-in-out infinite" }}
+                style={{
+                  animation: "floatLogo 6s ease-in-out infinite, logoGlow 6s ease-in-out infinite",
+                }}
               >
                 <Image
                   src="/FragrantiqueLogo3.png"
@@ -107,6 +118,7 @@ export default function FragrantiqueAIPage() {
               </div>
             </div>
 
+            {/* Title */}
             <div className="text-center space-y-3">
               <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
                 Fragrantique AI
@@ -118,10 +130,12 @@ export default function FragrantiqueAIPage() {
               </p>
             </div>
 
+            {/* Divider */}
             <div className="mt-8 mb-6 flex justify-center">
               <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
             </div>
 
+            {/* Input section */}
             <div className="grid gap-5">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 shadow-sm">
@@ -132,7 +146,9 @@ export default function FragrantiqueAIPage() {
                     placeholder={`Examples:\nMind Games - The Forward\nParfums de Marly - Delina\nNishane - Ani`}
                     className="w-full min-h-[140px] rounded-xl border border-[#ead9b8] bg-white px-3 py-2 text-sm text-[#182A39] outline-none focus:ring-2 focus:ring-[#d9c39a]/60"
                   />
-                  <div className="mt-2 text-xs text-[#182A39]/70">One per line or comma-separated. {likes.length}/25</div>
+                  <div className="mt-2 text-xs text-[#182A39]/70">
+                    Tip: one per line (or comma-separated). {likes.length}/25
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 shadow-sm">
@@ -143,7 +159,9 @@ export default function FragrantiqueAIPage() {
                     placeholder={`Examples:\nAnything too smoky\nOverly sweet vanilla bombs\nStrong patchouli`}
                     className="w-full min-h-[140px] rounded-xl border border-[#ead9b8] bg-white px-3 py-2 text-sm text-[#182A39] outline-none focus:ring-2 focus:ring-[#d9c39a]/60"
                   />
-                  <div className="mt-2 text-xs text-[#182A39]/70">You can describe notes/styles too. {dislikes.length}/25</div>
+                  <div className="mt-2 text-xs text-[#182A39]/70">
+                    You can describe styles/notes too. {dislikes.length}/25
+                  </div>
                 </div>
               </div>
 
@@ -159,15 +177,17 @@ export default function FragrantiqueAIPage() {
                     animation: loading ? "none" : "buttonShimmer 6s ease-in-out infinite",
                   }}
                 >
-                  <span className="font-semibold text-[#182A39]">{loading ? "Thinking…" : "Suggest fragrances"}</span>
+                  <span className="font-semibold text-[#182A39]">
+                    {loading ? "Thinking…" : "Suggest fragrances"}
+                  </span>
                 </button>
 
                 <div className="flex items-center gap-3 text-sm text-[#182A39]/80">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
-                      checked={showInputs}
-                      onChange={(e) => setShowInputs(e.target.checked)}
+                      checked={rawPromptPreview}
+                      onChange={(e) => setRawPromptPreview(e.target.checked)}
                       className="accent-[#d9c39a]"
                     />
                     Show my inputs
@@ -179,7 +199,7 @@ export default function FragrantiqueAIPage() {
                 </div>
               </div>
 
-              {showInputs && (
+              {rawPromptPreview && (
                 <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 text-sm text-[#182A39]">
                   <div className="font-semibold mb-2">What you entered</div>
                   <div className="grid md:grid-cols-2 gap-4">
@@ -195,64 +215,75 @@ export default function FragrantiqueAIPage() {
                 </div>
               )}
 
+              {/* Errors */}
               {error && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
                 </div>
               )}
 
+              {/* Results */}
               {results.length > 0 && (
                 <div className="mt-2">
                   <div className="text-center mb-4">
                     <h2 className="text-xl font-semibold text-[#182A39]">Suggestions</h2>
                     <p className="text-sm text-[#182A39]/75">
-                      Based on your likes/dislikes, here are fragrances from my collection you may enjoy.
+                      Click any fragrance to view the full details.
                     </p>
                   </div>
 
                   <div className="grid gap-4">
                     {results.map((f, idx) => {
                       const accordsText = accordsToText(f.accords);
+                      const href = `${FRAGRANCE_DETAIL_BASE}/${encodeURIComponent(String(f.id))}`;
+
                       return (
-                        <div
-                          key={`${f.id}-${idx}`}
-                          className="rounded-2xl border border-[#ead9b8] bg-white/90 p-4 shadow-sm"
-                          style={{
-                            backgroundImage:
-                              "linear-gradient(120deg, rgba(248,239,223,0.45), rgba(255,255,255,0.98), rgba(248,239,223,0.45))",
-                          }}
-                        >
-                          <div className="flex gap-4 items-start">
-                            <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#ead9b8] bg-white shrink-0">
-                              {f.image_url ? (
-                                <Image
-                                  src={f.image_url}
-                                  alt={`${f.brand || ""} ${f.name || ""}`.trim() || "Fragrance"}
-                                  fill
-                                  sizes="64px"
-                                  className="object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-xs text-[#182A39]/50">
-                                  No image
+                        <Link key={`${f.id}-${idx}`} href={href} className="block">
+                          <div
+                            className="rounded-2xl border border-[#ead9b8] bg-white/90 p-4 shadow-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_22px_rgba(217,195,154,0.6)]"
+                            style={{
+                              backgroundImage:
+                                "linear-gradient(120deg, rgba(248,239,223,0.45), rgba(255,255,255,0.98), rgba(248,239,223,0.45))",
+                            }}
+                          >
+                            <div className="flex gap-4 items-start">
+                              <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#ead9b8] bg-white shrink-0">
+                                {f.image_url ? (
+                                  <Image
+                                    src={f.image_url}
+                                    alt={`${f.brand || ""} ${f.name || ""}`.trim() || "Fragrance"}
+                                    fill
+                                    sizes="64px"
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xs text-[#182A39]/50">
+                                    No image
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm text-[#182A39]/70">{f.brand || "—"}</div>
+                                <div className="text-base font-semibold text-[#182A39]">{f.name || "—"}</div>
+
+                                {accordsText && (
+                                  <div className="mt-1 text-xs text-[#182A39]/70">{accordsText}</div>
+                                )}
+
+                                {f.reason && (
+                                  <div className="mt-2 text-sm text-[#182A39]/90 leading-relaxed">
+                                    <span className="font-semibold">Why:</span> {f.reason}
+                                  </div>
+                                )}
+
+                                <div className="mt-2 text-xs text-[#182A39]/60">
+                                  Tap to view fragrance →
                                 </div>
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm text-[#182A39]/70">{f.brand || "—"}</div>
-                              <div className="text-base font-semibold text-[#182A39]">{f.name || "—"}</div>
-
-                              {accordsText && <div className="mt-1 text-xs text-[#182A39]/70">{accordsText}</div>}
-
-                              {f.reason && (
-                                <div className="mt-2 text-sm text-[#182A39]/90 leading-relaxed">
-                                  <span className="font-semibold">Why:</span> {f.reason}
-                                </div>
-                              )}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>
@@ -260,6 +291,7 @@ export default function FragrantiqueAIPage() {
               )}
             </div>
 
+            {/* Footer links */}
             <div className="mt-10 grid gap-3">
               <div className="flex justify-center">
                 <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
@@ -292,18 +324,37 @@ export default function FragrantiqueAIPage() {
 
       <style jsx global>{`
         @keyframes floatLogo {
-          0% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
-          100% { transform: translateY(0); }
+          0% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-6px);
+          }
+          100% {
+            transform: translateY(0);
+          }
         }
+
         @keyframes logoGlow {
-          0%,100% { box-shadow: 0 10px 24px rgba(0,0,0,0.08), 0 0 0 0 rgba(217,195,154,0.4); }
-          50% { box-shadow: 0 14px 36px rgba(0,0,0,0.12), 0 0 18px 4px rgba(217,195,154,0.6); }
+          0%,
+          100% {
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08), 0 0 0 0 rgba(217, 195, 154, 0.4);
+          }
+          50% {
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12), 0 0 18px 4px rgba(217, 195, 154, 0.6);
+          }
         }
+
         @keyframes buttonShimmer {
-          0% { background-position: 0% 0%; }
-          50% { background-position: 100% 0%; }
-          100% { background-position: 0% 0%; }
+          0% {
+            background-position: 0% 0%;
+          }
+          50% {
+            background-position: 100% 0%;
+          }
+          100% {
+            background-position: 0% 0%;
+          }
         }
       `}</style>
     </>
