@@ -9,7 +9,7 @@ type RecommendedFragrance = {
   brand?: string | null;
   name?: string | null;
   image_url?: string | null;
-  accords?: any; // JSON in your DB (often an array of { name, strength })
+  accords?: any;
   reason?: string | null;
 };
 
@@ -38,13 +38,12 @@ export default function FragrantiqueAIPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<RecommendedFragrance[]>([]);
-  const [rawPromptPreview, setRawPromptPreview] = useState(false);
 
   const likes = useMemo(() => parseLines(likesText), [likesText]);
   const dislikes = useMemo(() => parseLines(dislikesText), [dislikesText]);
 
-  // If your fragrance detail route is different, change this:
-  const FRAGRANCE_DETAIL_BASE = "/fragrance"; // ← change if needed (ex: "/fragrances" or "/u/stephanie/fragrance")
+  // Adjust if your route differs
+  const FRAGRANCE_DETAIL_BASE = "/fragrance";
 
   async function handleRecommend() {
     setError(null);
@@ -60,17 +59,11 @@ export default function FragrantiqueAIPage() {
       const res = await fetch("/api/fragrantique-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          likes,
-          dislikes,
-          limit: 12,
-        }),
+        body: JSON.stringify({ likes, dislikes, limit: 12 }),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || "Something went wrong generating recommendations.");
-      }
+      if (!res.ok) throw new Error(data?.error || "Failed to generate recommendations.");
 
       setResults(Array.isArray(data?.recommendations) ? data.recommendations : []);
     } catch (e: any) {
@@ -113,7 +106,6 @@ export default function FragrantiqueAIPage() {
                   width={190}
                   height={80}
                   priority
-                  className="block"
                 />
               </div>
             </div>
@@ -135,7 +127,7 @@ export default function FragrantiqueAIPage() {
               <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
             </div>
 
-            {/* Input section */}
+            {/* Inputs */}
             <div className="grid gap-5">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 shadow-sm">
@@ -146,9 +138,6 @@ export default function FragrantiqueAIPage() {
                     placeholder={`Examples:\nMind Games - The Forward\nParfums de Marly - Delina\nNishane - Ani`}
                     className="w-full min-h-[140px] rounded-xl border border-[#ead9b8] bg-white px-3 py-2 text-sm text-[#182A39] outline-none focus:ring-2 focus:ring-[#d9c39a]/60"
                   />
-                  <div className="mt-2 text-xs text-[#182A39]/70">
-                    Tip: one per line (or comma-separated). {likes.length}/25
-                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 shadow-sm">
@@ -159,63 +148,19 @@ export default function FragrantiqueAIPage() {
                     placeholder={`Examples:\nAnything too smoky\nOverly sweet vanilla bombs\nStrong patchouli`}
                     className="w-full min-h-[140px] rounded-xl border border-[#ead9b8] bg-white px-3 py-2 text-sm text-[#182A39] outline-none focus:ring-2 focus:ring-[#d9c39a]/60"
                   />
-                  <div className="mt-2 text-xs text-[#182A39]/70">
-                    You can describe styles/notes too. {dislikes.length}/25
-                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <button
-                  onClick={handleRecommend}
-                  disabled={loading}
-                  className="w-full sm:w-auto rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-3 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(120deg, rgba(248,239,223,0.7), rgba(255,255,255,0.95), rgba(248,239,223,0.7))",
-                    backgroundSize: "200% 100%",
-                    animation: loading ? "none" : "buttonShimmer 6s ease-in-out infinite",
-                  }}
-                >
-                  <span className="font-semibold text-[#182A39]">
-                    {loading ? "Thinking…" : "Suggest fragrances"}
-                  </span>
-                </button>
+              <button
+                onClick={handleRecommend}
+                disabled={loading}
+                className="self-center rounded-2xl border border-[#ead9b8] bg-white/90 px-8 py-3 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-60"
+              >
+                <span className="font-semibold text-[#182A39]">
+                  {loading ? "Thinking…" : "Suggest fragrances"}
+                </span>
+              </button>
 
-                <div className="flex items-center gap-3 text-sm text-[#182A39]/80">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={rawPromptPreview}
-                      onChange={(e) => setRawPromptPreview(e.target.checked)}
-                      className="accent-[#d9c39a]"
-                    />
-                    Show my inputs
-                  </label>
-
-                  <Link href="/" className="underline hover:no-underline">
-                    Back to Home
-                  </Link>
-                </div>
-              </div>
-
-              {rawPromptPreview && (
-                <div className="rounded-2xl border border-[#ead9b8] bg-white/85 p-4 text-sm text-[#182A39]">
-                  <div className="font-semibold mb-2">What you entered</div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-[#182A39]/60 mb-1">Likes</div>
-                      <div className="whitespace-pre-wrap">{likes.join("\n") || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-[#182A39]/60 mb-1">Dislikes</div>
-                      <div className="whitespace-pre-wrap">{dislikes.join("\n") || "—"}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Errors */}
               {error && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
@@ -228,7 +173,7 @@ export default function FragrantiqueAIPage() {
                   <div className="text-center mb-4">
                     <h2 className="text-xl font-semibold text-[#182A39]">Suggestions</h2>
                     <p className="text-sm text-[#182A39]/75">
-                      Click any fragrance to view the full details.
+                      Click any fragrance to view full details.
                     </p>
                   </div>
 
@@ -239,19 +184,13 @@ export default function FragrantiqueAIPage() {
 
                       return (
                         <Link key={`${f.id}-${idx}`} href={href} className="block">
-                          <div
-                            className="rounded-2xl border border-[#ead9b8] bg-white/90 p-4 shadow-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_22px_rgba(217,195,154,0.6)]"
-                            style={{
-                              backgroundImage:
-                                "linear-gradient(120deg, rgba(248,239,223,0.45), rgba(255,255,255,0.98), rgba(248,239,223,0.45))",
-                            }}
-                          >
+                          <div className="rounded-2xl border border-[#ead9b8] bg-white/90 p-4 shadow-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_22px_rgba(217,195,154,0.6)]">
                             <div className="flex gap-4 items-start">
                               <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#ead9b8] bg-white shrink-0">
                                 {f.image_url ? (
                                   <Image
                                     src={f.image_url}
-                                    alt={`${f.brand || ""} ${f.name || ""}`.trim() || "Fragrance"}
+                                    alt={`${f.brand || ""} ${f.name || ""}`}
                                     fill
                                     sizes="64px"
                                     className="object-cover"
@@ -263,16 +202,16 @@ export default function FragrantiqueAIPage() {
                                 )}
                               </div>
 
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm text-[#182A39]/70">{f.brand || "—"}</div>
-                                <div className="text-base font-semibold text-[#182A39]">{f.name || "—"}</div>
+                              <div className="flex-1">
+                                <div className="text-sm text-[#182A39]/70">{f.brand}</div>
+                                <div className="text-base font-semibold text-[#182A39]">{f.name}</div>
 
                                 {accordsText && (
                                   <div className="mt-1 text-xs text-[#182A39]/70">{accordsText}</div>
                                 )}
 
                                 {f.reason && (
-                                  <div className="mt-2 text-sm text-[#182A39]/90 leading-relaxed">
+                                  <div className="mt-2 text-sm text-[#182A39]/90">
                                     <span className="font-semibold">Why:</span> {f.reason}
                                   </div>
                                 )}
@@ -290,73 +229,9 @@ export default function FragrantiqueAIPage() {
                 </div>
               )}
             </div>
-
-            {/* Footer links */}
-            <div className="mt-10 grid gap-3">
-              <div className="flex justify-center">
-                <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-3">
-                <Link
-                  href="/notes"
-                  className="text-center rounded-2xl border border-[#ead9b8] bg-white/85 px-4 py-3 text-sm text-[#182A39] hover:shadow-md"
-                >
-                  Search My Collection
-                </Link>
-                <Link
-                  href="/brand"
-                  className="text-center rounded-2xl border border-[#ead9b8] bg-white/85 px-4 py-3 text-sm text-[#182A39] hover:shadow-md"
-                >
-                  Brand Index
-                </Link>
-                <Link
-                  href="/recommendations"
-                  className="text-center rounded-2xl border border-[#ead9b8] bg-white/85 px-4 py-3 text-sm text-[#182A39] hover:shadow-md"
-                >
-                  Recommendations
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
       </main>
-
-      <style jsx global>{`
-        @keyframes floatLogo {
-          0% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-6px);
-          }
-          100% {
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes logoGlow {
-          0%,
-          100% {
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08), 0 0 0 0 rgba(217, 195, 154, 0.4);
-          }
-          50% {
-            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12), 0 0 18px 4px rgba(217, 195, 154, 0.6);
-          }
-        }
-
-        @keyframes buttonShimmer {
-          0% {
-            background-position: 0% 0%;
-          }
-          50% {
-            background-position: 100% 0%;
-          }
-          100% {
-            background-position: 0% 0%;
-          }
-        }
-      `}</style>
     </>
   );
 }
