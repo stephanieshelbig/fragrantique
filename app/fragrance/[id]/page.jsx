@@ -291,7 +291,6 @@ export default function FragranceDetail({ params }) {
               rel="noreferrer"
               className="text-sm underline"
             >
-              View on Fragrantica ↗
             </a>
           )}
           {canAdmin && (
