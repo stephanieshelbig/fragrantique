@@ -61,7 +61,7 @@ export default function CartPage() {
     [items]
   );
 
-  const BASE_SHIPPING_CENTS = 500;
+  const BASE_SHIPPING_CENTS = 600;
   const TAX_RATE = 0.07;
 
   const discountCents = useMemo(() => {
