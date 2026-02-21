@@ -165,7 +165,7 @@ export async function POST(req) {
       }
     }
 
-    const BASE_SHIPPING_CENTS = 500; // $5 flat rate (matches your UI)
+    const BASE_SHIPPING_CENTS = 600; // $6 flat rate (matches your UI)
     const TAX_RATE = 0.07;
 
     // Compute discounted merchandise totals (ONLY on product lines)
