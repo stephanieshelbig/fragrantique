@@ -85,7 +85,7 @@ export default function AdminCustomerPage() {
     try {
       const { data, error } = await supabase
         .from(ORDER_TABLE)
-        .select('buyer_email, created_at, items')
+        .select('id, buyer_email, created_at, items')
         .ilike('buyer_email', normalized)
         .order('created_at', { ascending: false })
         .limit(5000);
@@ -106,6 +106,7 @@ export default function AdminCustomerPage() {
             allPurchases.push({
               name: fragrance,
               date: row.created_at,
+              orderId: row.id,
             });
           }
         }
@@ -113,7 +114,9 @@ export default function AdminCustomerPage() {
 
       // Sort alphabetically, then by date (newest first for same fragrance)
       allPurchases.sort((a, b) => {
-        const nameCompare = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        const nameCompare = a.name.localeCompare(b.name, undefined, {
+          sensitivity: 'base',
+        });
         if (nameCompare !== 0) return nameCompare;
         return new Date(b.date) - new Date(a.date);
       });
@@ -123,7 +126,9 @@ export default function AdminCustomerPage() {
       if (!rows.length) {
         setMsg('No orders found for that email address.');
       } else {
-        setMsg(`Found ${allPurchases.length} total purchases across ${rows.length} orders.`);
+        setMsg(
+          `Found ${allPurchases.length} total purchases across ${rows.length} orders.`
+        );
       }
     } catch (err) {
       setMsg(`Search error: ${err.message}`);
@@ -178,19 +183,44 @@ export default function AdminCustomerPage() {
         </div>
       )}
 
+      {searchedEmail && (
+        <div className="rounded border bg-white p-4 space-y-3">
+          <div>
+            <div className="text-xs uppercase tracking-wide opacity-60">Customer</div>
+            <div className="font-medium">{searchedEmail}</div>
+          </div>
+
+          <div className="flex flex-wrap gap-6 text-sm">
+            <div>
+              <span className="opacity-60">Orders:</span>{' '}
+              <span className="font-medium">{orderCount}</span>
+            </div>
+            <div>
+              <span className="opacity-60">Purchases:</span>{' '}
+              <span className="font-medium">{results.length}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {results.length > 0 && (
         <div className="rounded border bg-white p-4">
           <h2 className="font-semibold mb-3">Purchased fragrances</h2>
 
-          {/* ONE COLUMN LIST */}
           <div className="space-y-2">
             {results.map((item, idx) => (
               <div
-                key={idx}
-                className="flex justify-between border-b pb-1 text-sm"
+                key={`${item.orderId}-${item.name}-${idx}`}
+                className="flex justify-between border-b pb-1 text-sm gap-4"
               >
                 <span>{item.name}</span>
-                <span className="opacity-60">{formatDate(item.date)}</span>
+
+                <Link
+                  href={`/admin/orders?id=${item.orderId}`}
+                  className="opacity-60 underline hover:opacity-100 whitespace-nowrap"
+                >
+                  {formatDate(item.date)}
+                </Link>
               </div>
             ))}
           </div>
