@@ -101,15 +101,27 @@ export default function AdminCustomerPage() {
         const items = Array.isArray(row.items) ? row.items : [];
 
         for (const item of items) {
-          const fragrance = parseFragranceName(item?.name);
-          if (fragrance) {
-            allPurchases.push({
-              name: fragrance,
-              date: row.created_at,
-              orderId: row.id,
-            });
-          }
-        }
+  const rawName = item?.name || '';
+
+  // ❌ Skip non-fragrance items
+  const lower = rawName.toLowerCase();
+  if (
+    lower.includes('flat-rate shipping') ||
+    lower.includes('sales tax')
+  ) {
+    continue;
+  }
+
+  const fragrance = parseFragranceName(rawName);
+
+  if (fragrance) {
+    allPurchases.push({
+      name: fragrance,
+      date: row.created_at,
+      orderId: row.id,
+    });
+  }
+}
       }
 
       // Sort alphabetically, then by date (newest first for same fragrance)
