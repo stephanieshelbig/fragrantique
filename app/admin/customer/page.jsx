@@ -215,12 +215,14 @@ export default function AdminCustomerPage() {
               >
                 <span>{item.name}</span>
 
-                <Link
-                  href={`/admin/orders?id=${item.orderId}`}
-                  className="opacity-60 underline hover:opacity-100 whitespace-nowrap"
-                >
-                  {formatDate(item.date)}
-                </Link>
+                <a
+  href={`/admin/orders?id=${item.orderId}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="opacity-60 underline hover:opacity-100 whitespace-nowrap"
+>
+  {formatDate(item.date)}
+</a>
               </div>
             ))}
           </div>
