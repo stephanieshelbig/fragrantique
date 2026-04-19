@@ -332,11 +332,6 @@ export default function AdminOrders() {
                     {o.buyer_address2 ? `, ${o.buyer_address2}` : ''}, {o.buyer_city}, {o.buyer_state} {o.buyer_postal}, {o.buyer_country || 'US'}
                   </div>
                 )}
-                {o.stripe_session_id && (
-                  <div className="opacity-80">
-                    <b>Stripe session:</b> <span className="font-mono break-all">{o.stripe_session_id}</span>
-                  </div>
-                )}
               </div>
 
               <ul className="mt-2 list-disc pl-5 text-sm">
