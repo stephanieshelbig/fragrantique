@@ -55,24 +55,37 @@ export default function AdminFragranceList() {
     setMsg('');
 
     // full catalog
-    const { data: allFrags } = await supabase
+    const { data: allFrags, error: allFragsError } = await supabase
       .from('fragrances')
       .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
       .order('brand', { ascending: true })
       .order('name', { ascending: true })
       .limit(5000);
 
+    if (allFragsError) {
+      setMsg(`Load error: ${allFragsError.message}`);
+      setRows([]);
+      setLinkedIds(new Set());
+      setLoading(false);
+      return;
+    }
+
     setRows(allFrags || []);
 
     // which are already on shelves for owner?
     if (ownerId) {
-      const { data: links } = await supabase
+      const { data: links, error: linksError } = await supabase
         .from('user_fragrances')
         .select('fragrance_id')
         .eq('user_id', ownerId)
         .limit(10000);
 
-      setLinkedIds(new Set((links || []).map(l => l.fragrance_id)));
+      if (linksError) {
+        setMsg(`Shelf link load error: ${linksError.message}`);
+        setLinkedIds(new Set());
+      } else {
+        setLinkedIds(new Set((links || []).map((l) => l.fragrance_id)));
+      }
     } else {
       setLinkedIds(new Set());
     }
@@ -83,9 +96,10 @@ export default function AdminFragranceList() {
   const filtered = useMemo(() => {
     if (!q) return rows;
     const s = q.toLowerCase();
-    return rows.filter(r =>
-      (r.brand || '').toLowerCase().includes(s) ||
-      (r.name || '').toLowerCase().includes(s)
+    return rows.filter(
+      (r) =>
+        (r.brand || '').toLowerCase().includes(s) ||
+        (r.name || '').toLowerCase().includes(s)
     );
   }, [rows, q]);
 
@@ -96,7 +110,9 @@ export default function AdminFragranceList() {
       <div className="max-w-3xl mx-auto p-6 space-y-3">
         <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
         <p className="opacity-70">{msg || 'Please sign in as an admin.'}</p>
-        <Link href="/admin" className="underline text-sm">← Back to Admin</Link>
+        <Link href="/admin" className="underline text-sm">
+          ← Back to Admin
+        </Link>
       </div>
     );
   }
@@ -106,9 +122,24 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Adding to shelves…');
 
-    await supabase
+    const { error } = await supabase
       .from('user_fragrances')
-      .insert({ user_id: owner.id, fragrance_id: fragranceId, manual: true });
+      .upsert(
+        {
+          user_id: owner.id,
+          fragrance_id: fragranceId,
+          manual: true,
+        },
+        {
+          onConflict: 'user_id,fragrance_id',
+        }
+      );
+
+    if (error) {
+      setMsg(`Add error: ${error.message}`);
+      setBusy(false);
+      return;
+    }
 
     await load(owner.id);
     setBusy(false);
@@ -120,11 +151,17 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Removing from shelves…');
 
-    await supabase
+    const { error } = await supabase
       .from('user_fragrances')
       .delete()
       .eq('user_id', owner.id)
       .eq('fragrance_id', fragranceId);
+
+    if (error) {
+      setMsg(`Remove error: ${error.message}`);
+      setBusy(false);
+      return;
+    }
 
     await load(owner.id);
     setBusy(false);
@@ -136,7 +173,10 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Adding ALL missing to shelves…');
 
-    const missing = rows.filter(r => !linkedIds.has(r.id)).map(r => r.id);
+    const missing = rows
+      .filter((r) => !linkedIds.has(r.id))
+      .map((r) => r.id);
+
     if (!missing.length) {
       setMsg('Everything is already on your shelves.');
       setBusy(false);
@@ -145,11 +185,24 @@ export default function AdminFragranceList() {
 
     const chunk = 200;
     let inserted = 0;
+
     for (let i = 0; i < missing.length; i += chunk) {
-      const batch = missing.slice(i, i + chunk).map(fid => ({
-        user_id: owner.id, fragrance_id: fid, manual: true
+      const batch = missing.slice(i, i + chunk).map((fid) => ({
+        user_id: owner.id,
+        fragrance_id: fid,
+        manual: true,
       }));
-      await supabase.from('user_fragrances').insert(batch);
+
+      const { error } = await supabase
+        .from('user_fragrances')
+        .upsert(batch, { onConflict: 'user_id,fragrance_id' });
+
+      if (error) {
+        setMsg(`Bulk add error: ${error.message}`);
+        setBusy(false);
+        return;
+      }
+
       inserted += batch.length;
     }
 
@@ -168,12 +221,12 @@ export default function AdminFragranceList() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageUrl: fragrance.image_url,
-          fragranceId: fragrance.id
-        })
+          fragranceId: fragrance.id,
+        }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.success) {
-        throw new Error(j?.error || `remove-bg failed`);
+        throw new Error(j?.error || 'remove-bg failed');
       }
       setMsg('Transparent image saved ✓');
     } catch (e) {
@@ -188,18 +241,20 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Making transparent for all missing…');
 
-    const targets = rows.filter(r => !r.image_url_transparent && r.image_url);
-    let ok = 0, fail = 0;
+    const targets = rows.filter((r) => !r.image_url_transparent && r.image_url);
+    let ok = 0;
+    let fail = 0;
 
     for (const f of targets) {
       try {
         const res = await fetch('/api/remove-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: f.image_url, fragranceId: f.id })
+          body: JSON.stringify({ imageUrl: f.image_url, fragranceId: f.id }),
         });
         const j = await res.json().catch(() => ({}));
-        if (res.ok && j?.success) ok++; else fail++;
+        if (res.ok && j?.success) ok++;
+        else fail++;
       } catch {
         fail++;
       }
@@ -214,7 +269,7 @@ export default function AdminFragranceList() {
     if (!isAdmin) return;
     const ok = window.confirm(
       `Delete "${fragrance.brand} — ${fragrance.name}" from the catalog?\n` +
-      `This will also remove it from your shelves.\n\nThis cannot be undone.`
+        `This will also remove it from your shelves.\n\nThis cannot be undone.`
     );
     if (!ok) return;
 
@@ -228,8 +283,8 @@ export default function AdminFragranceList() {
         body: JSON.stringify({
           fragranceId: fragrance.id,
           deleteFromShelves: true,
-          deleteStorage: true
-        })
+          deleteStorage: true,
+        }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) {
@@ -249,8 +304,9 @@ export default function AdminFragranceList() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
         <div className="flex items-center gap-3">
-          <Link href="/admin" className="underline text-sm">← Back to Admin</Link>
-          {/* NEW: Add Fragrance button */}
+          <Link href="/admin" className="underline text-sm">
+            ← Back to Admin
+          </Link>
           <Link
             href="/add"
             className="px-3 py-2 rounded bg-pink-600 text-white hover:bg-pink-700 text-sm"
@@ -280,7 +336,6 @@ export default function AdminFragranceList() {
 
         <div className="flex-1" />
 
-        {/* Bulk actions */}
         <button
           disabled={busy}
           onClick={addAllMissingToShelves}
@@ -302,12 +357,12 @@ export default function AdminFragranceList() {
       {msg && <div className="p-3 rounded bg-white border shadow text-sm">{msg}</div>}
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.map(f => {
+        {filtered.map((f) => {
           const onShelves = linkedIds.has(f.id);
           const img = f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+
           return (
             <div key={f.id} className="border rounded p-3 bg-white flex gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={img}
                 alt={f.name}
