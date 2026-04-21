@@ -28,6 +28,9 @@ export default function HeaderBar() {
           <Link href="/brand" className="hover:underline">
             Brand Index
           </Link>
+          <Link href="/reviews" className="hover:underline">
+            Reviews
+          </Link>
           <Link href="/chat" className="hover:underline">
             Contact Me
           </Link>
