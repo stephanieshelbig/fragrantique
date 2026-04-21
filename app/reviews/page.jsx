@@ -23,10 +23,10 @@ const featuredReviews = [
   },
   {
     id: 'placeholder-2',
-    name: 'Fragrantique Customer',
+    name: 'anonymous',
     rating: 5,
     text:
-      'The decants arrived quickly and were packaged so nicely. The whole order felt elevated, elegant, and personal.',
+      'The decants arrived quickly and were packaged nicely. Very happy!',
   },
   {
     id: 'placeholder-3',
