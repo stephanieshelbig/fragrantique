@@ -16,21 +16,21 @@ const GOOGLE_REVIEWS_URL =
 const featuredReviews = [
   {
     id: 'placeholder-1',
-    name: 'Fragrantique Customer',
+    name: 'Fragrantique Customer (probably)',
     rating: 5,
     text:
       'Beautiful presentation, carefully packed, and such a lovely experience from start to finish.',
   },
   {
     id: 'placeholder-2',
-    name: 'anonymous',
+    name: 'Fragrantique Customer (probably)',
     rating: 5,
     text:
       'The decants arrived quickly and were packaged nicely. Very happy!',
   },
   {
     id: 'placeholder-3',
-    name: 'Fragrantique Customer',
+    name: 'Fragrantique Customer (probably 😄)',
     rating: 5,
     text:
       'A gorgeous little fragrance experience. Wonderful communication, beautiful selection, and the attention to detail really stands out.',
