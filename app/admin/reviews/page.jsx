@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+const ADMIN_EMAIL = 'stephanieshelbig@gmail.com';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -19,14 +21,37 @@ function Stars({ count = 5 }) {
 }
 
 export default function AdminReviewsPage() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState(null);
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    loadReviews();
+    checkAdmin();
   }, []);
+
+  async function checkAdmin() {
+    setAuthLoading(true);
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user || user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      setIsAdmin(false);
+      setAuthLoading(false);
+      setLoading(false);
+      return;
+    }
+
+    setIsAdmin(true);
+    setAuthLoading(false);
+    await loadReviews();
+  }
 
   async function loadReviews() {
     setLoading(true);
@@ -112,6 +137,33 @@ export default function AdminReviewsPage() {
     () => reviews.filter((review) => review.approved),
     [reviews]
   );
+
+  if (authLoading) {
+    return (
+      <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
+        <section className="mx-auto max-w-3xl px-6 py-20 text-center">
+          <div className="rounded-[28px] border border-[#eadfce] bg-white p-8 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
+            Checking authorization...
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
+        <section className="mx-auto max-w-3xl px-6 py-20 text-center">
+          <div className="rounded-[28px] border border-[#eadfce] bg-white p-8 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
+            <h1 className="font-serif text-4xl text-[#1f1915]">Unauthorized</h1>
+            <p className="mt-4 text-[16px] leading-8 text-[#4b4038]">
+              You do not have access to this page.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
