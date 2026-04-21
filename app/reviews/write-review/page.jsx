@@ -83,7 +83,7 @@ export default function WriteReviewPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
-            I’d love to hear what you thought. Once submitted, your review will be
+            I’d love to hear what you think! Once submitted, your review will be
             checked by admin before it appears on the site.
           </p>
         </div>
