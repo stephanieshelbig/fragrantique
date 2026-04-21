@@ -4,8 +4,10 @@ const GOOGLE_REVIEWS_URL =
   process.env.NEXT_PUBLIC_GOOGLE_REVIEWS_URL ||
   'https://share.google/amP8gfM9LruQRZxfM';
 
-// Optional: replace these with real review text later.
-// For now they act as elegant featured testimonials on the page.
+const GOOGLE_WRITE_REVIEW_URL =
+  process.env.NEXT_PUBLIC_GOOGLE_WRITE_REVIEW_URL ||
+  GOOGLE_REVIEWS_URL;
+
 const featuredReviews = [
   {
     id: 1,
@@ -91,12 +93,12 @@ export default function ReviewsPage() {
             </a>
 
             <a
-              href={GOOGLE_REVIEWS_URL}
+              href={GOOGLE_WRITE_REVIEW_URL}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center rounded-full border border-[#e7cbd3] bg-[#f5e6eb] px-6 py-3 text-sm font-medium text-[#473934] transition hover:bg-[#f0dde4]"
             >
-              Leave a Google review
+              Write a review
             </a>
           </div>
         </div>
@@ -105,6 +107,34 @@ export default function ReviewsPage() {
           {featuredReviews.map((review) => (
             <ReviewCard key={review.id} review={review} />
           ))}
+        </div>
+
+        <div className="mt-14 rounded-[32px] border border-[#eadfce] bg-[#fffaf7] px-7 py-10 text-center shadow-[0_10px_30px_rgba(73,54,30,0.05)] md:px-10">
+          <div className="mx-auto max-w-2xl">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[#9a8467]">
+              Loved your order?
+            </div>
+
+            <h2 className="mt-3 font-serif text-3xl leading-tight text-[#1f1915]">
+              Share your Fragrantique experience
+            </h2>
+
+            <p className="mt-4 text-[15px] leading-7 text-[#4b4038]">
+              If your order made your day a little prettier, I’d love your review.
+              Your feedback helps other fragrance lovers discover Fragrantique.
+            </p>
+
+            <div className="mt-7">
+              <a
+                href={GOOGLE_WRITE_REVIEW_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#d8b56a] px-7 py-3 text-sm font-medium text-[#1e1a16] transition hover:brightness-95"
+              >
+                Write a Google review
+              </a>
+            </div>
+          </div>
         </div>
 
         <div className="mt-14 rounded-[32px] border border-[#eadfce] bg-white px-7 py-8 shadow-[0_10px_30px_rgba(73,54,30,0.05)] md:px-10">
@@ -135,7 +165,7 @@ export default function ReviewsPage() {
                   Visit the boutique
                 </Link>
                 <Link
-                  href="/notes"
+                  href="/explore"
                   className="block rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm text-[#2c241f] transition hover:bg-[#fcfaf7]"
                 >
                   Explore fragrances
