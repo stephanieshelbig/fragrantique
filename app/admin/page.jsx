@@ -120,6 +120,8 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Link
             href="/admin/customer"
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
           >
             Customer
@@ -127,6 +129,8 @@ export default function AdminPage() {
 
           <Link
             href="/admin/fragrances"
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
           >
             Fragrances
@@ -134,6 +138,8 @@ export default function AdminPage() {
 
           <Link
             href="/admin/orders"
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
           >
             Orders
@@ -141,6 +147,8 @@ export default function AdminPage() {
 
           <Link
             href="/admin/reviews"
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
           >
             Reviews
