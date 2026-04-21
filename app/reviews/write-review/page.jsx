@@ -2,12 +2,6 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 function StarPicker({ rating, setRating }) {
   return (
@@ -50,17 +44,20 @@ export default function WriteReviewPage() {
       return;
     }
 
-    const { error } = await supabase.from('reviews').insert([
-      {
+    const response = await fetch('/api/reviews/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         name: cleanName,
         rating,
         text: cleanText,
-        approved: false,
-      },
-    ]);
+      }),
+    });
 
-    if (error) {
-      setStatus('Something went wrong. Please try again.');
+    const result = await response.json();
+
+    if (!response.ok) {
+      setStatus(result?.error || 'Something went wrong. Please try again.');
       setSubmitting(false);
       return;
     }
