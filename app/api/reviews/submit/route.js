@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendOrderEmail } from '@/lib/email';
 
 function getAdminSupabase() {
   return createClient(
@@ -14,41 +15,46 @@ function getAdminSupabase() {
   );
 }
 
-async function sendReviewAlertEmail({ name, rating, text }) {
-  if (!process.env.RESEND_API_KEY) return;
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-  const to = process.env.REVIEW_ALERT_TO || 'stephanieshelbig@gmail.com';
-  const from = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+function renderReviewAlertHtml({ name, rating, text }) {
+  const safeName = escapeHtml(name);
+  const safeText = escapeHtml(text).replace(/\n/g, '<br />');
 
-  const subject = `New Fragrantique review submitted`;
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #222;">
-      <h2 style="margin-bottom: 12px;">New review submitted</h2>
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Rating:</strong> ${rating} / 5</p>
-      <p><strong>Review:</strong></p>
-      <div style="padding: 12px; background: #faf7f2; border: 1px solid #eadfce; border-radius: 12px;">
-        ${String(text).replace(/\n/g, '<br />')}
+  return `
+    <div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto">
+      <h2 style="margin:0 0 12px">New Fragrantique Review Submitted</h2>
+
+      <div style="font-size:14px;margin:0 0 8px">
+        <b>Name:</b> ${safeName}
       </div>
-      <p style="margin-top: 16px;">
-        Review it here: <a href="https://fragrantique.net/admin/reviews">fragrantique.net/admin/reviews</a>
-      </p>
+
+      <div style="font-size:14px;margin:0 0 8px">
+        <b>Rating:</b> ${rating} / 5
+      </div>
+
+      <h3 style="margin:16px 0 6px">Review</h3>
+      <div style="padding:12px;border:1px solid #eadfce;border-radius:12px;background:#fffaf4;font-size:14px;line-height:1.6">
+        ${safeText}
+      </div>
+
+      <div style="margin-top:20px;font-size:14px">
+        <a
+          href="https://fragrantique.net/admin/reviews"
+          style="display:inline-block;padding:10px 16px;border-radius:999px;background:#d8b56a;color:#1e1a16;text-decoration:none;font-weight:600"
+        >
+          Review & Publish
+        </a>
+      </div>
     </div>
   `;
-
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject,
-      html,
-    }),
-  });
 }
 
 export async function POST(request) {
@@ -82,7 +88,15 @@ export async function POST(request) {
     }
 
     try {
-      await sendReviewAlertEmail({ name, rating, text });
+      const emailResult = await sendOrderEmail({
+        to: process.env.GMAIL_USER,
+        subject: 'New Fragrantique Review Submitted',
+        html: renderReviewAlertHtml({ name, rating, text }),
+      });
+
+      if (emailResult?.ok === false) {
+        console.error('Review email failed:', emailResult.error);
+      }
     } catch (emailError) {
       console.error('Review alert email failed:', emailError);
     }
