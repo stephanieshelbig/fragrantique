@@ -20,6 +20,31 @@ function Stars({ count = 5 }) {
   );
 }
 
+function UnauthorizedRedirect() {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.location.href = '/';
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
+      <section className="mx-auto max-w-3xl px-6 py-20 text-center">
+        <div className="rounded-[28px] border border-[#eadfce] bg-white p-8 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
+          <h1 className="font-serif text-4xl text-[#1f1915]">
+            Unauthorized user. Redirecting...
+          </h1>
+          <p className="mt-4 text-[16px] leading-8 text-[#4b4038]">
+            You will be sent back to the home page in 5 seconds.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function AdminReviewsPage() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -151,29 +176,8 @@ export default function AdminReviewsPage() {
   }
 
   if (!isAdmin) {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      window.location.href = '/';
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
-      <section className="mx-auto max-w-3xl px-6 py-20 text-center">
-        <div className="rounded-[28px] border border-[#eadfce] bg-white p-8 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
-          <h1 className="font-serif text-4xl text-[#1f1915]">
-            Unauthorized user.
-          </h1>
-          <p className="mt-4 text-[16px] leading-8 text-[#4b4038]">
-            Redirecting...
-          </p>
-        </div>
-      </section>
-    </main>
-  );
-}
+    return <UnauthorizedRedirect />;
+  }
 
   return (
     <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
