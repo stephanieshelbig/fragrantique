@@ -135,7 +135,7 @@ export default function ReviewsPage() {
                   Visit the boutique
                 </Link>
                 <Link
-                  href="/explore"
+                  href="/notes"
                   className="block rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm text-[#2c241f] transition hover:bg-[#fcfaf7]"
                 >
                   Explore fragrances
