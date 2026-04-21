@@ -7,6 +7,13 @@ import { supabase } from '@/lib/supabase';
 
 const ADMIN_EMAILS = ['stephanieshelbig@gmail.com'];
 
+const adminLinks = [
+  { href: '/admin/customer', label: 'Customer', desc: 'View and manage customer info' },
+  { href: '/admin/fragrances', label: 'Fragrances', desc: 'Manage fragrance listings' },
+  { href: '/admin/orders', label: 'Orders', desc: 'Review purchases and shipping details' },
+  { href: '/admin/reviews', label: 'Reviews', desc: 'Moderate customer reviews' }
+];
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -88,102 +95,129 @@ export default function AdminPage() {
 
   if (!authChecked) {
     return (
-      <div className="max-w-xl mx-auto p-6">
-        <p className="text-sm opacity-75">Checking authorization...</p>
+      <div className="min-h-screen bg-[#fcf8f6] px-6 py-12">
+        <div className="mx-auto max-w-4xl">
+          <div className="rounded-3xl border border-[#eadfd9] bg-white/90 p-8 shadow-sm">
+            <p className="text-sm tracking-[0.18em] uppercase text-[#9a7b6f]">
+              Checking authorization...
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!isAuthorized) {
     return (
-      <div className="max-w-xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-3">Admin</h1>
-        <div className="border rounded p-4 bg-white shadow text-sm">
-          Unauthorized user. Redirecting...
+      <div className="min-h-screen bg-[#fcf8f6] px-6 py-12">
+        <div className="mx-auto max-w-4xl">
+          <div className="rounded-3xl border border-[#eadfd9] bg-white/95 p-10 shadow-sm">
+            <h1 className="text-3xl font-serif text-[#5f463d]">Admin</h1>
+            <div className="mt-5 rounded-2xl border border-[#f0d7dd] bg-[#fff8fa] px-5 py-4 text-[#8b5e6b] shadow-sm">
+              Unauthorized user. Redirecting...
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Admin</h1>
-        <p className="text-sm opacity-75 mt-1">
-          Signed in as: {viewer?.email || 'not signed in'} · Username target:{' '}
-          <span className="font-mono">{username}</span>
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#fcf8f6] px-6 py-10">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="rounded-[28px] border border-[#eadfd9] bg-white/95 p-8 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-[#b38b7d]">
+                Fragrantique
+              </p>
+              <h1 className="mt-2 text-4xl font-serif text-[#5f463d]">
+                Admin Dashboard
+              </h1>
+              <p className="mt-3 text-sm text-[#8c6f64]">
+                Signed in as{' '}
+                <span className="font-medium text-[#5f463d]">
+                  {viewer?.email || 'not signed in'}
+                </span>
+              </p>
+            </div>
 
-      <div className="space-y-3 border rounded p-4">
-        <h2 className="font-semibold">Admin pages</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link
-            href="/admin/customer"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
-          >
-            Customer
-          </Link>
-
-          <Link
-            href="/admin/fragrances"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
-          >
-            Fragrances
-          </Link>
-
-          <Link
-            href="/admin/orders"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
-          >
-            Orders
-          </Link>
-
-          <Link
-            href="/admin/reviews"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-3 rounded border bg-white hover:bg-gray-50 transition"
-          >
-            Reviews
-          </Link>
+            <div className="rounded-2xl border border-[#efe3dc] bg-[#fdf9f7] px-4 py-3 text-sm text-[#8c6f64] shadow-sm">
+              Username target:{' '}
+              <span className="rounded-md bg-white px-2 py-1 font-mono text-[#5f463d]">
+                {username}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-3 border rounded p-4">
-        <h2 className="font-semibold">Publish layout</h2>
-        <p className="text-sm opacity-80">
-          Copy your current arrangement to the public layout so logged-out visitors see it.
-        </p>
+        <div className="rounded-[28px] border border-[#eadfd9] bg-white/95 p-8 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-2xl font-serif text-[#5f463d]">Admin Pages</h2>
+            <p className="mt-2 text-sm text-[#8c6f64]">
+              Open any admin section in a new tab.
+            </p>
+          </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={publishFromDb}
-            className="px-3 py-2 rounded bg-black text-white hover:opacity-90"
-          >
-            Publish layout now (from DB)
-          </button>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {adminLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group rounded-3xl border border-[#efe3dc] bg-gradient-to-br from-white to-[#fbf4f1] p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#5f463d]">
+                      {item.label}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#8c6f64]">
+                      {item.desc}
+                    </p>
+                  </div>
 
-          <button
-            onClick={publishFromLocal}
-            className="px-3 py-2 rounded bg-pink-700 text-white hover:opacity-90"
-          >
-            Publish from browser backup
-          </button>
+                  <div className="rounded-full border border-[#ead8cf] bg-white px-3 py-1 text-sm text-[#9b7b70] transition group-hover:border-[#d8bbb0] group-hover:text-[#5f463d]">
+                    ↗
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {msg && (
-        <div className="p-3 rounded bg-white border shadow text-sm">
-          {msg}
+        <div className="rounded-[28px] border border-[#eadfd9] bg-white/95 p-8 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-2xl font-serif text-[#5f463d]">Publish Layout</h2>
+            <p className="mt-2 text-sm text-[#8c6f64]">
+              Copy your current arrangement to the public layout so logged-out visitors see it.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={publishFromDb}
+              className="rounded-2xl bg-[#5f463d] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+            >
+              Publish layout now (from DB)
+            </button>
+
+            <button
+              onClick={publishFromLocal}
+              className="rounded-2xl border border-[#e6cfd6] bg-[#c9879a] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+            >
+              Publish from browser backup
+            </button>
+          </div>
         </div>
-      )}
+
+        {msg && (
+          <div className="rounded-2xl border border-[#eadfd9] bg-white px-5 py-4 text-sm text-[#5f463d] shadow-sm">
+            {msg}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
