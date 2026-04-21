@@ -89,7 +89,7 @@ export async function POST(request) {
 
     try {
       const emailResult = await sendOrderEmail({
-        to: process.env.GMAIL_USER,
+        to: process.env.FROM_EMAIL,
         subject: 'New Fragrantique Review Submitted',
         html: renderReviewAlertHtml({ name, rating, text }),
       });
