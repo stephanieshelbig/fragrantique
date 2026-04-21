@@ -13,24 +13,24 @@ const GOOGLE_REVIEWS_URL =
   process.env.NEXT_PUBLIC_GOOGLE_REVIEWS_URL ||
   'https://share.google/amP8gfM9LruQRZxfM';
 
-const featuredReviews = [
+const placeholderReviews = [
   {
     id: 'placeholder-1',
-    name: 'Fragrantique Customer (probably)',
+    name: 'Fragrantique Customer',
     rating: 5,
     text:
-      'Beautiful presentation, carefully packed, and such a lovely experience from start to finish.',
+      'Beautiful presentation, carefully packed, and such a lovely experience from start to finish. Everything felt thoughtful and boutique.',
   },
   {
     id: 'placeholder-2',
-    name: 'Fragrantique Customer (probably)',
+    name: 'Fragrantique Customer',
     rating: 5,
     text:
-      'The decants arrived quickly and were packaged nicely. Very happy!',
+      'The decants arrived quickly and were packaged so nicely. The whole order felt elevated, elegant, and personal.',
   },
   {
     id: 'placeholder-3',
-    name: 'Fragrantique Customer (probably 😄)',
+    name: 'Fragrantique Customer',
     rating: 5,
     text:
       'A gorgeous little fragrance experience. Wonderful communication, beautiful selection, and the attention to detail really stands out.',
@@ -73,8 +73,7 @@ export default function ReviewsPage() {
         .from('reviews')
         .select('id, name, rating, text, created_at')
         .eq('approved', true)
-        .order('created_at', { ascending: false })
-        .limit(3);
+        .order('created_at', { ascending: false });
 
       if (!ignore && !error) {
         setApprovedReviews(data || []);
@@ -88,18 +87,18 @@ export default function ReviewsPage() {
     };
   }, []);
 
-  const displayedReviews = useMemo(() => {
-    const approved = approvedReviews.map((review) => ({
-      id: review.id,
-      name: review.name,
-      rating: review.rating,
-      text: review.text,
-    }));
+  const featuredReviews = useMemo(() => {
+    const realTopThree = approvedReviews.slice(0, 3);
 
-    if (approved.length >= 3) return approved.slice(0, 3);
+    if (realTopThree.length >= 3) return realTopThree;
 
-    return [...approved, ...featuredReviews.slice(approved.length, 3)];
+    return [
+      ...realTopThree,
+      ...placeholderReviews.slice(realTopThree.length, 3),
+    ];
   }, [approvedReviews]);
+
+  const moreReviews = approvedReviews.slice(3);
 
   return (
     <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
@@ -139,10 +138,29 @@ export default function ReviewsPage() {
         </div>
 
         <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {displayedReviews.map((review) => (
+          {featuredReviews.map((review) => (
             <ReviewCard key={review.id} review={review} />
           ))}
         </div>
+
+        {moreReviews.length > 0 ? (
+          <div className="mt-14">
+            <div className="mb-6 text-center">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-[#9a8467]">
+                More customer love
+              </div>
+              <h2 className="mt-3 font-serif text-3xl leading-tight text-[#1f1915]">
+                More reviews from the boutique
+              </h2>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {moreReviews.map((review) => (
+                <ReviewCard key={review.id} review={review} />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-14 rounded-[32px] border border-[#eadfce] bg-[#fffaf7] px-7 py-10 text-center shadow-[0_10px_30px_rgba(73,54,30,0.05)] md:px-10">
           <div className="mx-auto max-w-2xl">
