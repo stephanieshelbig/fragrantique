@@ -31,6 +31,9 @@ export default function HeaderBar() {
           <Link href="/chat" className="hover:underline">
             Contact Me
           </Link>
+          <Link href="/reviews" className="hover:underline">
+            Reviews
+          </Link>
           <Link href="/cart" className="hover:underline">
             Cart
           </Link>
