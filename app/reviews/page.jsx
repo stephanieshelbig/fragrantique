@@ -19,7 +19,7 @@ const featuredReviews = [
     name: 'Fragrantique Customer',
     rating: 5,
     text:
-      'Beautiful presentation, carefully packed, and such a lovely experience from start to finish. Everything felt thoughtful and boutique.',
+      'Beautiful presentation, carefully packed, and such a lovely experience from start to finish.',
   },
   {
     id: 'placeholder-2',
