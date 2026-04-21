@@ -38,7 +38,7 @@ export default function AdminReviewsPage() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      setStatus('Could not load reviews.');
+      setStatus(`Could not load reviews: ${error.message}`);
       setLoading(false);
       return;
     }
@@ -51,23 +51,26 @@ export default function AdminReviewsPage() {
     setWorkingId(id);
     setStatus('');
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('reviews')
       .update({ approved: true })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id, approved')
+      .single();
 
     if (error) {
-      setStatus('Could not publish review.');
+      setStatus(`Could not publish review: ${error.message}`);
       setWorkingId(null);
       return;
     }
 
-    setReviews((current) =>
-      current.map((review) =>
-        review.id === id ? { ...review, approved: true } : review
-      )
-    );
+    if (!data || data.approved !== true) {
+      setStatus('Publish did not go through in the database.');
+      setWorkingId(null);
+      return;
+    }
 
+    await loadReviews();
     setWorkingId(null);
     setStatus('Review published.');
   }
@@ -76,23 +79,26 @@ export default function AdminReviewsPage() {
     setWorkingId(id);
     setStatus('');
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('reviews')
       .update({ approved: false })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id, approved')
+      .single();
 
     if (error) {
-      setStatus('Could not unpublish review.');
+      setStatus(`Could not unpublish review: ${error.message}`);
       setWorkingId(null);
       return;
     }
 
-    setReviews((current) =>
-      current.map((review) =>
-        review.id === id ? { ...review, approved: false } : review
-      )
-    );
+    if (!data || data.approved !== false) {
+      setStatus('Unpublish did not go through in the database.');
+      setWorkingId(null);
+      return;
+    }
 
+    await loadReviews();
     setWorkingId(null);
     setStatus('Review unpublished.');
   }
