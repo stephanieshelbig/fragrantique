@@ -200,7 +200,7 @@ export default function ReviewsPage() {
               <p className="mt-4 max-w-2xl text-[15px] leading-7 text-[#4b4038]">
                 Every Fragrantique order is meant to feel special. This page can grow
                 over time with more customer love, featured testimonials, and a direct
-                path to your Google reviews.
+                path to Google reviews.
               </p>
             </div>
 
