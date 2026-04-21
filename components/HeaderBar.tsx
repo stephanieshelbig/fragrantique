@@ -29,7 +29,7 @@ export default function HeaderBar() {
             Brand Index
           </Link>
           <Link href="/reviews" className="hover:underline">
-            Reviews
+            *Reviews
           </Link>
           <Link href="/chat" className="hover:underline">
             Contact Me
