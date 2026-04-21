@@ -1,30 +1,35 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 const GOOGLE_REVIEWS_URL =
   process.env.NEXT_PUBLIC_GOOGLE_REVIEWS_URL ||
   'https://share.google/amP8gfM9LruQRZxfM';
 
-const GOOGLE_WRITE_REVIEW_URL =
-  process.env.NEXT_PUBLIC_GOOGLE_WRITE_REVIEW_URL ||
-  GOOGLE_REVIEWS_URL;
-
 const featuredReviews = [
   {
-    id: 1,
+    id: 'placeholder-1',
     name: 'Fragrantique Customer',
     rating: 5,
     text:
       'Beautiful presentation, carefully packed, and such a lovely experience from start to finish. Everything felt thoughtful and boutique.',
   },
   {
-    id: 2,
+    id: 'placeholder-2',
     name: 'Fragrantique Customer',
     rating: 5,
     text:
       'The decants arrived quickly and were packaged so nicely. The whole order felt elevated, elegant, and personal.',
   },
   {
-    id: 3,
+    id: 'placeholder-3',
     name: 'Fragrantique Customer',
     rating: 5,
     text:
@@ -57,13 +62,45 @@ function ReviewCard({ review }) {
   );
 }
 
-export const metadata = {
-  title: 'Reviews | Fragrantique',
-  description:
-    'Read customer reviews for Fragrantique and see what people are saying about the boutique fragrance experience.',
-};
-
 export default function ReviewsPage() {
+  const [approvedReviews, setApprovedReviews] = useState([]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadApprovedReviews() {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('id, name, rating, text, created_at')
+        .eq('approved', true)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (!ignore && !error) {
+        setApprovedReviews(data || []);
+      }
+    }
+
+    loadApprovedReviews();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const displayedReviews = useMemo(() => {
+    const approved = approvedReviews.map((review) => ({
+      id: review.id,
+      name: review.name,
+      rating: review.rating,
+      text: review.text,
+    }));
+
+    if (approved.length >= 3) return approved.slice(0, 3);
+
+    return [...approved, ...featuredReviews.slice(approved.length, 3)];
+  }, [approvedReviews]);
+
   return (
     <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
       <section className="mx-auto max-w-6xl px-6 pb-16 pt-14 md:px-8 md:pb-24 md:pt-20">
@@ -92,19 +129,17 @@ export default function ReviewsPage() {
               Read reviews on Google
             </a>
 
-            <a
-              href={GOOGLE_WRITE_REVIEW_URL}
-              target="_blank"
-              rel="noreferrer"
+            <Link
+              href="/reviews/write-review"
               className="inline-flex items-center justify-center rounded-full border border-[#e7cbd3] bg-[#f5e6eb] px-6 py-3 text-sm font-medium text-[#473934] transition hover:bg-[#f0dde4]"
             >
               Write a review
-            </a>
+            </Link>
           </div>
         </div>
 
         <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {featuredReviews.map((review) => (
+          {displayedReviews.map((review) => (
             <ReviewCard key={review.id} review={review} />
           ))}
         </div>
@@ -125,14 +160,12 @@ export default function ReviewsPage() {
             </p>
 
             <div className="mt-7">
-              <a
-                href={GOOGLE_WRITE_REVIEW_URL}
-                target="_blank"
-                rel="noreferrer"
+              <Link
+                href="/reviews/write-review"
                 className="inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#d8b56a] px-7 py-3 text-sm font-medium text-[#1e1a16] transition hover:brightness-95"
               >
-                Write a Google review
-              </a>
+                Write a review
+              </Link>
             </div>
           </div>
         </div>
