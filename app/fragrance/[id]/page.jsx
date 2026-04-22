@@ -293,7 +293,7 @@ export default function FragranceDetail({ params }) {
               title="Open this fragrance on Wikiperfume in a new tab"
             >
               <span className="text-base leading-none">✦</span>
-              <span>View on Wikiperfume</span>
+              <span>View on Wikiparfum</span>
               <span className="text-xs opacity-70">↗</span>
             </a>
           )}
