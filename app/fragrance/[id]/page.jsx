@@ -288,9 +288,10 @@ export default function FragranceDetail({ params }) {
             <a
               href={frag.fragrantica_url}
               target="_blank"
-              rel="noreferrer"
-              className="text-sm underline"
+              rel="noopener noreferrer"
+              className="text-sm underline hover:opacity-70"
             >
+              View on Wikiperfume
             </a>
           )}
           {canAdmin && (
