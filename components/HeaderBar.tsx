@@ -25,9 +25,6 @@ export default function HeaderBar() {
           <Link href="/photos" className="hover:underline">
             My Collection
           </Link>
-          <Link href="/brand" className="hover:underline">
-            Brand Index
-          </Link>
           <Link href="/reviews" className="hover:underline">
             *Reviews
           </Link>
