@@ -89,12 +89,14 @@ function Card({ f }) {
           <div className="font-medium text-black">{f.name || '—'}</div>
 
           <div className="mt-3">
-            <Link
-              href={href}
-              className="text-sm rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-100 text-black"
-            >
-              Info
-            </Link>
+           <Link
+  href={href}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="text-sm rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-100 text-black"
+>
+  Info
+</Link>
           </div>
         </div>
       </div>
