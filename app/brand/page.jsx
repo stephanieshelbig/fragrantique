@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 // --- helpers ---
-const brandKey = (b: string | null | undefined) =>
+const brandKey = (b) =>
   (b || "unknown")
     .trim()
     .toLowerCase()
@@ -20,7 +20,7 @@ const STOPWORDS = new Set([
   "edition", "editions", "house", "maison", "atelier", "collection", "collections",
 ]);
 
-function canonicalBrandKey(b: string | null | undefined) {
+function canonicalBrandKey(b) {
   const strict = brandKey(b);
   const parts = strict.split("-").filter(Boolean);
   const kept = parts.filter((p) => !STOPWORDS.has(p));
@@ -28,21 +28,10 @@ function canonicalBrandKey(b: string | null | undefined) {
   return canon || strict;
 }
 
-type Owner = {
-  id: string | null;
-  username: string;
-};
-
-type FragranceLink = {
-  id?: string;
-  brand?: string;
-  name?: string;
-};
-
 export default function BrandClient() {
   const [mounted, setMounted] = useState(false);
-  const [owner, setOwner] = useState<Owner>({ id: null, username: "stephanie" });
-  const [links, setLinks] = useState<FragranceLink[]>([]);
+  const [owner, setOwner] = useState({ id: null, username: "stephanie" });
+  const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => setMounted(true), []);
@@ -68,7 +57,7 @@ export default function BrandClient() {
           .eq("user_id", prof.id);
 
         if (!cancelled) {
-          setLinks(((rows || []) as any[]).map((r) => r.fragrance).filter(Boolean));
+          setLinks((rows || []).map((r) => r.fragrance).filter(Boolean));
         }
       } else {
         setOwner({ id: null, username: "stephanie" });
@@ -83,7 +72,7 @@ export default function BrandClient() {
   }, []);
 
   const brands = useMemo(() => {
-    const map = new Map<string, { display: string; strict: string; count: number }>();
+    const map = new Map();
 
     for (const f of links) {
       const disp = f?.brand || "Unknown";
@@ -94,7 +83,7 @@ export default function BrandClient() {
         map.set(canon, { display: disp, strict, count: 0 });
       }
 
-      map.get(canon)!.count += 1;
+      map.get(canon).count += 1;
     }
 
     return Array.from(map.entries()).sort((a, b) =>
