@@ -290,7 +290,7 @@ export default function FragranceDetail({ params }) {
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-full border border-[#d6c6a5] bg-gradient-to-r from-white via-[#fffaf2] to-white px-4 py-1.5 text-sm font-medium text-[#7a5c2e] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#fffaf0] hover:shadow"
-              title="Open this fragrance on Wikiperfume in a new tab"
+              title="View fragrance on Wikiparfum in new tab"
             >
               <span className="text-base leading-none">✦</span>
               <span>View on Wikiparfum</span>
