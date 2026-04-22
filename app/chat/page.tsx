@@ -48,9 +48,6 @@ export default function ChatPage() {
         <h1 className="text-2xl font-bold text-center">Send me a message</h1>
 
         <p className="text-center text-sm text-gray-600 mt-1">
-          I’ll receive your message by email and reply as soon as I can.
-        </p>
-        <p className="text-center text-sm text-gray-600 mt-1">
           Or email me directly at STEPHANIE@FRAGRANTIQUE.NET.
         </p>
 
