@@ -280,24 +280,27 @@ export default function FragranceDetail({ params }) {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Local page bar: keep back link, Fragrantica & Edit; remove duplicated nav links */}
+      {/* Local page bar: keep back link, Wikiperfume & Edit; remove duplicated nav links */}
       <div className="flex items-center justify-between">
         <div />
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           {frag.fragrantica_url && (
             <a
               href={frag.fragrantica_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm underline hover:opacity-70"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d6c6a5] bg-gradient-to-r from-white via-[#fffaf2] to-white px-4 py-1.5 text-sm font-medium text-[#7a5c2e] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#fffaf0] hover:shadow"
+              title="Open this fragrance on Wikiperfume in a new tab"
             >
-              View on Wikiperfume
+              <span className="text-base leading-none">✦</span>
+              <span>View on Wikiperfume</span>
+              <span className="text-xs opacity-70">↗</span>
             </a>
           )}
           {canAdmin && (
             <Link
               href={`/fragrance/${frag.id}/edit`}
-              className="text-sm rounded border px-2 py-1 hover:bg-gray-50"
+              className="text-sm rounded-full border px-3 py-1.5 hover:bg-gray-50 transition"
               title="Edit this fragrance"
             >
               Edit
@@ -703,10 +706,10 @@ export default function FragranceDetail({ params }) {
           <div className="text-sm opacity-80 leading-relaxed">
             These are fragrances from my personal collection. I'm selling decants of
             some of each fragrance to earn some extra money. I don't do this strictly
-            for profit, meaning I don't buy fragrances just to sell them, so my prices 
-            will be lower than decant sites like ScentsAngel and DecantX. If you find 
-            a lower price for these decants, send me a message through the 
-            &apos;Contact Me&apos; link at the top of the page, and I will try to match 
+            for profit, meaning I don't buy fragrances just to sell them, so my prices
+            will be lower than decant sites like ScentsAngel and DecantX. If you find
+            a lower price for these decants, send me a message through the
+            &apos;Contact Me&apos; link at the top of the page, and I will try to match
             the price.
           </div>
         </div>
