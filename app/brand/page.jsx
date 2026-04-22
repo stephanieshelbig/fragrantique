@@ -30,7 +30,6 @@ function canonicalBrandKey(b) {
 }
 
 export default function BrandClient() {
-  // Mount guard ensures first client render matches server fallback skeleton
   const [mounted, setMounted] = useState(false);
   const [owner, setOwner] = useState({ id: null, username: "stephanie" });
   const [links, setLinks] = useState([]);
@@ -83,37 +82,73 @@ export default function BrandClient() {
     );
   }, [links]);
 
-  // While not mounted, mirror the server-side skeleton exactly.
   if (!mounted) {
     return (
       <div className="min-h-screen" suppressHydrationWarning>
         <div className="relative w-full h-40 sm:h-56 md:h-64 lg:h-72" />
         <div className="max-w-5xl mx-auto p-6 space-y-4">
           <div className="p-3 rounded border bg-white h-12" />
-          <div className="space-y-2">
-            <div className="h-6 w-44 bg-gray-200 rounded" />
-            <div className="h-4 w-80 bg-gray-200 rounded" />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="px-3 py-2 rounded bg-gray-200 h-8 animate-pulse" aria-hidden />
-            ))}
-          </div>
         </div>
       </div>
     );
   }
 
-  // Mounted -> render the real page
   return (
     <div className="min-h-screen">
-      {/* Banner */}
-      
-
-      {/* Content */}
       <div className="max-w-5xl mx-auto p-6 space-y-4">
+
+        {/* HEADER BAR */}
         <div className="p-3 rounded border bg-white flex flex-wrap items-center gap-5">
-          
+
+          {/* LEFT: SOCIAL ICONS */}
+          <div className="flex items-center gap-3">
+
+            {/* TikTok */}
+            <a
+              href="https://www.tiktok.com/@fragrantique.net"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:scale-110 transition-transform"
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6 text-black fill-current">
+                <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.68h-3.274v13.37a2.96 2.96 0 1 1-2.96-2.96c.244 0 .48.03.707.086V9.157a6.236 6.236 0 0 0-.707-.04A6.233 6.233 0 1 0 15.818 15.35V8.568a8.048 8.048 0 0 0 4.71 1.52V6.686h-.939Z" />
+              </svg>
+            </a>
+
+            {/* Instagram */}
+            <a
+              href="https://www.instagram.com/fragrantique_net"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:scale-110 transition-transform"
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6">
+                <defs>
+                  <linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#feda75"/>
+                    <stop offset="50%" stopColor="#d62976"/>
+                    <stop offset="100%" stopColor="#4f5bd5"/>
+                  </linearGradient>
+                </defs>
+                <path fill="url(#ig)" d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2Z"/>
+              </svg>
+            </a>
+
+            {/* YouTube */}
+            <a
+              href="https://www.youtube.com/@fragrantique"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:scale-110 transition-transform"
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6 fill-red-600">
+                <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.6 31.6 0 0 0 0 12a31.6 31.6 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.6 31.6 0 0 0 24 12a31.6 31.6 0 0 0-.5-5.8ZM9.8 15.5v-7l6 3.5-6 3.5Z"/>
+              </svg>
+            </a>
+
+          </div>
+
+          {/* RIGHT SIDE LINKS */}
           <div className="ml-auto flex flex-col items-start sm:items-end gap-1">
             <Link href="/notes" className="font-semibold underline">
               Click here to search by name, brand, or notes
@@ -131,14 +166,10 @@ export default function BrandClient() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           {loading && Array.from({ length: 12 }).map((_, i) => (
-            <div key={`s-${i}`} className="px-3 py-2 rounded bg-gray-200 animate-pulse h-8" aria-hidden />
+            <div key={i} className="px-3 py-2 rounded bg-gray-200 animate-pulse h-8" />
           ))}
 
-          {!loading && brands.length === 0 && (
-            <div className="col-span-full p-4 border rounded bg-white">No brands yet.</div>
-          )}
-
-          {!loading && brands.length > 0 && brands.map(([canon, meta]) => {
+          {!loading && brands.map(([canon, meta]) => {
             const href = `/u/${encodeURIComponent(owner.username)}/brand/${meta.strict}`;
             return (
               <Link
