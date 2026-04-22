@@ -100,8 +100,7 @@ export default function FragrantiqueAIPage() {
                 FragrantiqueAI
               </h1>
               <p className="text-base md:text-lg text-[#182A39]/90">
-                Let FragrantiqueAI suggest fragrances from my
-                collection that you might like.
+                Enter what you like and what you dislike (fragrance, notes, brands, feelings, perfumers, etc), and FragrantiqueAI will suggest fragrances from my collection.
               </p>
             </div>
 
@@ -110,13 +109,13 @@ export default function FragrantiqueAIPage() {
                 <textarea
                   value={likesText}
                   onChange={(e) => setLikesText(e.target.value)}
-                  placeholder="What you like (fragrance, notes, feelings, etc)"
+                  placeholder="What you like (one item per line, as many lines as you want)"
                   className="min-h-[140px] rounded-xl border px-3 py-2"
                 />
                 <textarea
                   value={dislikesText}
                   onChange={(e) => setDislikesText(e.target.value)}
-                  placeholder="What you dislike (brands, perfumers, aesthetics, etc)"
+                  placeholder="What you dislike (one item per line, as many lines as you want)"
                   className="min-h-[140px] rounded-xl border px-3 py-2"
                 />
               </div>
