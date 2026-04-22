@@ -100,7 +100,7 @@ export default function FragrantiqueAIPage() {
                 FragrantiqueAI
               </h1>
               <p className="text-base md:text-lg text-[#182A39]/90">
-                Tell me what you like and what you dislike (fragrance, notes, brands, feelings, perfumers, etc), and FragrantiqueAI will suggest fragrances from my collection.
+                Tell me what you like and what you dislike
               </p>
               <p className="text-base md:text-lg text-[#182A39]/90">
                 (fragrance, notes, brands, feelings, perfumers, etc)
