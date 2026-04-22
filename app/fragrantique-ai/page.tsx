@@ -42,7 +42,6 @@ export default function FragrantiqueAIPage() {
   const likes = useMemo(() => parseLines(likesText), [likesText]);
   const dislikes = useMemo(() => parseLines(dislikesText), [dislikesText]);
 
-  // Adjust if your route differs
   const FRAGRANCE_DETAIL_BASE = "/fragrance";
 
   async function handleRecommend() {
@@ -74,113 +73,167 @@ export default function FragrantiqueAIPage() {
   }
 
   return (
-    <main
-      className="min-h-screen flex justify-center px-4 py-12 bg-[#fdfcf9]"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at top, #f5ebdc 0, #fdfcf9 40%, #fdfcf9 100%), repeating-linear-gradient(45deg, rgba(217,195,154,0.08), rgba(217,195,154,0.08) 6px, transparent 6px, transparent 12px)",
-        backgroundBlendMode: "soft-light",
-      }}
-    >
-      <div className="w-full max-w-3xl">
-        <div className="rounded-3xl border border-[#d9c39a] shadow-xl px-6 md:px-8 py-10 bg-white/95">
-          {/* Logo */}
-          <div className="flex justify-center mb-6">
-            <Image
-              src="/FragrantiqueLogo3.png"
-              alt="Fragrantique Logo"
-              width={190}
-              height={80}
-              priority
-            />
-          </div>
-
-          <div className="text-center space-y-3">
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
-              FragrantiqueAI
-            </h1>
-            <p className="text-base md:text-lg text-[#182A39]/90">
-              Let FragrantiqueAI suggest fragrances from my
-              collection that you might like.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-5">
-            <div className="grid md:grid-cols-2 gap-4">
-              <textarea
-                value={likesText}
-                onChange={(e) => setLikesText(e.target.value)}
-                placeholder="What you like (fragrance, notes, feelings, etc)"
-                className="min-h-[140px] rounded-xl border px-3 py-2"
-              />
-              <textarea
-                value={dislikesText}
-                onChange={(e) => setDislikesText(e.target.value)}
-                placeholder="What you dislike (brands, perfumers, aesthetics, etc)"
-                className="min-h-[140px] rounded-xl border px-3 py-2"
+    <>
+      <main
+        className="min-h-screen flex justify-center px-4 py-12 bg-[#fdfcf9]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at top, #f5ebdc 0, #fdfcf9 40%, #fdfcf9 100%), repeating-linear-gradient(45deg, rgba(217,195,154,0.08), rgba(217,195,154,0.08) 6px, transparent 6px, transparent 12px)",
+          backgroundBlendMode: "soft-light",
+        }}
+      >
+        <div className="w-full max-w-3xl">
+          <div className="rounded-3xl border border-[#d9c39a] shadow-xl px-6 md:px-8 py-10 bg-white/95">
+            {/* Logo */}
+            <div className="flex justify-center mb-6">
+              <Image
+                src="/FragrantiqueLogo3.png"
+                alt="Fragrantique Logo"
+                width={190}
+                height={80}
+                priority
               />
             </div>
 
-            <button
-              onClick={handleRecommend}
-              disabled={loading}
-              className="self-center rounded-2xl border px-8 py-3"
-            >
-              {loading ? "Thinking…" : "Suggest fragrances"}
-            </button>
+            <div className="text-center space-y-3">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
+                FragrantiqueAI
+              </h1>
+              <p className="text-base md:text-lg text-[#182A39]/90">
+                Let FragrantiqueAI suggest fragrances from my
+                collection that you might like.
+              </p>
+            </div>
 
-            {error && <div className="text-red-600 text-sm">{error}</div>}
+            <div className="mt-8 grid gap-5">
+              <div className="grid md:grid-cols-2 gap-4">
+                <textarea
+                  value={likesText}
+                  onChange={(e) => setLikesText(e.target.value)}
+                  placeholder="What you like (fragrance, notes, feelings, etc)"
+                  className="min-h-[140px] rounded-xl border px-3 py-2"
+                />
+                <textarea
+                  value={dislikesText}
+                  onChange={(e) => setDislikesText(e.target.value)}
+                  placeholder="What you dislike (brands, perfumers, aesthetics, etc)"
+                  className="min-h-[140px] rounded-xl border px-3 py-2"
+                />
+              </div>
 
-            {results.length > 0 && (
-              <div className="grid gap-4">
-                {results.map((f, idx) => {
-                  const accordsText = accordsToText(f.accords);
-                  const href = `${FRAGRANCE_DETAIL_BASE}/${encodeURIComponent(String(f.id))}`;
+              <button
+                onClick={handleRecommend}
+                disabled={loading}
+                className="self-center w-full sm:w-auto relative overflow-hidden rounded-2xl px-10 py-3.5 font-semibold text-[#182A39]
+                           bg-gradient-to-br from-[#fff7ec] via-[#f6e7c8] to-[#e7cfa2]
+                           border border-[#d9c39a]
+                           shadow-md
+                           hover:shadow-[0_0_30px_rgba(217,195,154,0.95)]
+                           hover:-translate-y-0.5
+                           transition-all duration-300
+                           disabled:opacity-60 disabled:cursor-not-allowed
+                           disabled:hover:translate-y-0"
+                style={{
+                  animation: loading ? "none" : "aiPulse 2.8s ease-in-out infinite",
+                }}
+              >
+                <span className="absolute inset-0 rounded-2xl opacity-70 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,245,220,0.35),rgba(217,195,154,0.12)_45%,transparent_72%)]" />
+                <span className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(217,195,154,0.38),transparent_70%)]" />
+                <span className="absolute inset-y-0 -left-1/3 w-1/3 rotate-12 bg-white/30 blur-xl pointer-events-none animate-[aiShimmer_3.5s_ease-in-out_infinite]" />
 
-                  return (
-                    <Link
-                      key={`${f.id}-${idx}`}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <div className="rounded-2xl border p-4 hover:shadow-lg transition cursor-pointer">
-                        <div className="flex gap-4">
-                          {f.image_url && (
-                            <Image
-                              src={f.image_url}
-                              alt={f.name || ""}
-                              width={64}
-                              height={64}
-                              className="rounded"
-                            />
-                          )}
-                          <div>
-                            <div className="text-sm opacity-70">{f.brand}</div>
-                            <div className="font-semibold">{f.name}</div>
-                            {accordsText && (
-                              <div className="text-xs opacity-70">{accordsText}</div>
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  <span>{loading ? "Thinking…" : "✨ Suggest Fragrances"}</span>
+                </span>
+              </button>
+
+              {error && <div className="text-red-600 text-sm">{error}</div>}
+
+              {results.length > 0 && (
+                <div className="grid gap-4">
+                  {results.map((f, idx) => {
+                    const accordsText = accordsToText(f.accords);
+                    const href = `${FRAGRANCE_DETAIL_BASE}/${encodeURIComponent(String(f.id))}`;
+
+                    return (
+                      <Link
+                        key={`${f.id}-${idx}`}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        <div className="rounded-2xl border p-4 hover:shadow-lg transition cursor-pointer">
+                          <div className="flex gap-4">
+                            {f.image_url && (
+                              <Image
+                                src={f.image_url}
+                                alt={f.name || ""}
+                                width={64}
+                                height={64}
+                                className="rounded"
+                              />
                             )}
-                            {f.reason && (
-                              <div className="text-sm mt-1">
-                                <strong>Why:</strong> {f.reason}
+                            <div>
+                              <div className="text-sm opacity-70">{f.brand}</div>
+                              <div className="font-semibold">{f.name}</div>
+                              {accordsText && (
+                                <div className="text-xs opacity-70">{accordsText}</div>
+                              )}
+                              {f.reason && (
+                                <div className="text-sm mt-1">
+                                  <strong>Why:</strong> {f.reason}
+                                </div>
+                              )}
+                              <div className="text-xs opacity-60 mt-1">
+                                Opens in a new tab →
                               </div>
-                            )}
-                            <div className="text-xs opacity-60 mt-1">
-                              Opens in a new tab →
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+
+      <style jsx global>{`
+        @keyframes aiPulse {
+          0%, 100% {
+            box-shadow:
+              0 8px 20px rgba(0,0,0,0.08),
+              0 0 0 0 rgba(217,195,154,0.35);
+            transform: translateY(0);
+          }
+          50% {
+            box-shadow:
+              0 12px 28px rgba(0,0,0,0.12),
+              0 0 22px 3px rgba(217,195,154,0.45);
+            transform: translateY(-1px);
+          }
+        }
+
+        @keyframes aiShimmer {
+          0% {
+            transform: translateX(-120%) rotate(12deg);
+            opacity: 0;
+          }
+          20% {
+            opacity: 0.45;
+          }
+          50% {
+            transform: translateX(320%) rotate(12deg);
+            opacity: 0.18;
+          }
+          100% {
+            transform: translateX(320%) rotate(12deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </>
   );
 }
