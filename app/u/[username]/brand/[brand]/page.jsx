@@ -114,7 +114,7 @@ export default function BrandPage({ params }) {
           href="/notes"
           className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md hover:scale-105 transition text-sm font-medium"
         >
-          🔍 Search
+          🔍 Search my collection
         </Link>
 
         {/* Primary CTA */}
