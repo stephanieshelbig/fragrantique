@@ -56,7 +56,7 @@ export default function HomePage() {
             </div>
 
             <div className="text-center space-y-4 mt-4">
-              <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
+              <p className="text-base md:text-lg text-[#b99254]/90 leading-relaxed">
                 *** I am in the US and can only ship to addresses in the US... for now.
               </p>
             </div>
