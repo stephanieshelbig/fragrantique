@@ -11,6 +11,7 @@ const adminLinks = [
   { href: '/admin/customer', label: 'Customer', desc: 'View and manage customer info' },
   { href: '/admin/fragrances', label: 'Fragrances', desc: 'Manage fragrance listings' },
   { href: '/admin/orders', label: 'Orders', desc: 'Review purchases and shipping details' },
+  { href: '/admin/requests', label: 'Requests', desc: 'Moderate customer requests' },
   { href: '/admin/reviews', label: 'Reviews', desc: 'Moderate customer reviews' }
 ];
 
