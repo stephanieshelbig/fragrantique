@@ -5,17 +5,17 @@ import { useEffect, useState } from 'react';
 
 function RequestCard({ item, onUpvote, votingId }) {
   return (
-    <div className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[#9a8467]">
-            Fragrance Request
-          </p>
+    <div className="rounded-[32px] border border-[#eadfce] bg-white p-7 shadow-[0_10px_30px_rgba(73,54,30,0.06)] md:p-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="inline-flex items-center rounded-full border border-[#eadfce] bg-[#fffaf4] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#9a8467]">
+            Requested Fragrance
+          </div>
 
-          <h3 className="mt-2 font-serif text-2xl leading-tight text-[#1f1915]">
+          <h2 className="mt-4 font-serif text-2xl leading-tight text-[#1f1915] md:text-3xl">
             {item.brand}
             <span className="block text-[#b99254]">{item.fragrance_name}</span>
-          </h3>
+          </h2>
 
           {item.notes ? (
             <p className="mt-4 text-[15px] leading-7 text-[#4b4038]">
@@ -28,9 +28,11 @@ function RequestCard({ item, onUpvote, votingId }) {
           type="button"
           onClick={() => onUpvote(item.id)}
           disabled={votingId === item.id}
-          className="shrink-0 rounded-full border border-[#d8b56a] bg-[#fffaf2] px-5 py-2.5 text-sm font-medium text-[#473934] transition hover:bg-[#fdf4df] disabled:cursor-not-allowed disabled:opacity-70"
+          className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#d8b56a] bg-[#fff7e8] px-6 py-3 text-sm font-medium text-[#1e1a16] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {votingId === item.id ? 'Voting...' : `♡ Upvote (${item.upvotes_count || 0})`}
+          {votingId === item.id
+            ? 'Submitting...'
+            : `♡ Upvote (${item.upvotes_count || 0})`}
         </button>
       </div>
     </div>
@@ -38,15 +40,15 @@ function RequestCard({ item, onUpvote, votingId }) {
 }
 
 export default function RequestsPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [requesterName, setRequesterName] = useState('');
+  const [requesterEmail, setRequesterEmail] = useState('');
   const [brand, setBrand] = useState('');
   const [fragranceName, setFragranceName] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState('');
   const [requests, setRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [votingId, setVotingId] = useState('');
 
   useEffect(() => {
@@ -54,16 +56,18 @@ export default function RequestsPage() {
   }, []);
 
   async function loadRequests() {
-    setLoadingRequests(true);
-
     try {
-      const res = await fetch('/api/requests/list', { cache: 'no-store' });
-      const json = await res.json();
-      if (res.ok) setRequests(json.requests || []);
-    } catch (err) {
-      console.error(err);
+      setLoading(true);
+      const response = await fetch('/api/requests/list', { cache: 'no-store' });
+      const result = await response.json();
+
+      if (response.ok) {
+        setRequests(result.requests || []);
+      }
+    } catch (error) {
+      console.error(error);
     } finally {
-      setLoadingRequests(false);
+      setLoading(false);
     }
   }
 
@@ -72,24 +76,16 @@ export default function RequestsPage() {
     setSubmitting(true);
     setStatus('');
 
-    const payload = {
-      requester_name: name.trim(),
-      requester_email: email.trim(),
-      brand: brand.trim(),
-      fragrance_name: fragranceName.trim(),
-      notes: notes.trim(),
-    };
-
-    if (!payload.brand || !payload.fragrance_name) {
-      setStatus('Please complete the brand and fragrance name.');
-      setSubmitting(false);
-      return;
-    }
-
     const response = await fetch('/api/requests/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        requester_name: requesterName.trim(),
+        requester_email: requesterEmail.trim(),
+        brand: brand.trim(),
+        fragrance_name: fragranceName.trim(),
+        notes: notes.trim(),
+      }),
     });
 
     const result = await response.json();
@@ -100,8 +96,8 @@ export default function RequestsPage() {
       return;
     }
 
-    setName('');
-    setEmail('');
+    setRequesterName('');
+    setRequesterEmail('');
     setBrand('');
     setFragranceName('');
     setNotes('');
@@ -110,9 +106,9 @@ export default function RequestsPage() {
   }
 
   async function handleUpvote(id) {
-    setVotingId(id);
-
     try {
+      setVotingId(id);
+
       const response = await fetch(`/api/requests/${id}/upvote`, {
         method: 'POST',
       });
@@ -131,6 +127,8 @@ export default function RequestsPage() {
             : item
         )
       );
+    } catch (error) {
+      alert('Something went wrong.');
     } finally {
       setVotingId('');
     }
@@ -150,8 +148,8 @@ export default function RequestsPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
-            Looking for a fragrance I don’t currently have? Submit a request below.
-            Once approved, it will appear here and others can upvote it too.
+            Submit a fragrance I don’t currently have. Once approved, it will
+            appear here so others can upvote it too.
           </p>
         </div>
 
@@ -164,8 +162,8 @@ export default function RequestsPage() {
                 </label>
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={requesterName}
+                  onChange={(e) => setRequesterName(e.target.value)}
                   maxLength={80}
                   placeholder="Your name (optional)"
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
@@ -178,8 +176,8 @@ export default function RequestsPage() {
                 </label>
                 <input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={requesterEmail}
+                  onChange={(e) => setRequesterEmail(e.target.value)}
                   maxLength={120}
                   placeholder="Your email (optional)"
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
@@ -195,7 +193,7 @@ export default function RequestsPage() {
                   value={brand}
                   onChange={(e) => setBrand(e.target.value)}
                   maxLength={120}
-                  placeholder="Ex: Guerlain"
+                  placeholder="Brand"
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
                   required
                 />
@@ -210,7 +208,7 @@ export default function RequestsPage() {
                   value={fragranceName}
                   onChange={(e) => setFragranceName(e.target.value)}
                   maxLength={160}
-                  placeholder="Ex: Angelique Noire"
+                  placeholder="Fragrance name"
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
                   required
                 />
@@ -224,8 +222,8 @@ export default function RequestsPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   maxLength={1200}
-                  rows={5}
-                  placeholder="Anything you’d like me to know..."
+                  rows={6}
+                  placeholder="Tell me anything about this fragrance..."
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
                 />
               </div>
@@ -256,14 +254,14 @@ export default function RequestsPage() {
           </div>
 
           <div className="space-y-5">
-            {loadingRequests ? (
-              <div className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
-                <p className="text-[#4b4038]">Loading requests...</p>
+            {loading ? (
+              <div className="rounded-[32px] border border-[#eadfce] bg-white p-7 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
+                <p className="text-[15px] text-[#4b4038]">Loading requests...</p>
               </div>
             ) : requests.length === 0 ? (
-              <div className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
-                <p className="text-[#4b4038]">
-                  No approved requests yet. Be the first to submit one.
+              <div className="rounded-[32px] border border-[#eadfce] bg-white p-7 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
+                <p className="text-[15px] text-[#4b4038]">
+                  No approved requests yet.
                 </p>
               </div>
             ) : (
