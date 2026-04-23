@@ -1,22 +1,88 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-// import your existing nodemailer/transporter helper here
-// import { transporter } from '@/lib/mailer'  <-- example
+import { sendOrderEmail } from '@/lib/email';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getAdminSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+}
 
-export async function POST(req) {
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderRequestAlertHtml({
+  requester_name,
+  requester_email,
+  brand,
+  fragrance_name,
+  notes,
+}) {
+  const safeRequesterName = escapeHtml(requester_name || '—');
+  const safeRequesterEmail = escapeHtml(requester_email || '—');
+  const safeBrand = escapeHtml(brand);
+  const safeFragranceName = escapeHtml(fragrance_name);
+  const safeNotes = escapeHtml(notes || '').replace(/\n/g, '<br />') || '—';
+
+  return `
+    <div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto">
+      <h2 style="margin:0 0 12px">New Fragrantique Fragrance Request Submitted</h2>
+
+      <div style="font-size:14px;margin:0 0 8px">
+        <b>Name:</b> ${safeRequesterName}
+      </div>
+
+      <div style="font-size:14px;margin:0 0 8px">
+        <b>Email:</b> ${safeRequesterEmail}
+      </div>
+
+      <div style="font-size:14px;margin:0 0 8px">
+        <b>Brand:</b> ${safeBrand}
+      </div>
+
+      <div style="font-size:14px;margin:0 0 8px">
+        <b>Fragrance:</b> ${safeFragranceName}
+      </div>
+
+      <h3 style="margin:16px 0 6px">Notes</h3>
+      <div style="padding:12px;border:1px solid #eadfce;border-radius:12px;background:#fffaf4;font-size:14px;line-height:1.6">
+        ${safeNotes}
+      </div>
+
+      <div style="margin-top:20px;font-size:14px">
+        <a
+          href="https://fragrantique.net/admin/requests"
+          style="display:inline-block;padding:10px 16px;border-radius:999px;background:#d8b56a;color:#1e1a16;text-decoration:none;font-weight:600"
+        >
+          Review & Publish
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+export async function POST(request) {
   try {
-    const body = await req.json();
+    const body = await request.json();
 
-    const requester_name = String(body.requester_name || '').trim();
-    const requester_email = String(body.requester_email || '').trim();
-    const brand = String(body.brand || '').trim();
-    const fragrance_name = String(body.fragrance_name || '').trim();
-    const notes = String(body.notes || '').trim();
+    const requester_name = String(body?.requester_name || '').trim();
+    const requester_email = String(body?.requester_email || '').trim();
+    const brand = String(body?.brand || '').trim();
+    const fragrance_name = String(body?.fragrance_name || '').trim();
+    const notes = String(body?.notes || '').trim();
 
     if (!brand || !fragrance_name) {
       return NextResponse.json(
@@ -25,53 +91,48 @@ export async function POST(req) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('perfume_requests')
-      .insert({
+    const supabase = getAdminSupabase();
+
+    const { error } = await supabase.from('perfume_requests').insert([
+      {
         requester_name: requester_name || null,
         requester_email: requester_email || null,
         brand,
         fragrance_name,
         notes: notes || null,
-        status: 'pending',
-      })
-      .select()
-      .single();
+        approved: false,
+        upvotes_count: 0,
+      },
+    ]);
 
     if (error) {
-      console.error(error);
-      return NextResponse.json(
-        { error: 'Unable to submit request.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // USE THE SAME EMAIL CONFIG YOU ALREADY USE FOR REVIEWS HERE
-    // Example:
-    /*
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM,
-      to: 'stephanie@fragrantique.net',
-      subject: `New fragrance request: ${brand} — ${fragrance_name}`,
-      html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.6">
-          <h2>New Fragrance Request</h2>
-          <p><strong>Brand:</strong> ${brand}</p>
-          <p><strong>Fragrance:</strong> ${fragrance_name}</p>
-          <p><strong>Name:</strong> ${requester_name || '—'}</p>
-          <p><strong>Email:</strong> ${requester_email || '—'}</p>
-          <p><strong>Notes:</strong> ${notes || '—'}</p>
-          <p><a href="https://fragrantique.net/admin/requests">Open admin requests</a></p>
-        </div>
-      `,
-    });
-    */
+    try {
+      const emailResult = await sendOrderEmail({
+        to: process.env.FROM_EMAIL,
+        subject: 'New Fragrantique Fragrance Request Submitted',
+        html: renderRequestAlertHtml({
+          requester_name,
+          requester_email,
+          brand,
+          fragrance_name,
+          notes,
+        }),
+      });
 
-    return NextResponse.json({ ok: true, request: data });
-  } catch (err) {
-    console.error(err);
+      if (emailResult?.ok === false) {
+        console.error('Request email failed:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('Request alert email failed:', emailError);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
     return NextResponse.json(
-      { error: 'Something went wrong. Please try again.' },
+      { error: 'Something went wrong submitting the request.' },
       { status: 500 }
     );
   }
