@@ -34,7 +34,7 @@ export async function POST(req, { params }) {
 
     if (existingVote) {
       return NextResponse.json(
-        { error: 'You already upvoted this request.' },
+        { error: 'Thanks, but you already upvoted this request.' },
         { status: 400 }
       );
     }
