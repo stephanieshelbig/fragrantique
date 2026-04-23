@@ -141,7 +141,22 @@ export default function HomePage() {
                   </div>
                 </div>
               </Link>
-
+ {/* Requests */}
+              <Link href="/requests">
+                <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
+                    <span className="text-xl">🆕</span>
+                  </div>
+                  <div>
+                    <div className="text-base md:text-lg font-semibold text-[#182A39]">
+                      Request a Fragrance
+                    </div>
+                    <div className="text-xs md:text-sm text-[#182A39]/70">
+                      Submit a request for a fragrance
+                    </div>
+                  </div>
+                </div>
+              </Link>
               {/* Social Buttons */}
               <div className="flex flex-wrap justify-center gap-3 -mt-1">
                 {/* TikTok */}
