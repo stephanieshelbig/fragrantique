@@ -148,8 +148,7 @@ export default function RequestsPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
-            Submit a fragrance I don’t currently have. Once approved, it will
-            appear here so others can upvote it too.
+            If there's a fragrance you want that I don’t have, submit a request here. If it sounds like something I would like, I'll look into it. Others can Upvote the request to show interest.
           </p>
         </div>
 
