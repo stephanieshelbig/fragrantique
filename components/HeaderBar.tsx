@@ -23,7 +23,7 @@ export default function HeaderBar() {
             Musk Anosmia
           </Link>
           <Link href="/photos" className="hover:underline">
-            My Collection
+            Pics of My Collection
           </Link>
           <Link href="/requests" className="hover:underline">
             🆕Request a Fragrance
