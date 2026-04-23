@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-// Normalization helpers (match boutique page)
+// Normalization helpers
 const brandKey = (b) =>
   (b || 'unknown')
     .trim()
@@ -106,28 +106,25 @@ export default function BrandPage({ params }) {
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-4">
 
-      {/* BUTTONS (replaces old links) */}
+      {/* BUTTONS */}
       <div className="flex flex-wrap justify-center gap-3 mb-4">
-        <Link
-          href="/decants"
-          className="px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md transition text-sm font-medium"
-        >
-          Shop Decants
-        </Link>
 
+        {/* Search */}
         <Link
           href="/notes"
-          className="px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md transition text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md hover:scale-105 transition text-sm font-medium"
         >
-          Search Fragrances
+          🔍 Search
         </Link>
 
+        {/* Primary CTA */}
         <Link
           href="/recommendations"
-          className="px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md transition text-sm font-medium"
+          className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#D4AF37] text-white hover:bg-[#c59c2f] hover:shadow-lg hover:scale-105 transition text-sm font-semibold"
         >
-          Get Recommendations
+          ✨ Get Recommendations
         </Link>
+
       </div>
 
       <div className="flex items-center justify-between">
