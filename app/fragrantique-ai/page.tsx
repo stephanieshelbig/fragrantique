@@ -95,20 +95,19 @@ export default function FragrantiqueAIPage() {
               />
             </div>
 
-            <div className="text-center space-y-3">
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
-                FragrantiqueAI
-              </h1>
-              <p className="text-base md:text-lg text-[#182A39]">
-                Tell me what you like and what you dislike
-              </p>
-              <p className="text-base md:text-lg text-[#182A39]">
-                (fragrance, notes, brands, feelings, perfumers, etc)
-              </p>
-              <p className="text-base md:text-lg text-[#182A39]">
-                and FragrantiqueAI will suggest fragrances from my collection.
-              </p>
-            </div>
+            <div className="text-center space-y-2">
+  <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
+    FragrantiqueAI
+  </h1>
+
+  <p className="text-base md:text-lg text-[#182A39] leading-relaxed max-w-xl mx-auto">
+    Tell me what you like and dislike
+    <span className="block text-sm md:text-base opacity-80">
+      (fragrances, notes, brands, feelings, perfumers, etc)
+    </span>
+    and FragrantiqueAI will suggest fragrances from my collection.
+  </p>
+</div>
 
             <div className="mt-8 grid gap-5">
               <div className="grid md:grid-cols-2 gap-4">
