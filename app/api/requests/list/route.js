@@ -13,14 +13,14 @@ function getAdminSupabase() {
     }
   );
 }
- 
+
 export async function GET() {
   try {
     const supabase = getAdminSupabase();
 
     const { data, error } = await supabase
       .from('perfume_requests')
-      .select('id, brand, fragrance_name, notes, upvotes_count, created_at')
+      .select('id, brand, fragrance_name, notes, upvotes_count, created_at, approved')
       .eq('approved', true)
       .order('upvotes_count', { ascending: false })
       .order('created_at', { ascending: false });
