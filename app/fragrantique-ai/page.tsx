@@ -99,13 +99,13 @@ export default function FragrantiqueAIPage() {
               <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
                 FragrantiqueAI
               </h1>
-              <p className="text-base md:text-lg text-[#182A39]/90">
+              <p className="text-base md:text-lg text-[#182A39]">
                 Tell me what you like and what you dislike
               </p>
-              <p className="text-base md:text-lg text-[#182A39]/90">
+              <p className="text-base md:text-lg text-[#182A39]">
                 (fragrance, notes, brands, feelings, perfumers, etc)
               </p>
-              <p className="text-base md:text-lg text-[#182A39]/90">
+              <p className="text-base md:text-lg text-[#182A39]">
                 and FragrantiqueAI will suggest fragrances from my collection.
               </p>
             </div>
