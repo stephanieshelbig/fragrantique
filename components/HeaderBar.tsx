@@ -26,7 +26,7 @@ export default function HeaderBar() {
             My Collection
           </Link>
           <Link href="/requests" className="hover:underline">
-            Request a Fragrance
+            🆕Request a Fragrance
           </Link>
           <Link href="/reviews" className="hover:underline">
             🥰Reviews
