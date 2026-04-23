@@ -144,7 +144,7 @@ export default function RequestsPage() {
 
           <h1 className="mt-6 font-serif text-4xl leading-tight text-[#1f1915] md:text-6xl">
             Request a
-            <span className="block text-[#b99254]">future Fragrantique scent</span>
+            <span className="block text-[#b99254]">fragrance</span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
