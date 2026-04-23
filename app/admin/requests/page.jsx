@@ -354,7 +354,7 @@ export default function AdminRequestsPage() {
                           </div>
                           <div>
                             <span className="font-medium text-[#1f1915]">Status: </span>
-                            {item.status || (item.approved ? 'approved' : 'pending')}
+                            {item.status || (isApproved ? 'approved' : 'pending')}
                           </div>
                           <div className="sm:col-span-2">
                             <span className="font-medium text-[#1f1915]">Submitted: </span>
