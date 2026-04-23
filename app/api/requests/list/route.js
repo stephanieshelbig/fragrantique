@@ -20,7 +20,10 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('perfume_requests')
-      .select('*')
+      .select('id, brand, fragrance_name, notes, upvotes_count, created_at, status, approved')
+      .eq('status', 'approved')
+      .eq('approved', true)
+      .order('upvotes_count', { ascending: false })
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -30,7 +33,7 @@ export async function GET() {
     return NextResponse.json({ requests: data || [] });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Something went wrong loading admin requests.' },
+      { error: 'Something went wrong loading requests.' },
       { status: 500 }
     );
   }
