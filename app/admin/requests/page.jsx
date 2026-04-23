@@ -212,7 +212,12 @@ export default function AdminRequestsPage() {
   }
 
   function getBadge(item) {
-    const isApproved = item.approved === true || item.status === 'approved';
+    const isApproved =
+  item.status === 'approved' ||
+  item.approved === true ||
+  item.approved === 'true' ||
+  item.approved === 't' ||
+  item.approved === 1;
 
     if (isApproved) {
       return (
