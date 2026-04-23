@@ -100,7 +100,9 @@ export async function POST(request) {
         brand,
         fragrance_name,
         notes: notes || null,
+        status: 'pending',
         approved: false,
+        approved_at: null,
         upvotes_count: 0,
       },
     ]);
