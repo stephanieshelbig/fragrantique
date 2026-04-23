@@ -127,7 +127,7 @@ export default function HomePage() {
 
                   {/* Icon */}
                   <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#fff1d6] to-[#e7cfa2] shadow-inner text-xl">
-                    ✨
+                    🤖
                   </div>
 
                   {/* Text */}
@@ -152,7 +152,7 @@ export default function HomePage() {
                       Request a Fragrance
                     </div>
                     <div className="text-xs md:text-sm text-[#182A39]/70">
-                      Submit a request for a fragrance
+                      Submit a request for a fragrance that's not on the site
                     </div>
                   </div>
                 </div>
