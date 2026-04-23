@@ -20,19 +20,19 @@ export default function HeaderBar() {
         {/* Right side: Stacked vertical links */}
         <nav className="flex flex-col items-end gap-2 text-[15px] font-medium text-[#D4A774]">
           <Link href="/muskAnosmia" className="hover:underline">
-            👃Musk Anosmia
+            Musk Anosmia👃
           </Link>
           <Link href="/photos" className="hover:underline">
-            🧴My Collection
+            My Collection🧴
           </Link>
           <Link href="/reviews" className="hover:underline">
-            🥰Reviews
+            Reviews🥰
           </Link>
           <Link href="/chat" className="hover:underline">
-            📨Contact Me
+            Contact Me📨
           </Link>
           <Link href="/cart" className="hover:underline">
-            🛒Cart
+            Cart🛒
           </Link>
         </nav>
 
