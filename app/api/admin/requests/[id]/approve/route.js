@@ -20,7 +20,11 @@ export async function POST(request, { params }) {
 
     const { data, error } = await supabase
       .from('perfume_requests')
-      .update({ approved: true })
+      .update({
+        approved: true,
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+      })
       .eq('id', params.id)
       .select()
       .single();
