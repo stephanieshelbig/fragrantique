@@ -19,6 +19,7 @@ const STOPWORDS = new Set([
   'inc','ltd','llc','co','company','laboratories','laboratory','lab','labs',
   'edition','editions','house','maison','atelier','collection','collections'
 ]);
+
 function canonicalBrandKey(b) {
   const strict = brandKey(b);
   const parts = strict.split('-').filter(Boolean);
@@ -32,13 +33,11 @@ export default function BrandPage({ params }) {
   const urlStrictKey = decodeURIComponent(params.brand || '');
 
   const [loading, setLoading] = useState(true);
-
   const [owner, setOwner] = useState({ id: null, username });
   const [frags, setFrags] = useState([]);
 
   useEffect(() => {
     (async () => {
-      // 1) Find boutique owner
       const { data: prof } = await supabase
         .from('profiles')
         .select('id, username')
@@ -51,9 +50,9 @@ export default function BrandPage({ params }) {
         setLoading(false);
         return;
       }
+
       setOwner(prof);
 
-      // 2) Load all fragrances for that owner; filter in JS by normalized brand
       const { data: rows } = await supabase
         .from('user_fragrances')
         .select(`
@@ -69,7 +68,6 @@ export default function BrandPage({ params }) {
     })();
   }, [username, urlStrictKey]);
 
-  // Normalize and match both strict + canonical keys, then sort alphabetically
   const filtered = useMemo(() => {
     const wantStrict = (urlStrictKey || '').toLowerCase();
     const wantCanon  = canonicalBrandKey(urlStrictKey);
@@ -86,17 +84,18 @@ export default function BrandPage({ params }) {
       );
   }, [frags, urlStrictKey]);
 
-  // Choose display brand
   const displayBrand = useMemo(() => {
     if (!filtered.length) {
       const guess = urlStrictKey.replace(/-/g, ' ');
       return guess ? guess.charAt(0).toUpperCase() + guess.slice(1) : 'Brand';
     }
+
     const counts = new Map();
     for (const f of filtered) {
       const b = f.brand || 'Unknown';
       counts.set(b, (counts.get(b) || 0) + 1);
     }
+
     return Array.from(counts.entries()).sort((a,b)=>b[1]-a[1])[0][0];
   }, [filtered, urlStrictKey]);
 
@@ -107,33 +106,34 @@ export default function BrandPage({ params }) {
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-4">
 
-      {/* Header Links (Arrange button removed) */}
-      
-      {/* link to /decants */}
-      <div className="mb-1 text-center text-sm">
-        <Link href="/decants" className="font-semibold underline">
-          Click here for all available decants
+      {/* BUTTONS (replaces old links) */}
+      <div className="flex flex-wrap justify-center gap-3 mb-4">
+        <Link
+          href="/decants"
+          className="px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md transition text-sm font-medium"
+        >
+          Shop Decants
+        </Link>
+
+        <Link
+          href="/notes"
+          className="px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md transition text-sm font-medium"
+        >
+          Search Fragrances
+        </Link>
+
+        <Link
+          href="/recommendations"
+          className="px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md transition text-sm font-medium"
+        >
+          Get Recommendations
         </Link>
       </div>
 
-      {/* NEW: link to /notes */}
-      <div className="mb-3 text-center text-sm">
-        <Link href="/notes" className="font-semibold underline">
-          Click here to search by notes, brand, or name
-        </Link>
-      </div>
-      
-      <div className="mb-1 text-center text-sm">
-        <Link href="/recommendations" className="font-semibold underline">
-          Click here for Recommendations
-        </Link>
-      </div>
-      
       <div className="flex items-center justify-between">
-       <h1 className="text-2xl font-bold">
+        <h1 className="text-2xl font-bold">
           {displayBrand} <span className="font-normal opacity-70"></span>
         </h1>
-        
       </div>
 
       {!filtered.length && (
@@ -153,12 +153,14 @@ export default function BrandPage({ params }) {
               title={`${f.brand} — ${f.name}`}
             >
               <div className="relative w-full" style={{ aspectRatio: '3 / 4' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={img}
                   alt={f.name}
                   className="absolute inset-0 h-full w-full object-contain"
-                  style={{ mixBlendMode: 'multiply', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.18))' }}
+                  style={{
+                    mixBlendMode: 'multiply',
+                    filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.18))'
+                  }}
                   onError={(e) => {
                     const el = e.currentTarget;
                     if (!el.dataset.fallback) {
