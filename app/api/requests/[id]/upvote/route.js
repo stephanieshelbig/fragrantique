@@ -2,15 +2,23 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getAdminSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+}
 
-function getIp(req) {
-  const forwarded = req.headers.get('x-forwarded-for');
+function getIp(request) {
+  const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
-  return req.headers.get('x-real-ip') || 'unknown';
+  return request.headers.get('x-real-ip') || 'unknown';
 }
 
 function hashIp(ip) {
@@ -20,55 +28,61 @@ function hashIp(ip) {
     .digest('hex');
 }
 
-export async function POST(req, { params }) {
+export async function POST(request, { params }) {
   try {
     const requestId = params.id;
-    const ipHash = hashIp(getIp(req));
+    const supabase = getAdminSupabase();
 
-    const { data: existingVote } = await supabase
+    const ipHash = hashIp(getIp(request));
+
+    const { data: perfumeRequest, error: requestError } = await supabase
+      .from('perfume_requests')
+      .select('id, approved, upvotes_count')
+      .eq('id', requestId)
+      .single();
+
+    if (requestError || !perfumeRequest || !perfumeRequest.approved) {
+      return NextResponse.json(
+        { error: 'Request not found.' },
+        { status: 404 }
+      );
+    }
+
+    const { data: existingVote, error: existingVoteError } = await supabase
       .from('perfume_request_votes')
       .select('id')
       .eq('request_id', requestId)
       .eq('ip_hash', ipHash)
       .maybeSingle();
 
+    if (existingVoteError) {
+      return NextResponse.json(
+        { error: existingVoteError.message },
+        { status: 500 }
+      );
+    }
+
     if (existingVote) {
       return NextResponse.json(
-        { error: 'Thanks, but you already upvoted this request.' },
+        { error: 'You already upvoted this fragrance.' },
         { status: 400 }
       );
     }
 
     const { error: voteError } = await supabase
       .from('perfume_request_votes')
-      .insert({
-        request_id: requestId,
-        ip_hash: ipHash,
-      });
+      .insert([
+        {
+          request_id: requestId,
+          ip_hash: ipHash,
+        },
+      ]);
 
     if (voteError) {
-      console.error(voteError);
-      return NextResponse.json(
-        { error: 'Unable to save vote.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: voteError.message }, { status: 500 });
     }
 
-    const { data: row, error: rowError } = await supabase
-      .from('perfume_requests')
-      .select('upvotes_count')
-      .eq('id', requestId)
-      .single();
-
-    if (rowError) {
-      console.error(rowError);
-      return NextResponse.json(
-        { error: 'Unable to find request.' },
-        { status: 404 }
-      );
-    }
-
-    const nextCount = (row.upvotes_count || 0) + 1;
+    const nextCount = Number(perfumeRequest.upvotes_count || 0) + 1;
 
     const { error: updateError } = await supabase
       .from('perfume_requests')
@@ -76,18 +90,16 @@ export async function POST(req, { params }) {
       .eq('id', requestId);
 
     if (updateError) {
-      console.error(updateError);
-      return NextResponse.json(
-        { error: 'Unable to update vote count.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, upvotes_count: nextCount });
-  } catch (err) {
-    console.error(err);
+    return NextResponse.json({
+      success: true,
+      upvotes_count: nextCount,
+    });
+  } catch (error) {
     return NextResponse.json(
-      { error: 'Unable to upvote right now.' },
+      { error: 'Something went wrong submitting the upvote.' },
       { status: 500 }
     );
   }
