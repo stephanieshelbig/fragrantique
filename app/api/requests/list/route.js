@@ -13,7 +13,7 @@ function getAdminSupabase() {
     }
   );
 }
-
+ 
 export async function GET() {
   try {
     const supabase = getAdminSupabase();
