@@ -21,7 +21,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('perfume_requests')
       .select('*')
-      .or('approved.eq.false,approved.is.null')
+      .eq('approved', false)
       .order('created_at', { ascending: false });
 
     if (error) {
