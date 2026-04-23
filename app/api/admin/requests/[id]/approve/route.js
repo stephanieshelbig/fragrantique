@@ -18,16 +18,18 @@ export async function POST(request, { params }) {
   try {
     const supabase = getAdminSupabase();
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('perfume_requests')
       .update({ approved: true })
-      .eq('id', params.id);
+      .eq('id', params.id)
+      .select()
+      .single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, request: data });
   } catch (error) {
     return NextResponse.json(
       { error: 'Something went wrong approving the request.' },
