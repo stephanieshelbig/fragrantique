@@ -32,7 +32,7 @@ export default function HomePage() {
                 }}
               >
                 <Image
-                  src="/FragrantiqueLogo3.png"
+                  src="/FragrantiqueLogo4.png"
                   alt="Fragrantique Logo"
                   width={190}
                   height={80}
