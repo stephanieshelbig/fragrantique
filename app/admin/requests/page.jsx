@@ -142,6 +142,44 @@ export default function AdminRequestsPage() {
     }
   }
 
+  async function handleUnapprove(id) {
+    try {
+      setWorkingId(id);
+      setStatusMessage('');
+
+      const response = await fetch(`/api/admin/requests/${id}/unapprove`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setStatusMessage(result?.error || 'Unable to unapprove request.');
+        return;
+      }
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                approved: false,
+                status: 'pending',
+                approved_at: null,
+              }
+            : item
+        )
+      );
+
+      setStatusMessage('Request unapproved.');
+    } catch (error) {
+      console.error(error);
+      setStatusMessage('Unable to unapprove request.');
+    } finally {
+      setWorkingId('');
+    }
+  }
+
   async function handleDelete(id) {
     const confirmed = window.confirm(
       'Delete this request? This cannot be undone.'
@@ -174,9 +212,9 @@ export default function AdminRequestsPage() {
   }
 
   function getBadge(item) {
-    const approved = item.approved === true || item.status === 'approved';
+    const isApproved = item.approved === true || item.status === 'approved';
 
-    if (approved) {
+    if (isApproved) {
       return (
         <div className="inline-flex items-center rounded-full border border-[#d8e7d2] bg-[#f5fbf2] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#658257]">
           Approved
@@ -236,7 +274,7 @@ export default function AdminRequestsPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
-            View all submitted requests, approve them for publishing, or delete them.
+            View all submitted requests, approve or unapprove them, or delete them.
           </p>
         </div>
 
@@ -332,22 +370,25 @@ export default function AdminRequestsPage() {
                       </div>
 
                       <div className="flex shrink-0 flex-col gap-3 sm:flex-row lg:flex-col">
-                        <button
-                          type="button"
-                          onClick={() => handleApprove(item.id)}
-                          disabled={workingId === item.id || isApproved}
-                          className={`inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                            isApproved
-                              ? 'border border-[#d8e7d2] bg-[#f5fbf2] text-[#658257]'
-                              : 'border border-[#d8b56a] bg-[#d8b56a] text-[#1e1a16] hover:brightness-95'
-                          }`}
-                        >
-                          {workingId === item.id
-                            ? 'Working...'
-                            : isApproved
-                            ? 'Approved'
-                            : 'Approve'}
-                        </button>
+                        {isApproved ? (
+                          <button
+                            type="button"
+                            onClick={() => handleUnapprove(item.id)}
+                            disabled={workingId === item.id}
+                            className="inline-flex items-center justify-center rounded-full border border-[#eadfce] bg-white px-6 py-3 text-sm font-medium text-[#473934] transition hover:bg-[#fcfaf7] disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {workingId === item.id ? 'Working...' : 'Unapprove'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleApprove(item.id)}
+                            disabled={workingId === item.id}
+                            className="inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#d8b56a] px-6 py-3 text-sm font-medium text-[#1e1a16] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {workingId === item.id ? 'Working...' : 'Approve'}
+                          </button>
+                        )}
 
                         <button
                           type="button"
