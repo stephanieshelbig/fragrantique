@@ -111,7 +111,7 @@ export async function POST(request) {
 
     try {
       const emailResult = await sendOrderEmail({
-        to: process.env.FROM_EMAIL,
+        to: 'stephanie@fragrantique.net',
         subject: 'New Fragrantique Fragrance Request Submitted',
         html: renderRequestAlertHtml({
           requester_name,
