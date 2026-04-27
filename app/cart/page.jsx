@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function CartPage() {
+  const router = useRouter();
+
   const [items, setItems] = useState([]);
   const [buyer, setBuyer] = useState({
     name: '',
@@ -16,7 +19,7 @@ export default function CartPage() {
   });
   const [msg, setMsg] = useState('');
 
-  // Discount state (if you already have discount logic)
+  // Discount state
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [discountMsg, setDiscountMsg] = useState('');
@@ -36,6 +39,16 @@ export default function CartPage() {
     } catch {}
   }, []);
 
+  // 🔥 Redirect when empty
+  useEffect(() => {
+    if (items.length === 0) {
+      const timer = setTimeout(() => {
+        router.push('/');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [items, router]);
+
   function persist(next) {
     localStorage.setItem('cart_v1', JSON.stringify(next));
     setItems(next);
@@ -50,7 +63,6 @@ export default function CartPage() {
     setAppliedDiscount(next);
   }
 
-  // 🔹 NEW — remove item helper
   function removeItem(index) {
     const next = items.filter((_, i) => i !== index);
     persist(next);
@@ -136,7 +148,9 @@ export default function CartPage() {
     <div className="max-w-3xl mx-auto p-6 space-y-5">
       <h1 className="text-2xl font-bold mb-4">Your Cart</h1>
 
-      {!items.length && <div>Your cart is empty.</div>}
+      {!items.length && (
+        <div>Your cart is empty. Redirecting to Home...</div>
+      )}
 
       {items.length > 0 && (
         <>
@@ -149,11 +163,9 @@ export default function CartPage() {
 
               <div className="flex items-center gap-3">
                 <div>x {it.quantity}</div>
-                {/* 🔹 NEW remove button */}
                 <button
                   onClick={() => removeItem(i)}
                   className="border rounded px-2 py-1 text-xs hover:bg-gray-50"
-                  aria-label={`Remove ${it.name}`}
                 >
                   Remove
                 </button>
@@ -161,7 +173,6 @@ export default function CartPage() {
             </div>
           ))}
 
-          {/* Discount */}
           <div className="p-4 border rounded bg-white space-y-2">
             <div className="font-medium">Discount</div>
             {!appliedDiscount ? (
@@ -192,7 +203,6 @@ export default function CartPage() {
             {discountMsg && <div className="text-xs opacity-70">{discountMsg}</div>}
           </div>
 
-          {/* Totals */}
           <div className="p-4 border rounded bg-white space-y-1">
             <div className="flex justify-between">
               <span>Subtotal</span>
