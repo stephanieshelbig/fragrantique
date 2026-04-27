@@ -213,13 +213,13 @@ export default function ReviewsPage() {
                   href="/"
                   className="block rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm text-[#2c241f] transition hover:bg-[#fcfaf7]"
                 >
-                  Visit the boutique
+                  Visit the Fragrance Boutique
                 </Link>
                 <Link
-                  href="/explore"
+                  href="/requests"
                   className="block rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm text-[#2c241f] transition hover:bg-[#fcfaf7]"
                 >
-                  Explore fragrances
+                  Submit a Fragrance Request
                 </Link>
               </div>
             </div>
