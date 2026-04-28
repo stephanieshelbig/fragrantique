@@ -23,7 +23,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('perfume_requests')
-      .select('id, brand, fragrance_name, notes, upvotes_count, created_at, status, approved')
+      .select('id, brand, fragrance_name, notes, reply, upvotes_count, created_at, status, approved')
       .eq('status', 'approved')
       .eq('approved', true)
       .order('upvotes_count', { ascending: false })
