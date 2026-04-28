@@ -22,6 +22,15 @@ function RequestCard({ item, onUpvote, votingId }) {
               {item.notes}
             </p>
           ) : null}
+
+          {item.reply ? (
+            <div className="mt-5 rounded-2xl border border-[#eadfce] bg-[#fffaf4] px-4 py-3">
+              <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#9a8467]">
+                Fragrantique Reply
+              </div>
+              <p className="text-sm leading-7 text-[#4b4038]">{item.reply}</p>
+            </div>
+          ) : null}
         </div>
 
         <button
