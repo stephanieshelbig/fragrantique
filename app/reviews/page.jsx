@@ -54,10 +54,26 @@ function ReviewCard({ review }) {
   return (
     <article className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
       <Stars count={review.rating} />
-      <p className="mt-4 text-[15px] leading-7 text-[#3d342d]">“{review.text}”</p>
+
+      <p className="mt-4 text-[15px] leading-7 text-[#3d342d]">
+        “{review.text}”
+      </p>
+
       <div className="mt-5 text-sm uppercase tracking-[0.18em] text-[#9a8467]">
         {review.name}
       </div>
+
+      {review.reply ? (
+        <div className="mt-5 rounded-2xl border border-[#eadfce] bg-[#fbf7f2] px-5 py-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#9a8467]">
+            Fragrantique reply
+          </div>
+
+          <p className="mt-2 text-[14px] leading-7 text-[#4b4038]">
+            {review.reply}
+          </p>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -71,7 +87,7 @@ export default function ReviewsPage() {
     async function loadApprovedReviews() {
       const { data, error } = await supabase
         .from('reviews')
-        .select('id, name, rating, text, created_at')
+        .select('id, name, rating, text, reply, created_at')
         .eq('approved', true)
         .order('created_at', { ascending: false });
 
