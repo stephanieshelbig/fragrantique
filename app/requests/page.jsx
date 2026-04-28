@@ -164,7 +164,7 @@ export default function RequestsPage() {
                   value={requesterName}
                   onChange={(e) => setRequesterName(e.target.value)}
                   maxLength={80}
-                  placeholder="Your name (this won't appear on the page)"
+                  placeholder="Your name (this will be hidden)"
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
                 />
               </div>
@@ -178,7 +178,7 @@ export default function RequestsPage() {
                   value={requesterEmail}
                   onChange={(e) => setRequesterEmail(e.target.value)}
                   maxLength={120}
-                  placeholder="Your email (this won't appear on the page)"
+                  placeholder="Your email (this will be hidden)"
                   className="w-full rounded-2xl border border-[#eadfce] bg-[#fffdfa] px-4 py-3 text-[#2d2621] outline-none transition focus:border-[#d8b56a]"
                 />
               </div>
