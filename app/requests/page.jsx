@@ -17,6 +17,10 @@ function RequestCard({ item, onUpvote, votingId }) {
               <div className="inline-flex items-center rounded-full border border-[#d8e7d2] bg-[#f5fbf2] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#658257]">
                 ✓ Added to site
               </div>
+            ) : item.rejected ? (
+              <div className="inline-flex items-center rounded-full border border-[#f1d4d4] bg-[#fff5f5] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#b25c5c]">
+                No thanks
+              </div>
             ) : null}
           </div>
 
