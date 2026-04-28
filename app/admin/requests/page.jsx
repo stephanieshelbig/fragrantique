@@ -21,6 +21,7 @@ export default function AdminRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [replyDrafts, setReplyDrafts] = useState({});
 
   useEffect(() => {
     let redirectTimer;
@@ -211,13 +212,48 @@ export default function AdminRequestsPage() {
     }
   }
 
+  async function handleSaveReply(id) {
+    try {
+      setWorkingId(id);
+      setStatusMessage('');
+
+      const reply = replyDrafts[id] ?? '';
+
+      const response = await fetch(`/api/admin/requests/${id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setStatusMessage(result?.error || 'Unable to save reply.');
+        return;
+      }
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, reply: result.reply || '' } : item
+        )
+      );
+
+      setStatusMessage('Reply saved.');
+    } catch (error) {
+      console.error(error);
+      setStatusMessage('Unable to save reply.');
+    } finally {
+      setWorkingId('');
+    }
+  }
+
   function getBadge(item) {
     const isApproved =
-  item.status === 'approved' ||
-  item.approved === true ||
-  item.approved === 'true' ||
-  item.approved === 't' ||
-  item.approved === 1;
+      item.status === 'approved' ||
+      item.approved === true ||
+      item.approved === 'true' ||
+      item.approved === 't' ||
+      item.approved === 1;
 
     if (isApproved) {
       return (
@@ -279,7 +315,7 @@ export default function AdminRequestsPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
-            View all submitted requests, approve or unapprove them, or delete them.
+            View all submitted requests, approve or unapprove them, reply to them, or delete them.
           </p>
         </div>
 
@@ -321,7 +357,11 @@ export default function AdminRequestsPage() {
             <div className="space-y-5">
               {requests.map((item) => {
                 const isApproved =
-                  item.approved === true || item.status === 'approved';
+                  item.status === 'approved' ||
+                  item.approved === true ||
+                  item.approved === 'true' ||
+                  item.approved === 't' ||
+                  item.approved === 1;
 
                 return (
                   <div
@@ -329,7 +369,7 @@ export default function AdminRequestsPage() {
                     className="rounded-[28px] border border-[#eadfce] bg-[#fffdfa] p-6"
                   >
                     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         {getBadge(item)}
 
                         <h3 className="mt-4 font-serif text-2xl leading-tight text-[#1f1915]">
@@ -371,6 +411,35 @@ export default function AdminRequestsPage() {
                           <div className="rounded-2xl border border-[#eadfce] bg-white px-4 py-3 text-sm leading-7 text-[#4b4038]">
                             {item.notes || '—'}
                           </div>
+                        </div>
+
+                        <div className="mt-5">
+                          <div className="mb-2 text-sm font-medium text-[#1f1915]">
+                            Reply
+                          </div>
+
+                          <textarea
+                            value={replyDrafts[item.id] ?? item.reply ?? ''}
+                            onChange={(e) =>
+                              setReplyDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: e.target.value,
+                              }))
+                            }
+                            maxLength={600}
+                            rows={4}
+                            placeholder="Write a short public reply..."
+                            className="w-full rounded-2xl border border-[#eadfce] bg-white px-4 py-3 text-sm leading-7 text-[#4b4038] outline-none transition focus:border-[#d8b56a]"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleSaveReply(item.id)}
+                            disabled={workingId === item.id}
+                            className="mt-3 inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#fff7e8] px-5 py-2 text-sm font-medium text-[#1e1a16] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {workingId === item.id ? 'Saving...' : 'Save reply'}
+                          </button>
                         </div>
                       </div>
 
