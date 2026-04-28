@@ -11,32 +11,28 @@ function getSupabaseAdminClient() {
 export async function POST(request, { params }) {
   try {
     const { id } = params;
-    const body = await request.json();
-
-    const addedToSite = Boolean(body.added_to_site);
+    const { added_to_site } = await request.json();
 
     const supabase = getSupabaseAdminClient();
 
+    const updatePayload = added_to_site
+      ? { added_to_site: true, rejected: false }
+      : { added_to_site: false };
+
     const { data, error } = await supabase
       .from('perfume_requests')
-      .update({ added_to_site: addedToSite })
+      .update(updatePayload)
       .eq('id', id)
-      .select('added_to_site')
+      .select('added_to_site, rejected')
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) throw error;
 
     return NextResponse.json({
       added_to_site: data.added_to_site,
+      rejected: data.rejected,
     });
-  } catch (error) {
-    console.error(error);
-
-    return NextResponse.json(
-      { error: 'Unable to update added badge.' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
