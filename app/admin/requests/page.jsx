@@ -247,6 +247,45 @@ export default function AdminRequestsPage() {
     }
   }
 
+  async function handleToggleAdded(id, currentValue) {
+    try {
+      setWorkingId(id);
+      setStatusMessage('');
+
+      const response = await fetch(`/api/admin/requests/${id}/toggle-added`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ added_to_site: !currentValue }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setStatusMessage(result?.error || 'Unable to update added badge.');
+        return;
+      }
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, added_to_site: result.added_to_site }
+            : item
+        )
+      );
+
+      setStatusMessage(
+        result.added_to_site
+          ? 'Request marked as added to site.'
+          : 'Request unmarked as added to site.'
+      );
+    } catch (error) {
+      console.error(error);
+      setStatusMessage('Unable to update added badge.');
+    } finally {
+      setWorkingId('');
+    }
+  }
+
   function getBadge(item) {
     const isApproved =
       item.status === 'approved' ||
@@ -315,7 +354,7 @@ export default function AdminRequestsPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-8 text-[#4b4038] md:text-[17px]">
-            View all submitted requests, approve or unapprove them, reply to them, or delete them.
+            View all submitted requests, approve or unapprove them, reply to them, mark them as added, or delete them.
           </p>
         </div>
 
@@ -370,7 +409,15 @@ export default function AdminRequestsPage() {
                   >
                     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
-                        {getBadge(item)}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {getBadge(item)}
+
+                          {item.added_to_site ? (
+                            <div className="inline-flex items-center rounded-full border border-[#d8e7d2] bg-[#f5fbf2] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#658257]">
+                              ✓ Added to site
+                            </div>
+                          ) : null}
+                        </div>
 
                         <h3 className="mt-4 font-serif text-2xl leading-tight text-[#1f1915]">
                           {item.brand}
@@ -432,14 +479,35 @@ export default function AdminRequestsPage() {
                             className="w-full rounded-2xl border border-[#eadfce] bg-white px-4 py-3 text-sm leading-7 text-[#4b4038] outline-none transition focus:border-[#d8b56a]"
                           />
 
-                          <button
-                            type="button"
-                            onClick={() => handleSaveReply(item.id)}
-                            disabled={workingId === item.id}
-                            className="mt-3 inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#fff7e8] px-5 py-2 text-sm font-medium text-[#1e1a16] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
-                          >
-                            {workingId === item.id ? 'Saving...' : 'Save reply'}
-                          </button>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveReply(item.id)}
+                              disabled={workingId === item.id}
+                              className="inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#fff7e8] px-5 py-2 text-sm font-medium text-[#1e1a16] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {workingId === item.id ? 'Saving...' : 'Save reply'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleToggleAdded(item.id, item.added_to_site)
+                              }
+                              disabled={workingId === item.id}
+                              className={
+                                item.added_to_site
+                                  ? 'inline-flex items-center justify-center rounded-full border border-[#d8e7d2] bg-[#f5fbf2] px-5 py-2 text-sm font-medium text-[#658257] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70'
+                                  : 'inline-flex items-center justify-center rounded-full border border-[#eadfce] bg-white px-5 py-2 text-sm font-medium text-[#473934] transition hover:bg-[#fcfaf7] disabled:cursor-not-allowed disabled:opacity-70'
+                              }
+                            >
+                              {workingId === item.id
+                                ? 'Working...'
+                                : item.added_to_site
+                                  ? '✓ Added to site'
+                                  : 'Mark as added'}
+                            </button>
+                          </div>
                         </div>
                       </div>
 
