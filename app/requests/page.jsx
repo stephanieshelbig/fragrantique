@@ -8,8 +8,16 @@ function RequestCard({ item, onUpvote, votingId }) {
     <div className="rounded-[32px] border border-[#eadfce] bg-white p-7 shadow-[0_10px_30px_rgba(73,54,30,0.06)] md:p-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="inline-flex items-center rounded-full border border-[#eadfce] bg-[#fffaf4] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#9a8467]">
-            Requested Fragrance
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center rounded-full border border-[#eadfce] bg-[#fffaf4] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#9a8467]">
+              Requested Fragrance
+            </div>
+
+            {item.added_to_site ? (
+              <div className="inline-flex items-center rounded-full border border-[#d8e7d2] bg-[#f5fbf2] px-3 py-1 text-[10px] uppercase tracking-[0.20em] text-[#658257]">
+                ✓ Added to site
+              </div>
+            ) : null}
           </div>
 
           <h2 className="mt-4 font-serif text-2xl leading-tight text-[#1f1915] md:text-3xl">
