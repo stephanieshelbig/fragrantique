@@ -53,6 +53,7 @@ export default function AdminReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState(null);
   const [status, setStatus] = useState('');
+  const [replies, setReplies] = useState({});
 
   useEffect(() => {
     checkAdmin();
@@ -84,7 +85,7 @@ export default function AdminReviewsPage() {
 
     const { data, error } = await supabase
       .from('reviews')
-      .select('id, name, rating, text, approved, created_at')
+      .select('id, name, rating, text, approved, reply, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -94,28 +95,48 @@ export default function AdminReviewsPage() {
     }
 
     setReviews(data || []);
+
+    // preload replies into state
+    const initialReplies = {};
+    (data || []).forEach((r) => {
+      initialReplies[r.id] = r.reply || '';
+    });
+    setReplies(initialReplies);
+
     setLoading(false);
+  }
+
+  async function saveReply(id) {
+    setWorkingId(id);
+    setStatus('');
+
+    const { error } = await supabase
+      .from('reviews')
+      .update({ reply: replies[id] })
+      .eq('id', id);
+
+    if (error) {
+      setStatus(`Could not save reply: ${error.message}`);
+      setWorkingId(null);
+      return;
+    }
+
+    await loadReviews();
+    setWorkingId(null);
+    setStatus('Reply saved.');
   }
 
   async function publishReview(id) {
     setWorkingId(id);
     setStatus('');
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('reviews')
       .update({ approved: true })
-      .eq('id', id)
-      .select('id, approved')
-      .single();
+      .eq('id', id);
 
     if (error) {
       setStatus(`Could not publish review: ${error.message}`);
-      setWorkingId(null);
-      return;
-    }
-
-    if (!data || data.approved !== true) {
-      setStatus('Publish did not go through in the database.');
       setWorkingId(null);
       return;
     }
@@ -129,21 +150,13 @@ export default function AdminReviewsPage() {
     setWorkingId(id);
     setStatus('');
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('reviews')
       .update({ approved: false })
-      .eq('id', id)
-      .select('id, approved')
-      .single();
+      .eq('id', id);
 
     if (error) {
       setStatus(`Could not unpublish review: ${error.message}`);
-      setWorkingId(null);
-      return;
-    }
-
-    if (!data || data.approved !== false) {
-      setStatus('Unpublish did not go through in the database.');
       setWorkingId(null);
       return;
     }
@@ -164,125 +177,85 @@ export default function AdminReviewsPage() {
   );
 
   if (authLoading) {
-    return (
-      <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
-        <section className="mx-auto max-w-3xl px-6 py-20 text-center">
-          <div className="rounded-[28px] border border-[#eadfce] bg-white p-8 shadow-[0_10px_30px_rgba(73,54,30,0.06)]">
-            Checking authorization...
-          </div>
-        </section>
-      </main>
-    );
+    return <div className="p-10 text-center">Checking authorization...</div>;
   }
 
   if (!isAdmin) {
     return <UnauthorizedRedirect />;
   }
 
+  const ReviewCard = ({ review, isPublished }) => (
+    <article className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow">
+      <Stars count={review.rating} />
+
+      <p className="mt-4 text-[15px] leading-7 text-[#3d342d]">
+        “{review.text}”
+      </p>
+
+      <div className="mt-5 text-sm uppercase tracking-[0.18em] text-[#9a8467]">
+        {review.name}
+      </div>
+
+      {/* Reply field */}
+      <div className="mt-5">
+        <textarea
+          value={replies[review.id] || ''}
+          onChange={(e) =>
+            setReplies({ ...replies, [review.id]: e.target.value })
+          }
+          placeholder="Write a reply..."
+          className="w-full rounded-xl border border-[#eadfce] p-3 text-sm"
+          rows={2}
+        />
+
+        <button
+          onClick={() => saveReply(review.id)}
+          disabled={workingId === review.id}
+          className="mt-2 rounded-full bg-[#d8b56a] px-4 py-2 text-sm"
+        >
+          {workingId === review.id ? 'Saving...' : 'Save reply'}
+        </button>
+      </div>
+
+      <div className="mt-5">
+        {isPublished ? (
+          <button
+            onClick={() => unpublishReview(review.id)}
+            className="rounded-full border px-5 py-2 text-sm"
+          >
+            Unpublish
+          </button>
+        ) : (
+          <button
+            onClick={() => publishReview(review.id)}
+            className="rounded-full bg-[#d8b56a] px-5 py-2 text-sm"
+          >
+            Publish
+          </button>
+        )}
+      </div>
+    </article>
+  );
+
   return (
-    <main className="min-h-screen bg-[#fbf7f2] text-[#221c18]">
-      <section className="mx-auto max-w-6xl px-6 pb-16 pt-14 md:px-8 md:pb-24 md:pt-20">
-        <div className="max-w-3xl">
-          <div className="inline-flex items-center rounded-full border border-[#eadfce] bg-white/80 px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-[#9a8467]">
-            Admin Reviews
-          </div>
+    <main className="min-h-screen bg-[#fbf7f2] p-10">
+      <h1 className="text-3xl mb-10">Admin Reviews</h1>
 
-          <h1 className="mt-6 font-serif text-4xl leading-tight text-[#1f1915] md:text-5xl">
-            Review moderation
-          </h1>
-
-          <p className="mt-4 max-w-2xl text-[16px] leading-8 text-[#4b4038]">
-            Publish customer-submitted reviews to make them appear on the public
-            reviews page.
-          </p>
-
-          {status ? (
-            <div className="mt-6 rounded-2xl border border-[#eadfce] bg-white px-4 py-3 text-sm text-[#4b4038]">
-              {status}
-            </div>
-          ) : null}
+      <div className="grid gap-10 lg:grid-cols-2">
+        <div>
+          <h2 className="text-xl mb-4">Pending</h2>
+          {pendingReviews.map((r) => (
+            <ReviewCard key={r.id} review={r} isPublished={false} />
+          ))}
         </div>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-2">
-          <div>
-            <h2 className="font-serif text-3xl text-[#1f1915]">Pending reviews</h2>
-            <div className="mt-6 space-y-6">
-              {loading ? (
-                <div className="rounded-[28px] border border-[#eadfce] bg-white p-6">
-                  Loading...
-                </div>
-              ) : pendingReviews.length === 0 ? (
-                <div className="rounded-[28px] border border-[#eadfce] bg-white p-6 text-[#4b4038]">
-                  No pending reviews.
-                </div>
-              ) : (
-                pendingReviews.map((review) => (
-                  <article
-                    key={review.id}
-                    className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow-[0_10px_30px_rgba(73,54,30,0.06)]"
-                  >
-                    <Stars count={review.rating} />
-                    <p className="mt-4 text-[15px] leading-7 text-[#3d342d]">
-                      “{review.text}”
-                    </p>
-                    <div className="mt-5 text-sm uppercase tracking-[0.18em] text-[#9a8467]">
-                      {review.name}
-                    </div>
-                    <div className="mt-5">
-                      <button
-                        onClick={() => publishReview(review.id)}
-                        disabled={workingId === review.id}
-                        className="inline-flex items-center justify-center rounded-full border border-[#d8b56a] bg-[#d8b56a] px-5 py-2.5 text-sm font-medium text-[#1e1a16] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {workingId === review.id ? 'Publishing...' : 'Publish to site'}
-                      </button>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="font-serif text-3xl text-[#1f1915]">Published reviews</h2>
-            <div className="mt-6 space-y-6">
-              {loading ? (
-                <div className="rounded-[28px] border border-[#eadfce] bg-white p-6">
-                  Loading...
-                </div>
-              ) : publishedReviews.length === 0 ? (
-                <div className="rounded-[28px] border border-[#eadfce] bg-white p-6 text-[#4b4038]">
-                  No published reviews yet.
-                </div>
-              ) : (
-                publishedReviews.map((review) => (
-                  <article
-                    key={review.id}
-                    className="rounded-[28px] border border-[#eadfce] bg-white p-6 shadow-[0_10px_30px_rgba(73,54,30,0.06)]"
-                  >
-                    <Stars count={review.rating} />
-                    <p className="mt-4 text-[15px] leading-7 text-[#3d342d]">
-                      “{review.text}”
-                    </p>
-                    <div className="mt-5 text-sm uppercase tracking-[0.18em] text-[#9a8467]">
-                      {review.name}
-                    </div>
-                    <div className="mt-5">
-                      <button
-                        onClick={() => unpublishReview(review.id)}
-                        disabled={workingId === review.id}
-                        className="inline-flex items-center justify-center rounded-full border border-[#eadfce] bg-white px-5 py-2.5 text-sm font-medium text-[#473934] transition hover:bg-[#fcfaf7] disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {workingId === review.id ? 'Updating...' : 'Unpublish'}
-                      </button>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </div>
+        <div>
+          <h2 className="text-xl mb-4">Published</h2>
+          {publishedReviews.map((r) => (
+            <ReviewCard key={r.id} review={r} isPublished={true} />
+          ))}
         </div>
-      </section>
+      </div>
     </main>
   );
 }
