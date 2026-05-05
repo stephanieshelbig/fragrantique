@@ -53,7 +53,7 @@ export default function AddFragrance() {
 
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Name" onChange={(e) => update('name', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Brand" onChange={(e) => update('brand', e.target.value)} />
-      <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL (bottle)" onChange={(e) => update('image_url', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL" value={form.image_url} onChange={(e) => update('image_url', e.target.value)}/>
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL 3 (fragrance card)" onChange={(e) => update('image_url_3', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL 4 (other)" onChange={(e) => update('image_url_4', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Fragrantica URL" onChange={(e) => update('fragrantica_url', e.target.value)} />
