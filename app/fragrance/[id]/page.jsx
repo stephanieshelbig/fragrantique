@@ -78,7 +78,7 @@ export default function FragranceDetail({ params }) {
       const { data: f } = await supabase
         .from('fragrances')
         .select(
-          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, fragrantica_url, notes'
+          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, wikiparfum_url, notes'
         )
         .eq('id', id)
         .maybeSingle();
@@ -379,9 +379,9 @@ export default function FragranceDetail({ params }) {
       <div className="flex items-center justify-between">
         <div />
         <div className="flex items-center gap-3 flex-wrap justify-end">
-          {frag.fragrantica_url && (
+          {frag.wikiparfum_url && (
             <a
-              href={frag.fragrantica_url}
+              href={frag.wikiparfum_url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-full border border-[#d6c6a5] bg-gradient-to-r from-white via-[#fffaf2] to-white px-4 py-1.5 text-sm font-medium text-[#7a5c2e] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#fffaf0] hover:shadow"
