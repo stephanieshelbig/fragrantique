@@ -7,7 +7,7 @@ export default function AddFragrance() {
   const [form, setForm] = useState({
     name: '',
     brand: '',
-    image_url: '',
+    image_url: 'https://fimgs.net/mdimg/perfume-thumbs/375x500.XXXXX.2x.jpg',
     image_url_3: '',
     image_url_4: '',
     fragrantica_url: '',
