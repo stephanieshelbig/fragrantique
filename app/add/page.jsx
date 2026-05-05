@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState } from 'react';
@@ -10,7 +8,10 @@ export default function AddFragrance() {
     name: '',
     brand: '',
     image_url: '',
+    image_url_3: '',
+    image_url_4: '',
     fragrantica_url: '',
+    wikiparfum_url: '',
     notes: '',
     accords: '',
     decant_price: '',
@@ -37,7 +38,10 @@ export default function AddFragrance() {
         name: form.name || null,
         brand: form.brand || null,
         image_url: form.image_url || null,
+        image_url_3: form.image_url_3 || null,
+        image_url_4: form.image_url_4 || null,
         fragrantica_url: form.fragrantica_url || null,
+        wikiparfum_url: form.wikiparfum_url || null,
         notes: form.notes || null,
         accords: accords.length ? accords : null,
         decant_price: form.decant_price ? Number(form.decant_price) : null,
@@ -124,7 +128,10 @@ export default function AddFragrance() {
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Name" onChange={(e) => update('name', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Brand" onChange={(e) => update('brand', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL" onChange={(e) => update('image_url', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL 3" onChange={(e) => update('image_url_3', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Image URL 4" onChange={(e) => update('image_url_4', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Fragrantica URL" onChange={(e) => update('fragrantica_url', e.target.value)} />
+      <input className="w-full border rounded-lg px-3 py-2" placeholder="Wikiparfum URL" onChange={(e) => update('wikiparfum_url', e.target.value)} />
       <textarea className="w-full border rounded-lg px-3 py-2" placeholder="Notes / Comments" onChange={(e) => update('notes', e.target.value)} />
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Accords (comma separated)" onChange={(e) => update('accords', e.target.value)} />
 
