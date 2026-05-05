@@ -22,6 +22,7 @@ export default function EditFragrancePage({ params }) {
   const [imageUrl, setImageUrl] = useState('');
   const [imageUrlTransparent, setImageUrlTransparent] = useState('');
   const [fragranticaUrl, setFragranticaUrl] = useState('');
+  const [wikiparfumUrl, setWikiparfumUrl] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
@@ -29,33 +30,33 @@ export default function EditFragrancePage({ params }) {
       setLoading(true);
       setMsg('');
 
-      // who am I
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user || null;
       setViewer(user);
 
-      // am I admin?
       if (user?.id) {
         const { data: me } = await supabase
           .from('profiles')
           .select('id, is_admin, username')
           .eq('id', user.id)
           .maybeSingle();
+
         setIsAdmin(!!me?.is_admin);
       }
 
-      // is owner @stephanie?
       const { data: owner } = await supabase
         .from('profiles')
         .select('id')
         .eq('username', 'stephanie')
         .maybeSingle();
+
       setIsOwner(!!(user && owner && user.id === owner.id));
 
-      // load fragrance
       const { data: f } = await supabase
         .from('fragrances')
-        .select('id, brand, name, image_url, image_url_transparent, fragrantica_url, notes')
+        .select(
+          'id, brand, name, image_url, image_url_transparent, fragrantica_url, wikiparfum_url, notes'
+        )
         .eq('id', id)
         .maybeSingle();
 
@@ -65,6 +66,7 @@ export default function EditFragrancePage({ params }) {
         setImageUrl(f.image_url || '');
         setImageUrlTransparent(f.image_url_transparent || '');
         setFragranticaUrl(f.fragrantica_url || '');
+        setWikiparfumUrl(f.wikiparfum_url || '');
         setNotes(f.notes || '');
       } else {
         setMsg('Fragrance not found.');
@@ -77,7 +79,11 @@ export default function EditFragrancePage({ params }) {
   const canEdit = isOwner || isAdmin;
 
   async function handleSave() {
-    if (!canEdit) { setMsg('Not authorized.'); return; }
+    if (!canEdit) {
+      setMsg('Not authorized.');
+      return;
+    }
+
     setSaving(true);
     setMsg('');
 
@@ -87,8 +93,8 @@ export default function EditFragrancePage({ params }) {
       image_url: imageUrl?.trim() || null,
       image_url_transparent: imageUrlTransparent?.trim() || null,
       fragrantica_url: fragranticaUrl?.trim() || null,
+      wikiparfum_url: wikiparfumUrl?.trim() || null,
       notes: notes ?? null,
-      // If you maintain a slug, you can recompute/update it here as needed.
     };
 
     const { error } = await supabase
@@ -97,12 +103,11 @@ export default function EditFragrancePage({ params }) {
       .eq('id', id);
 
     setSaving(false);
+
     if (error) {
       setMsg(`Save failed: ${error.message}`);
     } else {
       setMsg('Saved ✓');
-      // stay on page; or redirect back:
-      // router.push(`/fragrance/${encodeURIComponent(id)}`);
     }
   }
 
@@ -112,7 +117,9 @@ export default function EditFragrancePage({ params }) {
     return (
       <div className="max-w-3xl mx-auto p-6 space-y-3">
         <div className="text-lg font-semibold">Not authorized</div>
-        <p className="text-sm opacity-70">You must be the owner or an admin to edit fragrances.</p>
+        <p className="text-sm opacity-70">
+          You must be the owner or an admin to edit fragrances.
+        </p>
         <Link href={`/fragrance/${encodeURIComponent(id)}`} className="underline text-sm">
           ← Back to fragrance
         </Link>
@@ -167,7 +174,9 @@ export default function EditFragrancePage({ params }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Transparent Image URL</label>
+          <label className="block text-sm font-medium mb-1">
+            Transparent Image URL
+          </label>
           <input
             className="border rounded px-3 py-2 w-full"
             value={imageUrlTransparent}
@@ -183,6 +192,16 @@ export default function EditFragrancePage({ params }) {
             value={fragranticaUrl}
             onChange={(e) => setFragranticaUrl(e.target.value)}
             placeholder="https://www.fragrantica.com/…"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Wikiparfum URL</label>
+          <input
+            className="border rounded px-3 py-2 w-full"
+            value={wikiparfumUrl}
+            onChange={(e) => setWikiparfumUrl(e.target.value)}
+            placeholder="https://www.wikiperfume.com/en/fragrances/…"
           />
         </div>
 
