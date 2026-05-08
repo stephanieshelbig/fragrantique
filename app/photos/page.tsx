@@ -32,6 +32,12 @@ export default function MyCollectionPage() {
     },
   ];
 
+  const morePhotos = [
+    { src: "/RoyalCrown.jpg", alt: "Royal Crown collection photo" },
+    { src: "/Roja.jpg", alt: "Roja collection photo" },
+    { src: "/Boadicea.jpg", alt: "Boadicea collection photo" },
+  ];
+
   return (
     <main className="mx-auto max-w-6xl w-full px-3 py-6">
       <h1 className="text-2xl font-semibold mb-2">
@@ -106,6 +112,53 @@ export default function MyCollectionPage() {
 
         {/* TikTok embed script (Next.js-friendly) */}
         <Script src="https://www.tiktok.com/embed.js" strategy="afterInteractive" />
+      </section>
+
+      {/* More Photos Section */}
+      <section className="border-t pt-10 mt-14">
+        <h2 className="text-xl font-semibold mb-8">
+          More photos of my collection
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Top wide image */}
+          <div className="md:col-span-3 relative w-full aspect-[16/6] overflow-hidden rounded-2xl shadow">
+            <Image
+              src="/Xerjoff.jpg"
+              alt="Xerjoff collection photo"
+              fill
+              sizes="100vw"
+              className="object-cover"
+            />
+          </div>
+
+          {/* Middle row */}
+          {morePhotos.map(({ src, alt }) => (
+            <div
+              key={src}
+              className="relative w-full aspect-[4/5] overflow-hidden rounded-2xl shadow"
+            >
+              <Image
+                src={src}
+                alt={alt}
+                fill
+                sizes="(max-width: 768px) 100vw, 33vw"
+                className="object-cover"
+              />
+            </div>
+          ))}
+
+          {/* Bottom wide image */}
+          <div className="md:col-span-3 relative w-full aspect-[16/6] overflow-hidden rounded-2xl shadow">
+            <Image
+              src="/Kilian.jpg"
+              alt="Kilian collection photo"
+              fill
+              sizes="100vw"
+              className="object-cover"
+            />
+          </div>
+        </div>
       </section>
     </main>
   );
