@@ -32,11 +32,18 @@ export default function BrandPage({ params }) {
   const username = decodeURIComponent(params.username);
   const urlStrictKey = decodeURIComponent(params.brand || '');
 
+  const isKilianPage = brandKey(urlStrictKey) === 'kilian';
+
   const [loading, setLoading] = useState(true);
   const [owner, setOwner] = useState({ id: null, username });
   const [frags, setFrags] = useState([]);
 
   useEffect(() => {
+    if (isKilianPage) {
+      setLoading(false);
+      return;
+    }
+
     (async () => {
       const { data: prof } = await supabase
         .from('profiles')
@@ -66,17 +73,17 @@ export default function BrandPage({ params }) {
       setFrags(items);
       setLoading(false);
     })();
-  }, [username, urlStrictKey]);
+  }, [username, urlStrictKey, isKilianPage]);
 
   const filtered = useMemo(() => {
     const wantStrict = (urlStrictKey || '').toLowerCase();
-    const wantCanon  = canonicalBrandKey(urlStrictKey);
+    const wantCanon = canonicalBrandKey(urlStrictKey);
 
     return (frags || [])
       .filter(f => {
         const disp = f?.brand || 'unknown';
         const fStrict = brandKey(disp);
-        const fCanon  = canonicalBrandKey(disp);
+        const fCanon = canonicalBrandKey(disp);
         return fStrict === wantStrict || fCanon === wantCanon;
       })
       .sort((a, b) =>
@@ -96,11 +103,57 @@ export default function BrandPage({ params }) {
       counts.set(b, (counts.get(b) || 0) + 1);
     }
 
-    return Array.from(counts.entries()).sort((a,b)=>b[1]-a[1])[0][0];
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0][0];
   }, [filtered, urlStrictKey]);
 
   if (loading) {
     return <div className="max-w-5xl mx-auto p-6">Loading {displayBrand}…</div>;
+  }
+
+  if (isKilianPage) {
+    return (
+      <div className="max-w-5xl mx-auto p-6 space-y-6">
+        <div className="flex flex-wrap justify-center gap-3 mb-4">
+          <Link
+            href="/notes"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#D4AF37] text-[#182A39] bg-white hover:bg-[#FFF8E7] hover:shadow-md hover:scale-105 transition text-sm font-medium"
+          >
+            🔍 Search my collection
+          </Link>
+
+          <Link
+            href="/recommendations"
+            className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#D4AF37] text-white hover:bg-[#c59c2f] hover:shadow-lg hover:scale-105 transition text-sm font-semibold"
+          >
+            ✨ Get Recommendations
+          </Link>
+        </div>
+
+        <section className="rounded-3xl border border-[#ead8cf] bg-white p-5 shadow-sm md:p-8">
+          <div className="text-center space-y-5">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-wide text-[#182A39]">
+              Kilian Collection
+            </h1>
+
+            <img
+              src="/Kilian.jpg"
+              alt="Stephanie's Kilian collection"
+              className="mx-auto w-full max-w-4xl rounded-2xl object-cover shadow-md"
+              onError={(e) => {
+                e.currentTarget.src = '/bottle-placeholder.png';
+              }}
+            />
+
+            <p className="mx-auto max-w-3xl text-base md:text-lg leading-8 text-[#182A39]">
+              I cherish my Kilian collection too much to sell decants, so I&apos;ve
+              removed them from the site. Fragrantique is an app for showcasing your
+              fragrance collection and selling decants. So here is a photo to showcase
+              my Kilian collection.
+            </p>
+          </div>
+        </section>
+      </div>
+    );
   }
 
   return (
