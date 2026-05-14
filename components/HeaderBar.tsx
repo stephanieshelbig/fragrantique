@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 export default function HeaderBar() {
   return (
-    <div className="relative z-10 border-b bg-[#182A39]">
+    <div className="relative z-10 border-b bg-[#001138]">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
 
         {/* Left side: Clickable Logo */}
