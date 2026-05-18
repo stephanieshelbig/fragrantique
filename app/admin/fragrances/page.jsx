@@ -11,14 +11,13 @@ export default function AdminFragranceList() {
 
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
-  const [linkedIds, setLinkedIds] = useState(new Set()); // fragrance_ids already on shelves
+  const [linkedIds, setLinkedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
-      // who am I?
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user || null;
       setViewer(user);
@@ -28,7 +27,6 @@ export default function AdminFragranceList() {
         return;
       }
 
-      // am I admin?
       const { data: prof } = await supabase
         .from('profiles')
         .select('id, is_admin, username')
@@ -37,7 +35,6 @@ export default function AdminFragranceList() {
 
       setIsAdmin(!!prof?.is_admin);
 
-      // resolve boutique owner (you)
       const { data: ownerProf } = await supabase
         .from('profiles')
         .select('id, username')
@@ -54,10 +51,11 @@ export default function AdminFragranceList() {
     setLoading(true);
     setMsg('');
 
-    // full catalog
     const { data: allFrags, error: allFragsError } = await supabase
       .from('fragrances')
-      .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
+      .select(
+        'id, brand, name, image_url, image_url_2, image_url_3, image_url_saved, image_url_2_saved, image_url_3_saved, image_url_transparent, fragrantica_url'
+      )
       .order('brand', { ascending: true })
       .order('name', { ascending: true })
       .limit(5000);
@@ -72,7 +70,6 @@ export default function AdminFragranceList() {
 
     setRows(allFrags || []);
 
-    // which are already on shelves for owner?
     if (ownerId) {
       const { data: links, error: linksError } = await supabase
         .from('user_fragrances')
@@ -103,18 +100,36 @@ export default function AdminFragranceList() {
     );
   }, [rows, q]);
 
-  if (loading) return <div className="p-6">Loading…</div>;
+  async function saveImagesToSupabase(fragrance) {
+    setBusy(true);
+    setMsg(`Saving images for ${fragrance.brand} — ${fragrance.name}…`);
 
-  if (!viewer || !isAdmin) {
-    return (
-      <div className="max-w-3xl mx-auto p-6 space-y-3">
-        <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
-        <p className="opacity-70">{msg || 'Please sign in as an admin.'}</p>
-        <Link href="/admin" className="underline text-sm">
-          ← Back to Admin
-        </Link>
-      </div>
-    );
+    try {
+      const res = await fetch('/api/admin/mirror-fragrance-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fragranceId: fragrance.id }),
+      });
+
+      const j = await res.json().catch(() => ({}));
+
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || 'Image save failed');
+      }
+
+      const savedCount = Object.keys(j.updates || {}).length;
+      setMsg(
+        savedCount
+          ? `Saved ${savedCount} image${savedCount === 1 ? '' : 's'} to Supabase ✓`
+          : 'No image URLs found to save.'
+      );
+
+      await load(owner.id);
+    } catch (e) {
+      setMsg(`Save images error: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function addOneToShelves(fragranceId) {
@@ -173,9 +188,7 @@ export default function AdminFragranceList() {
     setBusy(true);
     setMsg('Adding ALL missing to shelves…');
 
-    const missing = rows
-      .filter((r) => !linkedIds.has(r.id))
-      .map((r) => r.id);
+    const missing = rows.filter((r) => !linkedIds.has(r.id)).map((r) => r.id);
 
     if (!missing.length) {
       setMsg('Everything is already on your shelves.');
@@ -224,10 +237,13 @@ export default function AdminFragranceList() {
           fragranceId: fragrance.id,
         }),
       });
+
       const j = await res.json().catch(() => ({}));
+
       if (!res.ok || !j?.success) {
         throw new Error(j?.error || 'remove-bg failed');
       }
+
       setMsg('Transparent image saved ✓');
     } catch (e) {
       setMsg(`Background remover error: ${e.message}`);
@@ -252,7 +268,9 @@ export default function AdminFragranceList() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageUrl: f.image_url, fragranceId: f.id }),
         });
+
         const j = await res.json().catch(() => ({}));
+
         if (res.ok && j?.success) ok++;
         else fail++;
       } catch {
@@ -267,10 +285,12 @@ export default function AdminFragranceList() {
 
   async function deleteFragrance(fragrance) {
     if (!isAdmin) return;
+
     const ok = window.confirm(
       `Delete "${fragrance.brand} — ${fragrance.name}" from the catalog?\n` +
         `This will also remove it from your shelves.\n\nThis cannot be undone.`
     );
+
     if (!ok) return;
 
     setBusy(true);
@@ -286,10 +306,13 @@ export default function AdminFragranceList() {
           deleteStorage: true,
         }),
       });
+
       const j = await res.json().catch(() => ({}));
+
       if (!res.ok || !j?.ok) {
         throw new Error(j?.error || 'delete failed');
       }
+
       setMsg('Fragrance deleted ✓');
       await load(owner.id);
     } catch (e) {
@@ -299,14 +322,30 @@ export default function AdminFragranceList() {
     }
   }
 
+  if (loading) return <div className="p-6">Loading…</div>;
+
+  if (!viewer || !isAdmin) {
+    return (
+      <div className="max-w-3xl mx-auto p-6 space-y-3">
+        <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
+        <p className="opacity-70">{msg || 'Please sign in as an admin.'}</p>
+        <Link href="/admin" className="underline text-sm">
+          ← Back to Admin
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
+
         <div className="flex items-center gap-3">
           <Link href="/admin" className="underline text-sm">
             ← Back to Admin
           </Link>
+
           <Link
             href="/add"
             className="px-3 py-2 rounded bg-pink-600 text-white hover:bg-pink-700 text-sm"
@@ -327,6 +366,7 @@ export default function AdminFragranceList() {
           placeholder="Search by brand or name…"
           className="border rounded px-3 py-2 w-full sm:w-80"
         />
+
         <button
           onClick={() => load(owner.id)}
           className="px-3 py-2 rounded bg-black text-white hover:opacity-90"
@@ -340,15 +380,14 @@ export default function AdminFragranceList() {
           disabled={busy}
           onClick={addAllMissingToShelves}
           className="px-3 py-2 rounded bg-blue-600 text-white hover:opacity-90 disabled:opacity-60"
-          title="Link every fragrance not yet on your shelves"
         >
           Add all missing to shelves
         </button>
+
         <button
           disabled={busy}
           onClick={makeAllMissingTransparent}
           className="px-3 py-2 rounded bg-pink-700 text-white hover:opacity-90 disabled:opacity-60"
-          title="Run background removal for all without transparent images"
         >
           Make transparent (missing only)
         </button>
@@ -359,7 +398,19 @@ export default function AdminFragranceList() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
         {filtered.map((f) => {
           const onShelves = linkedIds.has(f.id);
-          const img = f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+
+          const img =
+            f.image_url_transparent ||
+            f.image_url_saved ||
+            f.image_url ||
+            '/bottle-placeholder.png';
+
+          const hasAnyRemoteImage = !!(f.image_url || f.image_url_2 || f.image_url_3);
+          const hasAnySavedImage = !!(
+            f.image_url_saved ||
+            f.image_url_2_saved ||
+            f.image_url_3_saved
+          );
 
           return (
             <div key={f.id} className="border rounded p-3 bg-white flex gap-3">
@@ -376,9 +427,14 @@ export default function AdminFragranceList() {
                   }
                 }}
               />
+
               <div className="flex-1">
                 <div className="text-xs opacity-70">{f.brand}</div>
                 <div className="font-medium">{f.name}</div>
+
+                <div className="mt-1 text-[11px] opacity-70">
+                  {hasAnySavedImage ? 'Supabase image saved ✓' : 'No saved image yet'}
+                </div>
 
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Link
@@ -388,12 +444,20 @@ export default function AdminFragranceList() {
                     Edit
                   </Link>
 
+                  <button
+                    disabled={busy || !hasAnyRemoteImage}
+                    onClick={() => saveImagesToSupabase(f)}
+                    className="px-2 py-1 rounded bg-purple-700 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                    title="Download this fragrance's image URLs and save them to Supabase Storage"
+                  >
+                    Save images
+                  </button>
+
                   {!onShelves ? (
                     <button
                       disabled={busy}
                       onClick={() => addOneToShelves(f.id)}
                       className="px-2 py-1 rounded bg-black text-white text-xs hover:opacity-90 disabled:opacity-60"
-                      title="Add this to your shelves"
                     >
                       Add to shelves
                     </button>
@@ -402,7 +466,6 @@ export default function AdminFragranceList() {
                       disabled={busy}
                       onClick={() => removeOneFromShelves(f.id)}
                       className="px-2 py-1 rounded bg-amber-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
-                      title="Remove this from your shelves"
                     >
                       Remove from shelves
                     </button>
@@ -412,7 +475,6 @@ export default function AdminFragranceList() {
                     disabled={busy || !f.image_url}
                     onClick={() => makeTransparent(f)}
                     className="px-2 py-1 rounded bg-pink-700 text-white text-xs hover:opacity-90 disabled:opacity-60"
-                    title="Create transparent PNG and save to Storage"
                   >
                     Transparent
                   </button>
@@ -421,7 +483,6 @@ export default function AdminFragranceList() {
                     disabled={busy}
                     onClick={() => deleteFragrance(f)}
                     className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
-                    title="Delete this fragrance from the catalog (admin only)"
                   >
                     Delete fragrance
                   </button>
@@ -443,9 +504,7 @@ export default function AdminFragranceList() {
         })}
       </div>
 
-      {!filtered.length && (
-        <div className="p-4 border rounded bg-white">No matches.</div>
-      )}
+      {!filtered.length && <div className="p-4 border rounded bg-white">No matches.</div>}
     </div>
   );
 }
