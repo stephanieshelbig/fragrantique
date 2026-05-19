@@ -11,7 +11,7 @@ export default function HeaderBar() {
         <Link href="/" className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/FragrantiqueLogo3.png"
+            src="/Logo5.png"
             alt="Fragrantique Logo"
             className="h-48 w-auto cursor-pointer"
           />
