@@ -87,7 +87,7 @@ export default function FragrantiqueAIPage() {
             {/* Logo */}
             <div className="flex justify-center mb-6">
               <Image
-                src="/FragrantiqueLogo3.png"
+                src="/Logo4.png"
                 alt="Fragrantique Logo"
                 width={190}
                 height={80}
