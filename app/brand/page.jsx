@@ -31,16 +31,17 @@ function canonicalBrandKey(b) {
 function BrandName({ name }) {
   const len = String(name || "").length;
 
-  let sizeClass = "text-[18px] sm:text-[20px] md:text-[18px] lg:text-[17px]";
-  if (len > 10) sizeClass = "text-[15px] sm:text-[17px] md:text-[15px] lg:text-[14px]";
-  if (len > 16) sizeClass = "text-[13px] sm:text-[15px] md:text-[13px] lg:text-[12px]";
-  if (len > 24) sizeClass = "text-[11px] sm:text-[13px] md:text-[11px] lg:text-[10px]";
+  let sizeClass = "text-[34px]";
+  if (len > 10) sizeClass = "text-[28px]";
+  if (len > 16) sizeClass = "text-[22px]";
+  if (len > 24) sizeClass = "text-[18px]";
+  if (len > 34) sizeClass = "text-[15px]";
 
   return (
     <span
       className={[
         "block w-full whitespace-normal break-words text-center",
-        "font-black leading-[1.02] tracking-[-0.03em]",
+        "font-black leading-[0.95] tracking-[-0.05em]",
         sizeClass,
       ].join(" ")}
     >
@@ -115,22 +116,12 @@ export default function BrandClient() {
   if (!mounted) {
     return (
       <div className="min-h-screen" suppressHydrationWarning>
-        <div className="relative w-full h-40 sm:h-56 md:h-64 lg:h-72" />
-
-        <div className="max-w-5xl mx-auto p-6 space-y-4">
-          <div className="p-3 rounded border bg-white h-16" />
-
-          <div className="space-y-2">
-            <div className="h-6 w-44 bg-gray-200 rounded" />
-            <div className="h-4 w-80 bg-gray-200 rounded" />
-          </div>
-
-          <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
-            {Array.from({ length: 24 }).map((_, i) => (
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-square rounded-md bg-gray-200 animate-pulse"
-                aria-hidden
+                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
               />
             ))}
           </div>
@@ -141,7 +132,7 @@ export default function BrandClient() {
 
   return (
     <div className="min-h-screen bg-[#fdfcf9]">
-      <div className="max-w-5xl mx-auto p-6 space-y-4">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
         <div className="p-4 rounded-2xl border border-[#ead9b8] bg-white/95 shadow-sm flex flex-wrap items-center gap-5">
           <div className="flex items-center gap-3">
             <a
@@ -149,9 +140,9 @@ export default function BrandClient() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Visit Fragrantique on TikTok"
-              className="social-icon group"
+              className="social-icon"
             >
-              <svg viewBox="0 0 24 24" className="w-6 h-6 text-black fill-current" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="w-6 h-6 text-black fill-current">
                 <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.68h-3.274v13.37a2.96 2.96 0 1 1-2.96-2.96c.244 0 .48.03.707.086V9.157a6.236 6.236 0 0 0-.707-.04A6.233 6.233 0 1 0 15.818 15.35V8.568a8.048 8.048 0 0 0 4.71 1.52V6.686h-.939Z" />
               </svg>
             </a>
@@ -161,9 +152,9 @@ export default function BrandClient() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Visit Fragrantique on Instagram"
-              className="social-icon group"
+              className="social-icon"
             >
-              <svg viewBox="0 0 24 24" className="w-6 h-6" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="w-6 h-6">
                 <defs>
                   <linearGradient id="brandPageInstagramGradient" x1="0%" y1="100%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#feda75" />
@@ -186,59 +177,34 @@ export default function BrandClient() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Visit Fragrantique on YouTube"
-              className="social-icon group"
+              className="social-icon"
             >
-              <svg viewBox="0 0 24 24" className="w-6 h-6" aria-hidden="true" fill="#FF0000">
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="#FF0000">
                 <path d="M23.498 6.186a2.997 2.997 0 0 0-2.11-2.12C19.505 3.5 12 3.5 12 3.5s-7.505 0-9.388.566a2.997 2.997 0 0 0-2.11 2.12C0 8.08 0 12 0 12s0 3.92.502 5.814a2.997 2.997 0 0 0 2.11 2.12C4.495 20.5 12 20.5 12 20.5s7.505 0 9.388-.566a2.997 2.997 0 0 0 2.11-2.12C24 15.92 24 12 24 12s0-3.92-.502-5.814ZM9.75 15.568V8.432L15.818 12 9.75 15.568Z" />
               </svg>
             </a>
           </div>
-
-          <div className="ml-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            <Link
-              href="/notes"
-              className="group inline-flex items-center justify-center gap-2 rounded-full border border-[#d9c39a] bg-gradient-to-br from-[#fff7ec] to-[#f7e8d4] px-5 py-2.5 text-sm font-semibold text-[#182A39] shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.45)] transition-all duration-200"
-            >
-              <span className="text-base">🔍</span>
-              <span>Search by name, brand, or notes</span>
-            </Link>
-
-            <Link
-              href="/recommendations"
-              className="group inline-flex items-center justify-center gap-2 rounded-full border border-[#d9c39a] bg-gradient-to-br from-[#fbe5ff] to-[#f3d7ff] px-5 py-2.5 text-sm font-semibold text-[#182A39] shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.45)] transition-all duration-200"
-            >
-              <span className="text-base">✨</span>
-              <span>Get recommendations</span>
-            </Link>
-          </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-[#182A39]">
-          Brand index
+        <h1 className="text-3xl font-bold text-[#182A39]">
+          Brand Index
         </h1>
 
-        <p className="opacity-70 text-sm text-[#182A39]">
+        <p className="opacity-70 text-base text-[#182A39]">
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+        {/* BIGGER SQUARES */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {loading &&
-            Array.from({ length: 24 }).map((_, i) => (
+            Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={`s-${i}`}
-                className="aspect-square rounded-md bg-gray-200 animate-pulse"
-                aria-hidden
+                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
               />
             ))}
 
-          {!loading && brands.length === 0 && (
-            <div className="col-span-full p-4 border rounded bg-white">
-              No brands yet.
-            </div>
-          )}
-
           {!loading &&
-            brands.length > 0 &&
             brands.map(([canon, meta]) => {
               const href = `/u/${encodeURIComponent(owner.username)}/brand/${meta.strict}`;
 
@@ -246,11 +212,11 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square flex flex-col items-center justify-center rounded-md bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 p-2 text-center shadow-sm"
+                  className="aspect-square flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-6 text-center shadow-lg"
                 >
                   <BrandName name={meta.display} />
 
-                  <span className="opacity-75 text-[10px] mt-1 leading-none font-semibold shrink-0">
+                  <span className="opacity-75 text-[20px] mt-3 leading-none font-semibold">
                     ({meta.count})
                   </span>
                 </Link>
@@ -270,34 +236,11 @@ export default function BrandClient() {
           border: 1px solid #ead9b8;
           background: rgba(255, 255, 255, 0.96);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-          transition:
-            transform 0.2s ease,
-            box-shadow 0.2s ease,
-            background 0.2s ease;
-          animation: socialFloat 3.6s ease-in-out infinite;
-        }
-
-        .social-icon:nth-child(2) {
-          animation-delay: 0.35s;
-        }
-
-        .social-icon:nth-child(3) {
-          animation-delay: 0.7s;
+          transition: transform 0.2s ease;
         }
 
         .social-icon:hover {
           transform: translateY(-3px) scale(1.08);
-          box-shadow: 0 0 18px rgba(217, 195, 154, 0.45);
-          background: #fffdf9;
-        }
-
-        @keyframes socialFloat {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-3px);
-          }
         }
       `}</style>
     </div>
