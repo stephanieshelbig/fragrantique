@@ -95,18 +95,20 @@ export default function BrandClient() {
     return (
       <div className="min-h-screen" suppressHydrationWarning>
         <div className="relative w-full h-40 sm:h-56 md:h-64 lg:h-72" />
+
         <div className="max-w-5xl mx-auto p-6 space-y-4">
           <div className="p-3 rounded border bg-white h-16" />
+
           <div className="space-y-2">
             <div className="h-6 w-44 bg-gray-200 rounded" />
             <div className="h-4 w-80 bg-gray-200 rounded" />
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {Array.from({ length: 12 }).map((_, i) => (
+          <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+            {Array.from({ length: 24 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
+                className="aspect-square rounded-md bg-gray-200 animate-pulse"
                 aria-hidden
               />
             ))}
@@ -194,24 +196,28 @@ export default function BrandClient() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-[#182A39]">Brand index</h1>
+        <h1 className="text-2xl font-bold text-[#182A39]">
+          Brand index
+        </h1>
 
         <p className="opacity-70 text-sm text-[#182A39]">
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
           {loading &&
-            Array.from({ length: 12 }).map((_, i) => (
+            Array.from({ length: 24 }).map((_, i) => (
               <div
                 key={`s-${i}`}
-                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
+                className="aspect-square rounded-md bg-gray-200 animate-pulse"
                 aria-hidden
               />
             ))}
 
           {!loading && brands.length === 0 && (
-            <div className="col-span-full p-4 border rounded bg-white">No brands yet.</div>
+            <div className="col-span-full p-4 border rounded bg-white">
+              No brands yet.
+            </div>
           )}
 
           {!loading &&
@@ -223,17 +229,15 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 text-sm p-3 text-center shadow-md"
+                  className="aspect-square flex flex-col items-center justify-center rounded-md bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 text-[9px] p-1 text-center shadow-sm"
                 >
-                  <>
-                    <span className="font-medium leading-tight">
-                      {meta.display}
-                    </span>
+                  <span className="font-medium leading-tight line-clamp-2">
+                    {meta.display}
+                  </span>
 
-                    <span className="opacity-70 text-xs mt-1">
-                      ({meta.count})
-                    </span>
-                  </>
+                  <span className="opacity-70 text-[8px] mt-0.5">
+                    ({meta.count})
+                  </span>
                 </Link>
               );
             })}
