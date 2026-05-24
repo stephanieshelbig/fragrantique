@@ -40,8 +40,8 @@ function BrandName({ name }) {
   return (
     <span
       className={[
-        "block w-full whitespace-normal break-words text-center",
-        "font-light leading-[0.95] font-[Georgia]",
+        "block w-[92%] mx-auto text-center whitespace-normal",
+        "font-normal leading-[1.05] font-[Georgia]",
         sizeClass,
       ].join(" ")}
     >
@@ -116,8 +116,8 @@ export default function BrandClient() {
   if (!mounted) {
     return (
       <div className="min-h-screen" suppressHydrationWarning>
-        <div className="max-w-7xl mx-auto p-2">
-          <div className="grid grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={i}
@@ -135,6 +135,7 @@ export default function BrandClient() {
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         <div className="p-4 rounded-2xl border border-[#ead9b8] bg-white/95 shadow-sm flex flex-wrap items-center gap-5">
           <div className="flex items-center gap-3">
+            {/* TikTok */}
             <a
               href="https://www.tiktok.com/@fragrantique.net"
               target="_blank"
@@ -147,6 +148,7 @@ export default function BrandClient() {
               </svg>
             </a>
 
+            {/* Instagram */}
             <a
               href="https://www.instagram.com/fragrantique_net"
               target="_blank"
@@ -172,6 +174,7 @@ export default function BrandClient() {
               </svg>
             </a>
 
+            {/* YouTube */}
             <a
               href="https://www.youtube.com/@fragrantique"
               target="_blank"
@@ -194,7 +197,7 @@ export default function BrandClient() {
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        {/* BIGGER SQUARES */}
+        {/* Smaller squares */}
         <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
           {loading &&
             Array.from({ length: 12 }).map((_, i) => (
@@ -212,11 +215,11 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-6 text-center shadow-lg"
+                  className="aspect-square flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-3 text-center shadow-lg"
                 >
                   <BrandName name={meta.display} />
 
-                  <span className="opacity-75 text-[20px] mt-3 leading-none font-semibold">
+                  <span className="opacity-75 text-[15px] mt-2 leading-none font-semibold">
                     ({meta.count})
                   </span>
                 </Link>
