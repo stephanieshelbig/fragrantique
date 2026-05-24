@@ -21,10 +21,6 @@ export default function CartPage() {
 
   const [msg, setMsg] = useState('');
 
-  const [discountInput, setDiscountInput] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState(null);
-  const [discountMsg, setDiscountMsg] = useState('');
-
   useEffect(() => {
     try {
       const arr = JSON.parse(localStorage.getItem('cart_v1') || '[]');
@@ -38,10 +34,7 @@ export default function CartPage() {
       setBuyer((prev) => ({ ...prev, ...b }));
     } catch {}
 
-    try {
-      const d = JSON.parse(localStorage.getItem('cart_discount_v1') || 'null');
-      if (d && d.code) setAppliedDiscount(d);
-    } catch {}
+    localStorage.removeItem('cart_discount_v1');
 
     setCartLoaded(true);
   }, []);
@@ -68,13 +61,6 @@ export default function CartPage() {
     setBuyer(next);
   }
 
-  function saveDiscount(next) {
-    if (next) localStorage.setItem('cart_discount_v1', JSON.stringify(next));
-    else localStorage.removeItem('cart_discount_v1');
-
-    setAppliedDiscount(next);
-  }
-
   function removeItem(index) {
     const next = items.filter((_, i) => i !== index);
     persist(next);
@@ -88,61 +74,11 @@ export default function CartPage() {
   const BASE_SHIPPING_CENTS = 600;
   const TAX_RATE = 0.07;
 
-  const discountCents = useMemo(() => {
-    if (!appliedDiscount) return 0;
-
-    if (appliedDiscount.type === 'percent') {
-      return Math.floor((subtotalCents * (appliedDiscount.value || 0)) / 100);
-    }
-
-    if (appliedDiscount.type === 'fixed') {
-      return Math.min(appliedDiscount.value || 0, subtotalCents);
-    }
-
-    return 0;
-  }, [appliedDiscount, subtotalCents]);
-
-  const discountedSubtotal = Math.max(0, subtotalCents - discountCents);
-  const shippingCents = appliedDiscount?.type === 'free_shipping' ? 0 : BASE_SHIPPING_CENTS;
-  const taxCents = Math.round(discountedSubtotal * TAX_RATE);
-  const totalCents = discountedSubtotal + shippingCents + taxCents;
+  const shippingCents = BASE_SHIPPING_CENTS;
+  const taxCents = Math.round(subtotalCents * TAX_RATE);
+  const totalCents = subtotalCents + shippingCents + taxCents;
 
   const fmt = (c) => (c / 100).toFixed(2);
-
-  async function applyDiscount() {
-    setDiscountMsg('');
-
-    if (!discountInput.trim()) {
-      setDiscountMsg('Enter a code.');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/discount/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: discountInput.trim(), subtotalCents }),
-      });
-
-      const j = await res.json();
-
-      if (!res.ok || !j?.ok) {
-        setDiscountMsg(j?.error || 'Invalid code.');
-        return;
-      }
-
-      saveDiscount(j.discount);
-      setDiscountMsg('Discount applied.');
-    } catch {
-      setDiscountMsg('Could not validate code.');
-    }
-  }
-
-  function removeDiscount() {
-    saveDiscount(null);
-    setDiscountMsg('');
-    setDiscountInput('');
-  }
 
   async function checkout() {
     setMsg('');
@@ -153,7 +89,7 @@ export default function CartPage() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, buyer, discount: appliedDiscount }),
+        body: JSON.stringify({ items, buyer, discount: null }),
       });
 
       const j = await res.json();
@@ -202,54 +138,11 @@ export default function CartPage() {
             </div>
           ))}
 
-          <div className="p-4 border rounded bg-white space-y-2">
-            <div className="font-medium">Discount</div>
-
-            {!appliedDiscount ? (
-              <div className="flex gap-2">
-                <input
-                  className="border rounded px-3 py-2 flex-1"
-                  placeholder="Enter code"
-                  value={discountInput}
-                  onChange={(e) => setDiscountInput(e.target.value)}
-                />
-
-                <button onClick={applyDiscount} className="border rounded px-3 py-2">
-                  Apply
-                </button>
-              </div>
-            ) : (
-              <div className="flex justify-between">
-                <div>
-                  <b>{appliedDiscount.code}</b>{' '}
-                  {appliedDiscount.type === 'percent' &&
-                    `(${appliedDiscount.value}% off)`}
-                  {appliedDiscount.type === 'fixed' &&
-                    `($${fmt(appliedDiscount.value)} off)`}
-                  {appliedDiscount.type === 'free_shipping' && `— Free shipping`}
-                </div>
-
-                <button onClick={removeDiscount} className="border px-2 text-xs">
-                  Remove
-                </button>
-              </div>
-            )}
-
-            {discountMsg && <div className="text-xs opacity-70">{discountMsg}</div>}
-          </div>
-
           <div className="p-4 border rounded bg-white space-y-1">
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span>${fmt(subtotalCents)}</span>
             </div>
-
-            {appliedDiscount && (
-              <div className="flex justify-between">
-                <span>Discount</span>
-                <span>- ${fmt(discountCents)}</span>
-              </div>
-            )}
 
             <div className="flex justify-between">
               <span>Shipping</span>
