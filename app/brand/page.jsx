@@ -28,6 +28,27 @@ function canonicalBrandKey(b) {
   return canon || strict;
 }
 
+function BrandName({ name }) {
+  const len = String(name || "").length;
+
+  let sizeClass = "text-[18px] sm:text-[20px] md:text-[18px] lg:text-[17px]";
+  if (len > 10) sizeClass = "text-[15px] sm:text-[17px] md:text-[15px] lg:text-[14px]";
+  if (len > 16) sizeClass = "text-[13px] sm:text-[15px] md:text-[13px] lg:text-[12px]";
+  if (len > 24) sizeClass = "text-[11px] sm:text-[13px] md:text-[11px] lg:text-[10px]";
+
+  return (
+    <span
+      className={[
+        "block w-full whitespace-normal break-words text-center",
+        "font-black leading-[1.02] tracking-[-0.03em]",
+        sizeClass,
+      ].join(" ")}
+    >
+      {name}
+    </span>
+  );
+}
+
 export default function BrandClient() {
   const [mounted, setMounted] = useState(false);
   const [owner, setOwner] = useState({ id: null, username: "stephanie" });
@@ -122,9 +143,7 @@ export default function BrandClient() {
     <div className="min-h-screen bg-[#fdfcf9]">
       <div className="max-w-5xl mx-auto p-6 space-y-4">
         <div className="p-4 rounded-2xl border border-[#ead9b8] bg-white/95 shadow-sm flex flex-wrap items-center gap-5">
-          {/* Left side: social icons */}
           <div className="flex items-center gap-3">
-            {/* TikTok */}
             <a
               href="https://www.tiktok.com/@fragrantique.net"
               target="_blank"
@@ -137,7 +156,6 @@ export default function BrandClient() {
               </svg>
             </a>
 
-            {/* Instagram */}
             <a
               href="https://www.instagram.com/fragrantique_net"
               target="_blank"
@@ -163,7 +181,6 @@ export default function BrandClient() {
               </svg>
             </a>
 
-            {/* YouTube */}
             <a
               href="https://www.youtube.com/@fragrantique"
               target="_blank"
@@ -229,13 +246,11 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square flex flex-col items-center justify-center rounded-md bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 p-1 text-center shadow-sm overflow-hidden"
+                  className="aspect-square flex flex-col items-center justify-center rounded-md bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 p-2 text-center shadow-sm"
                 >
-                  <span className="font-black leading-[0.88] text-[clamp(11px,2vw,24px)] w-full px-[2px] break-words line-clamp-3 tracking-[-0.03em]">
-                    {meta.display}
-                  </span>
+                  <BrandName name={meta.display} />
 
-                  <span className="opacity-75 text-[clamp(7px,1vw,11px)] mt-0.5 leading-none font-medium">
+                  <span className="opacity-75 text-[10px] mt-1 leading-none font-semibold shrink-0">
                     ({meta.count})
                   </span>
                 </Link>
