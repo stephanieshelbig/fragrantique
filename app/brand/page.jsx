@@ -229,13 +229,13 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square flex flex-col items-center justify-center rounded-md bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 text-[9px] p-1 text-center shadow-sm"
+                  className="aspect-square flex flex-col items-center justify-center rounded-md bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 p-1 text-center shadow-sm overflow-hidden"
                 >
-                  <span className="font-medium leading-tight line-clamp-2">
+                  <span className="font-black leading-[0.88] text-[clamp(11px,2vw,24px)] w-full px-[2px] break-words line-clamp-3 tracking-[-0.03em]">
                     {meta.display}
                   </span>
 
-                  <span className="opacity-70 text-[8px] mt-0.5">
+                  <span className="opacity-75 text-[clamp(7px,1vw,11px)] mt-0.5 leading-none font-medium">
                     ({meta.count})
                   </span>
                 </Link>
