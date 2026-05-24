@@ -41,7 +41,7 @@ function BrandName({ name }) {
     <span
       className={[
         "block w-full whitespace-normal break-words text-center",
-        "font-black leading-[0.95] tracking-[-0.05em]",
+        "font-normal leading-[0.95]",
         sizeClass,
       ].join(" ")}
     >
