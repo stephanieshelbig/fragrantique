@@ -195,7 +195,7 @@ export default function BrandClient() {
         </p>
 
         {/* BIGGER SQUARES */}
-        <div className="grid grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
+        <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
           {loading &&
             Array.from({ length: 12 }).map((_, i) => (
               <div
