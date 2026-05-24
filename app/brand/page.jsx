@@ -101,9 +101,14 @@ export default function BrandClient() {
             <div className="h-6 w-44 bg-gray-200 rounded" />
             <div className="h-4 w-80 bg-gray-200 rounded" />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="px-3 py-2 rounded bg-gray-200 h-8 animate-pulse" aria-hidden />
+              <div
+                key={i}
+                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
+                aria-hidden
+              />
             ))}
           </div>
         </div>
@@ -148,6 +153,7 @@ export default function BrandClient() {
                     <stop offset="100%" stopColor="#4f5bd5" />
                   </linearGradient>
                 </defs>
+
                 <path
                   fill="url(#brandPageInstagramGradient)"
                   d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2Zm0 1.8A3.95 3.95 0 0 0 3.8 7.75v8.5a3.95 3.95 0 0 0 3.95 3.95h8.5a3.95 3.95 0 0 0 3.95-3.95v-8.5a3.95 3.95 0 0 0-3.95-3.95h-8.5Zm8.95 1.35a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 1.8A3.2 3.2 0 1 0 12 15.2 3.2 3.2 0 0 0 12 8.8Z"
@@ -169,7 +175,6 @@ export default function BrandClient() {
             </a>
           </div>
 
-          {/* Right side: pretty buttons */}
           <div className="ml-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <Link
               href="/notes"
@@ -190,16 +195,17 @@ export default function BrandClient() {
         </div>
 
         <h1 className="text-2xl font-bold text-[#182A39]">Brand index</h1>
+
         <p className="opacity-70 text-sm text-[#182A39]">
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {loading &&
             Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={`s-${i}`}
-                className="px-3 py-2 rounded bg-gray-200 animate-pulse h-8"
+                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
                 aria-hidden
               />
             ))}
@@ -212,13 +218,22 @@ export default function BrandClient() {
             brands.length > 0 &&
             brands.map(([canon, meta]) => {
               const href = `/u/${encodeURIComponent(owner.username)}/brand/${meta.strict}`;
+
               return (
                 <Link
                   key={canon}
                   href={href}
-                  className="px-3 py-2 rounded bg-[#182A39] text-white hover:opacity-90 text-sm"
+                  className="aspect-square flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.03] hover:opacity-95 transition-all duration-200 text-sm p-3 text-center shadow-md"
                 >
-                  {meta.display} <span className="opacity-70">({meta.count})</span>
+                  <>
+                    <span className="font-medium leading-tight">
+                      {meta.display}
+                    </span>
+
+                    <span className="opacity-70 text-xs mt-1">
+                      ({meta.count})
+                    </span>
+                  </>
                 </Link>
               );
             })}
