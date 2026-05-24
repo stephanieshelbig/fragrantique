@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-:root{--bg:#2C0547;--gold:#c7a24b;--blush:#f6b0c3;}
+:root{--bg:#f7f2e9;--gold:#c7a24b;--blush:#f6b0c3;}
 html,body{background:var(--bg);color:#2b2b2b;}
 .boutique-bg{background-image:url('/images/boutique-bg.png');background-size:cover;background-position:center;}
 .shelf{border-bottom:3px solid rgba(199,162,75,0.4);padding-bottom:12px;}
