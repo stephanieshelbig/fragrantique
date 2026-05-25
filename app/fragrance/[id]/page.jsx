@@ -158,6 +158,11 @@ export default function FragranceDetail({ params }) {
     setCurrentImage((prev) => (prev + 1) % galleryImages.length);
   }
 
+  function openImageInNewTab(src) {
+    if (!src) return;
+    window.open(src, '_blank', 'noopener,noreferrer');
+  }
+
   async function saveExtraImages() {
     if (!canAdmin || !frag?.id) {
       setMsg('Not authorized');
@@ -434,7 +439,8 @@ export default function FragranceDetail({ params }) {
                 key={activeImage}
                 src={activeImage}
                 alt={frag.name}
-                className="max-h-full max-w-full object-contain transition-all duration-500 ease-out"
+                onClick={() => openImageInNewTab(activeImage)}
+                className="max-h-full max-w-full object-contain transition-all duration-500 ease-out cursor-zoom-in"
                 style={{
                   mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 16px 22px rgba(0,0,0,0.18))',
@@ -509,372 +515,19 @@ export default function FragranceDetail({ params }) {
                   <img
                     src={img.src}
                     alt={img.label}
-                    className="h-full w-full object-contain"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openImageInNewTab(img.src);
+                    }}
+                    className="h-full w-full object-contain cursor-zoom-in"
                     style={{ mixBlendMode: 'multiply' }}
                   />
                 </button>
               ))}
             </div>
           )}
-
-          {/* Admin extra images */}
-          {canAdmin && (
-            <div className="rounded-2xl border border-[#eadfcb] bg-white/90 p-4 shadow-sm space-y-3">
-              <div>
-                <div className="text-sm font-semibold text-[#5f4724]">
-                  Additional fragrance photos
-                </div>
-                <div className="text-xs text-gray-500">
-                  Paste 1 or 2 extra image URLs for the carousel.
-                </div>
-              </div>
-
-              <input
-                className="w-full rounded-xl border border-[#eadfcb] px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
-                placeholder="Image URL 2"
-                value={imageUrl2}
-                onChange={(e) => setImageUrl2(e.target.value)}
-              />
-
-              <input
-                className="w-full rounded-xl border border-[#eadfcb] px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
-                placeholder="Image URL 3"
-                value={imageUrl3}
-                onChange={(e) => setImageUrl3(e.target.value)}
-              />
-
-              <button
-                type="button"
-                onClick={saveExtraImages}
-                className="w-full rounded-full bg-[#182A39] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:-translate-y-[1px] hover:opacity-95"
-              >
-                Save photos
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 space-y-4">
-          {/* Purchase panel */}
-          <div className="p-3 rounded border bg-white space-y-3">
-            <div className="font-medium">Choose an option</div>
-
-            {!canAdmin && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Option</label>
-                  <select
-                    className="border rounded px-3 py-2 w-full"
-                    value={selectedId}
-                    onChange={(e) => {
-                      setSelectedId(e.target.value);
-                      setMsg('');
-                      setAdded(false);
-                    }}
-                  >
-                    {options.length === 0 && <option>— No options —</option>}
-                    {options.map((o) => (
-                      <option key={o.id} value={o.id} disabled={!o.in_stock}>
-                        {o.label}
-                        {!o.in_stock ? ' (out of stock)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Quantity</label>
-                    <input
-                      type="number"
-                      min="1"
-                      className="border rounded px-3 py-2 w-full"
-                      value={qty}
-                      onChange={(e) => {
-                        setQty(e.target.value);
-                        setMsg('');
-                        setAdded(false);
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleAddToCart}
-                  className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90"
-                >
-                  Add to cart
-                </button>
-
-                {added && (
-                  <div className="text-sm p-2 rounded bg-green-50 border border-green-200">
-                    Added to cart.{' '}
-                    <Link href="/cart" className="underline">
-                      View cart →
-                    </Link>
-                  </div>
-                )}
-
-                {msg && <div className="text-sm p-2 rounded bg-white border mt-2">{msg}</div>}
-              </>
-            )}
-
-            {canAdmin && (
-              <div className="space-y-4">
-                <div className="text-sm opacity-70">
-                  Create options like <b>5 mL decant</b>, <b>10 mL decant</b>, or{' '}
-                  <b>Full Bottle</b>.
-                </div>
-
-                <div className="border rounded divide-y">
-                  {options.map((o) => (
-                    <div key={o.id} className="p-3 grid sm:grid-cols-7 gap-3 items-end">
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium mb-1">Label</label>
-                        <input
-                          className="border rounded px-2 py-1 w-full"
-                          value={o.label || ''}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, label: e.target.value } : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Size (mL)</label>
-                        <input
-                          type="number"
-                          className="border rounded px-2 py-1 w-full"
-                          value={o.size_ml ?? ''}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, size_ml: e.target.value } : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Price (USD)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="border rounded px-2 py-1 w-full"
-                          value={centsToDollars(o.price_cents)}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id
-                                  ? {
-                                      ...x,
-                                      price_cents: dollarsToCents(e.target.value),
-                                    }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Currency</label>
-                        <select
-                          className="border rounded px-2 py-1 w-full"
-                          value={o.currency || 'usd'}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, currency: e.target.value } : x
-                              )
-                            )
-                          }
-                        >
-                          <option value="usd">USD</option>
-                          <option value="eur">EUR</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Quantity</label>
-                        <input
-                          type="number"
-                          className="border rounded px-2 py-1 w-full"
-                          placeholder="Leave blank for unlimited"
-                          value={o.quantity ?? ''}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id
-                                  ? {
-                                      ...x,
-                                      quantity:
-                                        e.target.value === ''
-                                          ? null
-                                          : Math.max(0, Number(e.target.value) || 0),
-                                    }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                        <div className="text-[11px] mt-1 opacity-70">
-                          {o.quantity === null ? 'Unlimited' : `${o.quantity} left`}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`stock-${o.id}`}
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={!!o.in_stock}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, in_stock: e.target.checked } : x
-                              )
-                            )
-                          }
-                        />
-                        <label htmlFor={`stock-${o.id}`} className="text-xs">
-                          In stock
-                        </label>
-                      </div>
-
-                      <div className="flex gap-2 sm:justify-end">
-                        <button
-                          onClick={() => saveOption(o)}
-                          className="px-3 py-1.5 rounded bg-black text-white text-xs"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => deleteOption(o.id)}
-                          className="px-3 py-1.5 rounded border text-xs"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {!options.length && <div className="p-3 text-sm opacity-70">No options yet.</div>}
-                </div>
-
-                <div className="p-3 border rounded space-y-2">
-                  <div className="font-medium text-sm">Add a new option</div>
-
-                  <div className="grid sm:grid-cols-7 gap-3 items-end">
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium mb-1">Label</label>
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 5 mL decant / Full Bottle"
-                        value={newLabel}
-                        onChange={(e) => setNewLabel(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Size (mL)</label>
-                      <input
-                        type="number"
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 5 or 100"
-                        value={newSize}
-                        onChange={(e) => setNewSize(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Price (USD)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 24.00"
-                        value={newPrice}
-                        onChange={(e) => setNewPrice(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Currency</label>
-                      <select
-                        className="border rounded px-2 py-1 w-full"
-                        value={newCurrency}
-                        onChange={(e) => setNewCurrency(e.target.value)}
-                      >
-                        <option value="usd">USD</option>
-                        <option value="eur">EUR</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Quantity</label>
-                      <input
-                        type="number"
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="Leave blank for unlimited"
-                        value={newQuantity}
-                        onChange={(e) =>
-                          setNewQuantity(
-                            e.target.value === ''
-                              ? ''
-                              : Math.max(0, Number(e.target.value) || 0)
-                          )
-                        }
-                      />
-                      <div className="text-[11px] mt-1 opacity-70">
-                        {newQuantity === '' ? 'Unlimited' : `${newQuantity} to start`}
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2 flex sm:justify-end">
-                      <button
-                        onClick={addNewOption}
-                        className="px-3 py-2 rounded bg-black text-white text-xs"
-                      >
-                        Add option
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {msg && <div className="text-sm p-2 rounded bg-white border">{msg}</div>}
-
-                <div className="text-xs opacity-60">
-                  Visitors won’t see prices here. They’ll just pick an option and quantity, then add
-                  to cart.
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="text-sm opacity-80 leading-relaxed">
-            These are fragrances from my personal collection. I'm selling decants of some of each
-            fragrance to earn some extra money. I don't do this strictly for profit, meaning I don't
-            buy fragrances just to sell them, so my prices will be lower than decant sites like
-            ScentsAngel and DecantX. If you find a lower price for these decants, send me a message
-            through the &apos;Contact Me&apos; link at the top of the page, and I will try to match
-            the price.
-          </div>
         </div>
       </div>
-
-      {!canAdmin && (
-        <div className="text-sm">
-          <Link className="underline" href="/cart">
-            Go to cart →
-          </Link>
-        </div>
-      )}
     </div>
   );
 }
