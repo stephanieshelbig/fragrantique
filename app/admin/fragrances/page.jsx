@@ -132,6 +132,65 @@ export default function AdminFragranceList() {
     }
   }
 
+  async function saveAllImagesToSupabase() {
+    setBusy(true);
+
+    const targets = rows.filter(
+      (f) =>
+        (f.image_url || f.image_url_2 || f.image_url_3) &&
+        !(f.image_url_saved && f.image_url_2_saved && f.image_url_3_saved)
+    );
+
+    if (!targets.length) {
+      setMsg('All fragrance images are already saved ✓');
+      setBusy(false);
+      return;
+    }
+
+    const okToRun = window.confirm(
+      `Save images for ${targets.length} fragrance${targets.length === 1 ? '' : 's'}?\n\n` +
+        `This may take a little while. Please keep this page open until it finishes.`
+    );
+
+    if (!okToRun) {
+      setBusy(false);
+      return;
+    }
+
+    let ok = 0;
+    let fail = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      const f = targets[i];
+
+      setMsg(
+        `Saving images ${i + 1} of ${targets.length}: ${f.brand} — ${f.name}…`
+      );
+
+      try {
+        const res = await fetch('/api/admin/mirror-fragrance-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fragranceId: f.id }),
+        });
+
+        const j = await res.json().catch(() => ({}));
+
+        if (!res.ok || !j?.ok) {
+          throw new Error(j?.error || 'Image save failed');
+        }
+
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+
+    setMsg(`Save all images done: ${ok} saved, ${fail} failed`);
+    setBusy(false);
+    await load(owner.id);
+  }
+
   async function addOneToShelves(fragranceId) {
     if (!owner.id) return;
     setBusy(true);
@@ -382,6 +441,14 @@ export default function AdminFragranceList() {
           className="px-3 py-2 rounded bg-blue-600 text-white hover:opacity-90 disabled:opacity-60"
         >
           Add all missing to shelves
+        </button>
+
+        <button
+          disabled={busy}
+          onClick={saveAllImagesToSupabase}
+          className="px-3 py-2 rounded bg-purple-700 text-white hover:opacity-90 disabled:opacity-60"
+        >
+          Save all images
         </button>
 
         <button
