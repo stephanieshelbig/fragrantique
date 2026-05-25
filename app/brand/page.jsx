@@ -31,17 +31,17 @@ function canonicalBrandKey(b) {
 function BrandName({ name }) {
   const len = String(name || "").length;
 
-  let sizeClass = "text-[34px]";
-  if (len > 10) sizeClass = "text-[28px]";
-  if (len > 16) sizeClass = "text-[22px]";
-  if (len > 24) sizeClass = "text-[18px]";
-  if (len > 34) sizeClass = "text-[15px]";
+  let sizeClass = "text-[28px]";
+  if (len > 10) sizeClass = "text-[24px]";
+  if (len > 16) sizeClass = "text-[20px]";
+  if (len > 24) sizeClass = "text-[17px]";
+  if (len > 34) sizeClass = "text-[14px]";
 
   return (
     <span
       className={[
-        "block w-[92%] mx-auto text-center whitespace-normal",
-        "font-normal leading-[1.05] font-[Georgia]",
+        "block w-[90%] mx-auto text-center whitespace-normal break-words",
+        "font-normal leading-[1.1] font-[Georgia]",
         sizeClass,
       ].join(" ")}
     >
@@ -197,8 +197,8 @@ export default function BrandClient() {
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        {/* Smaller squares */}
-        <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+        {/* Bigger squares + smaller text */}
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
           {loading &&
             Array.from({ length: 12 }).map((_, i) => (
               <div
@@ -215,11 +215,11 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-3 text-center shadow-lg"
+                  className="aspect-square min-h-[180px] flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-5 text-center shadow-lg"
                 >
                   <BrandName name={meta.display} />
 
-                  <span className="opacity-75 text-[15px] mt-2 leading-none font-semibold">
+                  <span className="opacity-75 text-[15px] mt-3 leading-none font-semibold">
                     ({meta.count})
                   </span>
                 </Link>
