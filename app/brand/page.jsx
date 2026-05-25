@@ -195,6 +195,7 @@ export default function BrandClient() {
 
         <p className="opacity-70 text-base text-[#182A39]">
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
+          BEST VIEWED IN LANDSCAPE MODE.
         </p>
 
         {/* Rectangle buttons */}
