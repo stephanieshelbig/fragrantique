@@ -31,17 +31,17 @@ function canonicalBrandKey(b) {
 function BrandName({ name }) {
   const len = String(name || "").length;
 
-  let sizeClass = "text-[28px]";
-  if (len > 10) sizeClass = "text-[24px]";
-  if (len > 16) sizeClass = "text-[20px]";
-  if (len > 24) sizeClass = "text-[17px]";
-  if (len > 34) sizeClass = "text-[14px]";
+  let sizeClass = "text-[30px]";
+  if (len > 10) sizeClass = "text-[26px]";
+  if (len > 16) sizeClass = "text-[22px]";
+  if (len > 24) sizeClass = "text-[18px]";
+  if (len > 34) sizeClass = "text-[15px]";
 
   return (
     <span
       className={[
-        "block w-[90%] mx-auto text-center whitespace-normal break-words",
-        "font-normal leading-[1.1] font-[Georgia]",
+        "block w-full px-2 mx-auto text-center break-words",
+        "font-normal leading-[1.05] font-[Georgia]",
         sizeClass,
       ].join(" ")}
     >
@@ -121,7 +121,7 @@ export default function BrandClient() {
             {Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
+                className="h-[140px] rounded-2xl bg-gray-200 animate-pulse"
               />
             ))}
           </div>
@@ -197,13 +197,13 @@ export default function BrandClient() {
           Showing brands from <span className="font-medium">@{owner.username}</span>’s boutique.
         </p>
 
-        {/* Bigger squares + smaller text */}
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
+        {/* Rectangle buttons */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {loading &&
             Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={`s-${i}`}
-                className="aspect-square rounded-2xl bg-gray-200 animate-pulse"
+                className="h-[140px] rounded-2xl bg-gray-200 animate-pulse"
               />
             ))}
 
@@ -215,7 +215,7 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="aspect-square min-h-[180px] flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-5 text-center shadow-lg"
+                  className="h-[140px] flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-6 text-center shadow-lg"
                 >
                   <BrandName name={meta.display} />
 
