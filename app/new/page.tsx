@@ -88,10 +88,12 @@ export default function WhatsNewPage() {
 
               return (
                 <Link
-                  key={fragrance.id}
-                  href={`/fragrance/${fragrance.id}`}
-                  className="group rounded-3xl border border-[#ead9b8] bg-white/95 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(217,195,154,0.55)]"
-                >
+  key={fragrance.id}
+  href={`/fragrance/${fragrance.id}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="group rounded-3xl border border-[#ead9b8] bg-white/95 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(217,195,154,0.55)]"
+>
                   <div className="flex h-56 items-center justify-center rounded-2xl bg-[#fff8ee] p-4">
                     {image ? (
                       <Image
