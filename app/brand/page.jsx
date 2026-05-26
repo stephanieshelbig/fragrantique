@@ -216,11 +216,11 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="h-[140px] flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-6 text-center shadow-lg"
+                  className="h-[140px] flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-2 text-center shadow-lg"
                 >
                   <BrandName name={meta.display} />
 
-                  <span className="opacity-75 text-[15px] mt-3 leading-none font-semibold">
+                  <span className="opacity-75 text-[8px] mt-3 leading-none font-semibold">
                     ({meta.count})
                   </span>
                 </Link>
