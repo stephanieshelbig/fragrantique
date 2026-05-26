@@ -31,7 +31,7 @@ function canonicalBrandKey(b) {
 function BrandName({ name }) {
   const len = String(name || "").length;
 
-  const sizeClass = "text-[40px]";
+  const sizeClass = "text-[15px]";
 
   return (
     <span
