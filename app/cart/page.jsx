@@ -8,6 +8,8 @@ export default function CartPage() {
 
   const [items, setItems] = useState([]);
   const [cartLoaded, setCartLoaded] = useState(false);
+  const [discountCode, setDiscountCode] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState(null);
 
   const [buyer, setBuyer] = useState({
     name: '',
@@ -64,7 +66,22 @@ export default function CartPage() {
   function removeItem(index) {
     const next = items.filter((_, i) => i !== index);
     persist(next);
+
+    const stillHasLostInParis = next.some((it) =>
+      (it.name || '').toLowerCase().includes('lost in paris')
+    );
+
+    if (!stillHasLostInParis) {
+      setAppliedDiscount(null);
+      localStorage.removeItem('cart_discount_v1');
+    }
   }
+
+  const hasLostInParis = useMemo(() => {
+    return items.some((it) =>
+      (it.name || '').toLowerCase().includes('lost in paris')
+    );
+  }, [items]);
 
   const subtotalCents = useMemo(
     () => items.reduce((sum, it) => sum + it.unit_amount * it.quantity, 0),
@@ -74,11 +91,58 @@ export default function CartPage() {
   const BASE_SHIPPING_CENTS = 600;
   const TAX_RATE = 0.07;
 
+  const discountCents = appliedDiscount?.amountCents || 0;
+  const discountedSubtotalCents = Math.max(0, subtotalCents - discountCents);
+
   const shippingCents = BASE_SHIPPING_CENTS;
-  const taxCents = Math.round(subtotalCents * TAX_RATE);
-  const totalCents = subtotalCents + shippingCents + taxCents;
+  const taxCents = Math.round(discountedSubtotalCents * TAX_RATE);
+  const totalCents = discountedSubtotalCents + shippingCents + taxCents;
 
   const fmt = (c) => (c / 100).toFixed(2);
+
+  function applyDiscountCode() {
+    setMsg('');
+
+    const code = discountCode.trim().toUpperCase();
+
+    if (!code) {
+      setAppliedDiscount(null);
+      localStorage.removeItem('cart_discount_v1');
+      setMsg('Please enter a discount code.');
+      return;
+    }
+
+    if (code !== 'LOSTINPARIS10') {
+      setAppliedDiscount(null);
+      localStorage.removeItem('cart_discount_v1');
+      setMsg('Invalid discount code.');
+      return;
+    }
+
+    if (!hasLostInParis) {
+      setAppliedDiscount(null);
+      localStorage.removeItem('cart_discount_v1');
+      setMsg('This discount code only works when Roja Lost in Paris is in your cart.');
+      return;
+    }
+
+    const discount = {
+      code,
+      amountCents: 1000,
+      requiredItem: 'Lost in Paris',
+    };
+
+    setAppliedDiscount(discount);
+    localStorage.setItem('cart_discount_v1', JSON.stringify(discount));
+    setMsg('$10 discount applied to Roja Lost in Paris.');
+  }
+
+  function removeDiscount() {
+    setAppliedDiscount(null);
+    setDiscountCode('');
+    localStorage.removeItem('cart_discount_v1');
+    setMsg('');
+  }
 
   async function checkout() {
     setMsg('');
@@ -89,7 +153,7 @@ export default function CartPage() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, buyer, discount: null }),
+        body: JSON.stringify({ items, buyer, discount: appliedDiscount }),
       });
 
       const j = await res.json();
@@ -138,11 +202,50 @@ export default function CartPage() {
             </div>
           ))}
 
+          <div className="p-4 border rounded bg-white space-y-3">
+            <div className="font-semibold">Discount Code</div>
+
+            <div className="flex gap-2">
+              <input
+                value={discountCode}
+                onChange={(e) => setDiscountCode(e.target.value)}
+                placeholder="Enter discount code"
+                className="flex-1 border rounded px-3 py-2"
+              />
+
+              <button
+                onClick={applyDiscountCode}
+                className="bg-black text-white px-4 py-2 rounded"
+              >
+                Apply
+              </button>
+            </div>
+
+            {appliedDiscount && (
+              <div className="flex justify-between items-center text-sm text-green-700">
+                <span>Applied: {appliedDiscount.code}</span>
+                <button
+                  onClick={removeDiscount}
+                  className="text-xs underline text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="p-4 border rounded bg-white space-y-1">
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span>${fmt(subtotalCents)}</span>
             </div>
+
+            {discountCents > 0 && (
+              <div className="flex justify-between text-green-700">
+                <span>Discount</span>
+                <span>-${fmt(discountCents)}</span>
+              </div>
+            )}
 
             <div className="flex justify-between">
               <span>Shipping</span>
@@ -164,7 +267,15 @@ export default function CartPage() {
             Checkout
           </button>
 
-          {msg && <div className="text-red-600 text-sm mt-2">{msg}</div>}
+          {msg && (
+            <div
+              className={`text-sm mt-2 ${
+                msg.includes('applied') ? 'text-green-700' : 'text-red-600'
+              }`}
+            >
+              {msg}
+            </div>
+          )}
         </>
       )}
     </div>
