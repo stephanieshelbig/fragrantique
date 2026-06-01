@@ -913,6 +913,86 @@ export default function FragranceDetail({ params }) {
           </Link>
         </div>
       )}
+
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4"
+          onClick={closeLightbox}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Fragrance photo gallery"
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col items-center justify-center rounded-[2rem] border border-white/20 bg-[#111]/90 p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeLightbox}
+              className="absolute right-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-2xl leading-none text-black shadow hover:bg-white"
+              aria-label="Close image gallery"
+            >
+              ×
+            </button>
+
+            {galleryImages.length > 1 && (
+              <button
+                type="button"
+                onClick={goPrevLightboxImage}
+                className="absolute left-4 top-1/2 z-20 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-4xl leading-none text-black shadow hover:bg-white"
+                aria-label="Previous image"
+              >
+                ‹
+              </button>
+            )}
+
+            <div className="flex h-[78vh] w-full items-center justify-center px-10 py-8">
+              <img
+                src={galleryImages[lightboxIndex]?.src || activeImage}
+                alt={galleryImages[lightboxIndex]?.label || frag.name}
+                className="max-h-full max-w-full object-contain"
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  if (!el.dataset.fallback) {
+                    el.dataset.fallback = '1';
+                    el.src = '/bottle-placeholder.png';
+                  }
+                }}
+              />
+            </div>
+
+            {galleryImages.length > 1 && (
+              <button
+                type="button"
+                onClick={goNextLightboxImage}
+                className="absolute right-4 top-1/2 z-20 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-4xl leading-none text-black shadow hover:bg-white"
+                aria-label="Next image"
+              >
+                ›
+              </button>
+            )}
+
+            {galleryImages.length > 1 && (
+              <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 py-2 backdrop-blur">
+                {galleryImages.map((img, index) => (
+                  <button
+                    key={`lightbox-dot-${img.src}-${index}`}
+                    type="button"
+                    onClick={() => {
+                      setLightboxIndex(index);
+                      setCurrentImage(index);
+                    }}
+                    className={`h-2 rounded-full transition-all ${
+                      lightboxIndex === index ? 'w-8 bg-white' : 'w-2 bg-white/45 hover:bg-white/75'
+                    }`}
+                    aria-label={`View image ${index + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
