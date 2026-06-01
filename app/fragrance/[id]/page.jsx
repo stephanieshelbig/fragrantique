@@ -30,6 +30,8 @@ export default function FragranceDetail({ params }) {
   const [msg, setMsg] = useState('');
 
   const [currentImage, setCurrentImage] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [imageUrl2, setImageUrl2] = useState('');
   const [imageUrl3, setImageUrl3] = useState('');
 
@@ -139,6 +141,24 @@ export default function FragranceDetail({ params }) {
     ].filter(Boolean);
   }, [frag]);
 
+  useEffect(() => {
+    if (!lightboxOpen) return;
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') goPrevLightboxImage();
+      if (e.key === 'ArrowRight') goNextLightboxImage();
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [lightboxOpen, galleryImages.length]);
+
   const selectedOpt = useMemo(
     () => options.find((o) => String(o.id) === String(selectedId)),
     [options, selectedId]
@@ -146,9 +166,16 @@ export default function FragranceDetail({ params }) {
 
   const canAdmin = isOwner || isAdmin;
 
-  function openImageInNewTab(src) {
-    if (!src) return;
-    window.open(src, '_blank', 'noopener,noreferrer');
+  function openLightbox(index = currentImage) {
+    if (!galleryImages.length) return;
+    const safeIndex = Math.min(Math.max(index, 0), galleryImages.length - 1);
+    setLightboxIndex(safeIndex);
+    setCurrentImage(safeIndex);
+    setLightboxOpen(true);
+  }
+
+  function closeLightbox() {
+    setLightboxOpen(false);
   }
 
   function goPrevImage() {
@@ -159,6 +186,24 @@ export default function FragranceDetail({ params }) {
   function goNextImage() {
     if (!galleryImages.length) return;
     setCurrentImage((prev) => (prev + 1) % galleryImages.length);
+  }
+
+  function goPrevLightboxImage() {
+    if (!galleryImages.length) return;
+    setLightboxIndex((prev) => {
+      const next = prev === 0 ? galleryImages.length - 1 : prev - 1;
+      setCurrentImage(next);
+      return next;
+    });
+  }
+
+  function goNextLightboxImage() {
+    if (!galleryImages.length) return;
+    setLightboxIndex((prev) => {
+      const next = (prev + 1) % galleryImages.length;
+      setCurrentImage(next);
+      return next;
+    });
   }
 
   async function saveExtraImages() {
@@ -430,7 +475,7 @@ export default function FragranceDetail({ params }) {
                 key={activeImage}
                 src={activeImage}
                 alt={frag.name}
-                onClick={() => openImageInNewTab(activeImage)}
+                onClick={() => openLightbox(currentImage)}
                 className="max-h-full max-w-full object-contain transition-all duration-500 ease-out cursor-zoom-in"
                 style={{
                   mixBlendMode: 'multiply',
@@ -506,7 +551,7 @@ export default function FragranceDetail({ params }) {
                     alt={img.label}
                     onClick={(e) => {
                       e.stopPropagation();
-                      openImageInNewTab(img.src);
+                      openLightbox(index);
                     }}
                     className="h-full w-full object-contain cursor-zoom-in"
                     style={{ mixBlendMode: 'multiply' }}
