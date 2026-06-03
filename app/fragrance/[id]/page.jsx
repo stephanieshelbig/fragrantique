@@ -89,11 +89,21 @@ export default function FragranceDetail({ params }) {
       setCurrentImage(0);
 
       try {
-        const { data: ds, error: de } = await supabase
-          .from('decants')
-          .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
-          .eq('fragrance_id', id)
-          .order('label', { ascending: true });
+  let decantsQuery = supabase
+    .from('decants')
+    .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
+    .eq('fragrance_id', id);
+
+  // Body Mist page gets alphabetical sorting.
+  // Everything else stays sorted by size.
+  if (id === '27bfb4b1-4f99-4e15-903d-bd641ed442fe') {
+    decantsQuery = decantsQuery.order('label', { ascending: true });
+  } else {
+    decantsQuery = decantsQuery.order('size_ml', { ascending: true });
+  }
+
+  const { data: ds, error: de } = await decantsQuery;
+
 
         if (!de && Array.isArray(ds)) {
           const mapped = ds.map((d) => ({
