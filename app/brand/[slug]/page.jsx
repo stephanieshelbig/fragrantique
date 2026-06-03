@@ -5,17 +5,66 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+const BODY_MIST_ID = '27bfb4b1-4f99-4e15-903d-bd641ed442fe';
+
+function cleanDecantName(label = '') {
+  return label.replace(/\s*\$[0-9]+(\.[0-9]{1,2})?$/, '').trim();
+}
+
 export default function BrandDetailPage({ params }) {
   const brandParam = decodeURIComponent(params.slug || '');
+  const isBodyMistPage = brandParam.toLowerCase() === 'body-mist';
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load all fragrances for this brand (alphabetical)
   useEffect(() => {
     (async () => {
       setLoading(true);
 
-      // 1) Try case-insensitive exact match (best for clean slugs)
+      if (isBodyMistPage) {
+        const { data, error } = await supabase
+          .from('decants')
+          .select(`
+            id,
+            label,
+            size_ml,
+            price_cents,
+            fragrance_id,
+            fragrances (
+              id,
+              brand,
+              name,
+              image_url,
+              image_url_transparent,
+              fragrantica_url
+            )
+          `)
+          .eq('fragrance_id', BODY_MIST_ID)
+          .limit(5000);
+
+        if (!error && data) {
+          const mapped = data.map((d) => ({
+            id: d.id,
+            brand: 'Body Mist',
+            name: cleanDecantName(d.label),
+            size_ml: d.size_ml,
+            price_cents: d.price_cents,
+            fragrance_id: d.fragrance_id,
+            image_url: d.fragrances?.image_url,
+            image_url_transparent: d.fragrances?.image_url_transparent,
+            fragrantica_url: d.fragrances?.fragrantica_url,
+          }));
+
+          setItems(mapped);
+        } else {
+          setItems([]);
+        }
+
+        setLoading(false);
+        return;
+      }
+
       let { data, error } = await supabase
         .from('fragrances')
         .select('id, brand, name, image_url, image_url_transparent, fragrantica_url')
@@ -23,7 +72,6 @@ export default function BrandDetailPage({ params }) {
         .order('name', { ascending: true })
         .limit(5000);
 
-      // 2) If nothing comes back (brand capitalization/spacing quirks), try contains
       if (!error && (!data || data.length === 0)) {
         const fallback = await supabase
           .from('fragrances')
@@ -38,9 +86,8 @@ export default function BrandDetailPage({ params }) {
       if (!error && data) setItems(data || []);
       setLoading(false);
     })();
-  }, [brandParam]);
+  }, [brandParam, isBodyMistPage]);
 
-  // Safety net: sort again on the client in case DB ordering is bypassed somewhere
   const sorted = useMemo(() => {
     return [...(items || [])].sort((a, b) =>
       (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base' })
@@ -49,7 +96,6 @@ export default function BrandDetailPage({ params }) {
 
   return (
     <div className="mx-auto max-w-6xl w-full px-2">
-      {/* Boutique header to match your site */}
       <div className="w-full mb-6">
         <Image
           src="/StephaniesBoutiqueHeader.png"
@@ -63,8 +109,9 @@ export default function BrandDetailPage({ params }) {
 
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl sm:text-2xl font-bold">
-          {brandParam} — {sorted.length} fragrance{sorted.length === 1 ? '' : 's'}
+          {isBodyMistPage ? 'Body Mist' : brandParam} — {sorted.length} option{sorted.length === 1 ? '' : 's'}
         </h1>
+
         <div className="flex gap-3 text-sm">
           <Link href="/brand" className="underline">← Back to Brand Index</Link>
           <Link href="/cart" className="hover:underline">Cart</Link>
@@ -72,6 +119,7 @@ export default function BrandDetailPage({ params }) {
       </div>
 
       {loading && <div>Loading…</div>}
+
       {!loading && !sorted.length && (
         <div className="p-4 border rounded bg-white">No fragrances found for this brand.</div>
       )}
@@ -80,13 +128,16 @@ export default function BrandDetailPage({ params }) {
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {sorted.map((f) => {
             const img = f.image_url_transparent || f.image_url || '/bottle-placeholder.png';
+            const href = isBodyMistPage
+              ? `/fragrance/${BODY_MIST_ID}`
+              : `/fragrance/${f.id}`;
+
             return (
               <li key={f.id} className="group">
                 <Link
-                  href={`/fragrance/${f.id}`}
+                  href={href}
                   className="block rounded-lg bg-white border hover:shadow-sm p-3 text-center"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={img}
                     alt={f.name}
@@ -100,10 +151,19 @@ export default function BrandDetailPage({ params }) {
                       }
                     }}
                   />
+
                   <div className="mt-2 text-xs opacity-70">{f.brand}</div>
                   <div className="text-sm font-medium">{f.name}</div>
+
+                  {isBodyMistPage && (
+                    <div className="mt-1 text-xs opacity-70">
+                      {f.size_ml ? `${f.size_ml}ml` : ''}
+                      {f.price_cents ? ` · $${(f.price_cents / 100).toFixed(2)}` : ''}
+                    </div>
+                  )}
                 </Link>
-                {f.fragrantica_url && (
+
+                {!isBodyMistPage && f.fragrantica_url && (
                   <a
                     href={f.fragrantica_url}
                     target="_blank"
