@@ -7,7 +7,6 @@ import Link from 'next/link';
 const bottleUrl = (f) =>
   f?.image_url_transparent || f?.image_url || '/bottle-placeholder.png';
 
-// Parse `accords` into an array of lowercased names
 function parseAccordNames(accords) {
   try {
     if (typeof accords === 'string') {
@@ -32,10 +31,32 @@ function parseAccordNames(accords) {
   }
 }
 
-// ---------- UI ----------
-function HeaderNav() {
-  
+function getSearchTerms(input) {
+  return (input || '')
+    .toLowerCase()
+    .replace(/[,+]/g, ' ')
+    .split(/\s+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .filter((x) => !['and', '&'].includes(x));
 }
+
+function fragranceSearchText(f) {
+  const acc = parseAccordNames(f.accords).join(' ');
+  const notesText = (f.notes ?? '').toString();
+
+  return [
+    f.brand || '',
+    f.name || '',
+    acc,
+    notesText,
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+// ---------- UI ----------
+function HeaderNav() {}
 
 function SearchBar({ value, onChange, onReload }) {
   return (
@@ -43,7 +64,7 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by brand, fragrance, notes, or accords…"
+        placeholder='Search multiple terms, like "woody and floral and vanilla"…'
         className="w-full rounded-xl border px-4 py-2 bg-white text-black"
       />
       <button
@@ -64,7 +85,6 @@ function Card({ f }) {
     <div className="rounded-2xl border p-3 shadow-sm bg-white">
       <div className="flex items-start gap-3">
         <div className="w-16 h-20 rounded overflow-hidden border bg-gray-100 shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={img}
             alt={`${f.brand || ''} ${f.name || ''}`}
@@ -89,14 +109,14 @@ function Card({ f }) {
           <div className="font-medium text-black">{f.name || '—'}</div>
 
           <div className="mt-3">
-           <Link
-  href={href}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="text-sm rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-100 text-black"
->
-  Info
-</Link>
+            <Link
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-100 text-black"
+            >
+              Info
+            </Link>
           </div>
         </div>
       </div>
@@ -116,6 +136,7 @@ export default function NotesPage() {
 
       const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
       if (!base || !anon) {
         setLoadError('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not set.');
         return;
@@ -131,10 +152,12 @@ export default function NotesPage() {
           headers: { apikey: anon, Authorization: `Bearer ${anon}` },
           cache: 'no-store',
         });
+
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`);
         }
+
         const data = await res.json();
         setRows(Array.isArray(data) ? data : []);
       } catch (err) {
@@ -146,17 +169,12 @@ export default function NotesPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    const s = (q || '').toLowerCase();
-    if (!s) return rows;
+    const terms = getSearchTerms(q);
+    if (terms.length === 0) return rows;
+
     return rows.filter((f) => {
-      const acc = parseAccordNames(f.accords).join(' ');
-      const notesText = (f.notes ?? '').toString().toLowerCase();
-      return (
-        (f.brand || '').toLowerCase().includes(s) ||
-        (f.name || '').toLowerCase().includes(s) ||
-        acc.includes(s) ||
-        notesText.includes(s)
-      );
+      const haystack = fragranceSearchText(f);
+      return terms.every((term) => haystack.includes(term));
     });
   }, [rows, q]);
 
@@ -182,7 +200,7 @@ export default function NotesPage() {
 
         {filtered.length === 0 ? (
           <div className="p-4 border rounded bg-white text-black text-sm opacity-80">
-            No matches. Try searching by brand, fragrance name, notes, or accord keywords.
+            No matches. Try searching multiple keywords, like woody and floral, vanilla amber, or fruity musk.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 pt-2">
