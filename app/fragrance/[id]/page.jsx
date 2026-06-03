@@ -93,7 +93,7 @@ export default function FragranceDetail({ params }) {
           .from('decants')
           .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
           .eq('fragrance_id', id)
-          .order('size_ml', { ascending: true });
+          .order('label', { ascending: true });
 
         if (!de && Array.isArray(ds)) {
           const mapped = ds.map((d) => ({
