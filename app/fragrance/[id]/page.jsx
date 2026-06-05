@@ -910,7 +910,7 @@ export default function FragranceDetail({ params }) {
             These are fragrances from my personal collection. I'm selling decants of some of each
             fragrance to earn some extra money. I don't do this strictly for profit, meaning I don't
             buy fragrances just to sell them, so my prices will be lower than other decant sites. 
-            <strong>If you find a lower price for these decants</strong>, send me a message through the &apos;Contact Me&apos; link at the top of the page, and I will try to match
+             <strong>If you find a lower price for these decants</strong>, send me a message through the &apos;Contact Me&apos; link at the top of the page, and I will try to match
             the price.
           </div>
         </div>
