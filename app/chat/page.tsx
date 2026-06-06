@@ -2,15 +2,16 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 export default function ChatPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<string | null>(null);
 
-  async function onSubmit(e) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setResult(null);
 
@@ -20,13 +21,16 @@ export default function ChatPage() {
     }
 
     setBusy(true);
+
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, message }),
       });
+
       const j = await res.json();
+
       if (!res.ok) {
         setResult(j?.error || "Could not send your message.");
       } else {
@@ -35,7 +39,7 @@ export default function ChatPage() {
         setEmail("");
         setMessage("");
       }
-    } catch (err) {
+    } catch (err: any) {
       setResult(err?.message || "Something went wrong.");
     } finally {
       setBusy(false);
@@ -45,13 +49,15 @@ export default function ChatPage() {
   return (
     <main className="min-h-screen bg-[#fdfcf9] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl bg-white border rounded-2xl shadow p-6">
-        <h1 className="text-2xl font-bold text-center">Send me a message</h1>
+        <h1 className="text-2xl font-bold text-center">
+          Send me a message
+        </h1>
 
         <p className="text-center text-sm text-gray-600 mt-1">
           Or email me directly at STEPHANIE@FRAGRANTIQUE.NET.
         </p>
 
-        {/* ✨ NEW SOCIAL BUTTONS */}
+        {/* Social Buttons */}
         <div className="mt-5 flex justify-center gap-3 flex-wrap">
 
           {/* TikTok */}
@@ -61,7 +67,10 @@ export default function ChatPage() {
             rel="noopener noreferrer"
             className="social-pill group"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-black fill-current">
+            <svg
+              viewBox="0 0 24 24"
+              className="w-5 h-5 text-black fill-current"
+            >
               <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.68h-3.274v13.37a2.96 2.96 0 1 1-2.96-2.96c.244 0 .48.03.707.086V9.157a6.236 6.236 0 0 0-.707-.04A6.233 6.233 0 1 0 15.818 15.35V8.568a8.048 8.048 0 0 0 4.71 1.52V6.686h-.939Z" />
             </svg>
             <span>TikTok</span>
@@ -76,15 +85,24 @@ export default function ChatPage() {
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5">
               <defs>
-                <linearGradient id="contactIG" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#feda75"/>
-                  <stop offset="35%" stopColor="#fa7e1e"/>
-                  <stop offset="65%" stopColor="#d62976"/>
-                  <stop offset="85%" stopColor="#962fbf"/>
-                  <stop offset="100%" stopColor="#4f5bd5"/>
+                <linearGradient
+                  id="contactIG"
+                  x1="0%"
+                  y1="100%"
+                  x2="100%"
+                  y2="0%"
+                >
+                  <stop offset="0%" stopColor="#feda75" />
+                  <stop offset="35%" stopColor="#fa7e1e" />
+                  <stop offset="65%" stopColor="#d62976" />
+                  <stop offset="85%" stopColor="#962fbf" />
+                  <stop offset="100%" stopColor="#4f5bd5" />
                 </linearGradient>
               </defs>
-              <path fill="url(#contactIG)" d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2Z"/>
+              <path
+                fill="url(#contactIG)"
+                d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2Z"
+              />
             </svg>
             <span>Instagram</span>
           </a>
@@ -96,17 +114,56 @@ export default function ChatPage() {
             rel="noopener noreferrer"
             className="social-pill group"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#FF0000">
-              <path d="M23.498 6.186a2.997 2.997 0 0 0-2.11-2.12C19.505 3.5 12 3.5 12 3.5s-7.505 0-9.388.566a2.997 2.997 0 0 0-2.11 2.12C0 8.08 0 12 0 12s0 3.92.502 5.814a2.997 2.997 0 0 0 2.11 2.12C4.495 20.5 12 20.5 12 20.5s7.505 0 9.388-.566a2.997 2.997 0 0 0 2.11-2.12C24 15.92 24 12 24 12s0-3.92-.502-5.814ZM9.75 15.568V8.432L15.818 12 9.75 15.568Z"/>
+            <svg
+              viewBox="0 0 24 24"
+              className="w-5 h-5"
+              fill="#FF0000"
+            >
+              <path d="M23.498 6.186a2.997 2.997 0 0 0-2.11-2.12C19.505 3.5 12 3.5 12 3.5s-7.505 0-9.388.566a2.997 2.997 0 0 0-2.11 2.12C0 8.08 0 12 0 12s0 3.92.502 5.814a2.997 2.997 0 0 0 2.11 2.12C4.495 20.5 12 20.5 12 20.5s7.505 0 9.388-.566a2.997 2.997 0 0 0 2.11-2.12C24 15.92 24 12 24 12s0-3.92-.502-5.814ZM9.75 15.568V8.432L15.818 12 9.75 15.568Z" />
             </svg>
             <span>YouTube</span>
           </a>
 
         </div>
 
+        {/* Stephanie Section */}
+        <div className="mt-8 bg-[#fdf8ef] border border-[#ead9b8] rounded-2xl p-5">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="shrink-0">
+              <Image
+                src="/meWaving.png"
+                alt="Stephanie from Fragrantique"
+                width={220}
+                height={220}
+                priority
+                className="rounded-2xl"
+              />
+            </div>
+
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl font-bold text-[#182A39]">
+                Hi, I'm Stephanie!
+              </h2>
+
+              <p className="mt-3 text-gray-700 leading-relaxed">
+                Thank you for visiting Fragrantique. Whether you have a
+                question about fragrances, body mists, decants, an order,
+                or simply want to talk perfume, I'd love to hear from you.
+              </p>
+
+              <p className="mt-3 text-gray-700 leading-relaxed">
+                Feel free to send me a message using the form below and
+                I'll get back to you as soon as I can.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Your name</label>
+            <label className="block text-sm font-medium mb-1">
+              Your name
+            </label>
             <input
               className="w-full border rounded-lg px-3 py-2"
               value={name}
@@ -116,7 +173,9 @@ export default function ChatPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Your email</label>
+            <label className="block text-sm font-medium mb-1">
+              Your email
+            </label>
             <input
               type="email"
               className="w-full border rounded-lg px-3 py-2"
@@ -127,7 +186,9 @@ export default function ChatPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Message</label>
+            <label className="block text-sm font-medium mb-1">
+              Message
+            </label>
             <textarea
               className="w-full border rounded-lg px-3 py-2 h-36"
               value={message}
@@ -152,7 +213,6 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* ✨ Styles */}
       <style jsx global>{`
         .social-pill {
           display: inline-flex;
@@ -164,14 +224,14 @@ export default function ChatPage() {
           background: white;
           font-size: 14px;
           font-weight: 500;
-          color: #182A39;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+          color: #182a39;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
           transition: all 0.2s ease;
         }
 
         .social-pill:hover {
           transform: translateY(-2px);
-          box-shadow: 0 0 16px rgba(217,195,154,0.4);
+          box-shadow: 0 0 16px rgba(217, 195, 154, 0.4);
         }
       `}</style>
     </main>
