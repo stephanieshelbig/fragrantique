@@ -34,6 +34,7 @@ export default function FragranceDetail({ params }) {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [imageUrl2, setImageUrl2] = useState('');
   const [imageUrl3, setImageUrl3] = useState('');
+  const [imageUrl4, setImageUrl4] = useState('');
 
   const [selectedId, setSelectedId] = useState('');
   const [qty, setQty] = useState(1);
@@ -78,7 +79,7 @@ export default function FragranceDetail({ params }) {
       const { data: f } = await supabase
         .from('fragrances')
         .select(
-          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, wikiparfum_url, notes'
+          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, wikiparfum_url, notes'
         )
         .eq('id', id)
         .maybeSingle();
@@ -86,24 +87,22 @@ export default function FragranceDetail({ params }) {
       setFrag(f || null);
       setImageUrl2(f?.image_url_2 || '');
       setImageUrl3(f?.image_url_3 || '');
+      setImageUrl4(f?.image_url_4 || '');
       setCurrentImage(0);
 
       try {
-  let decantsQuery = supabase
-    .from('decants')
-    .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
-    .eq('fragrance_id', id);
+        let decantsQuery = supabase
+          .from('decants')
+          .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
+          .eq('fragrance_id', id);
 
-  // Body Mist page gets alphabetical sorting.
-  // Everything else stays sorted by size.
-  if (id === '27bfb4b1-4f99-4e15-903d-bd641ed442fe') {
-    decantsQuery = decantsQuery.order('label', { ascending: true });
-  } else {
-    decantsQuery = decantsQuery.order('size_ml', { ascending: true });
-  }
+        if (id === '27bfb4b1-4f99-4e15-903d-bd641ed442fe') {
+          decantsQuery = decantsQuery.order('label', { ascending: true });
+        } else {
+          decantsQuery = decantsQuery.order('size_ml', { ascending: true });
+        }
 
-  const { data: ds, error: de } = await decantsQuery;
-
+        const { data: ds, error: de } = await decantsQuery;
 
         if (!de && Array.isArray(ds)) {
           const mapped = ds.map((d) => ({
@@ -146,6 +145,12 @@ export default function FragranceDetail({ params }) {
         ? {
             src: frag.image_url_3_saved || frag.image_url_3,
             label: 'Photo 3',
+          }
+        : null,
+      frag?.image_url_4
+        ? {
+            src: frag.image_url_4,
+            label: 'Photo 4',
           }
         : null,
     ].filter(Boolean);
@@ -227,6 +232,7 @@ export default function FragranceDetail({ params }) {
       .update({
         image_url_2: imageUrl2.trim() || null,
         image_url_3: imageUrl3.trim() || null,
+        image_url_4: imageUrl4.trim() || null,
       })
       .eq('id', frag.id);
 
@@ -241,6 +247,7 @@ export default function FragranceDetail({ params }) {
             ...prev,
             image_url_2: imageUrl2.trim() || null,
             image_url_3: imageUrl3.trim() || null,
+            image_url_4: imageUrl4.trim() || null,
           }
         : prev
     );
@@ -578,7 +585,7 @@ export default function FragranceDetail({ params }) {
                   Additional fragrance photos
                 </div>
                 <div className="text-xs text-gray-500">
-                  Paste 1 or 2 extra image URLs for the carousel.
+                  Paste extra image URLs for the carousel.
                 </div>
               </div>
 
@@ -594,6 +601,13 @@ export default function FragranceDetail({ params }) {
                 placeholder="Image URL 3"
                 value={imageUrl3}
                 onChange={(e) => setImageUrl3(e.target.value)}
+              />
+
+              <input
+                className="w-full rounded-xl border border-[#eadfcb] px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
+                placeholder="Image URL 4"
+                value={imageUrl4}
+                onChange={(e) => setImageUrl4(e.target.value)}
               />
 
               <button
@@ -910,8 +924,9 @@ export default function FragranceDetail({ params }) {
             These are fragrances from my personal collection. I'm selling decants of some of each
             fragrance to earn some extra money. I don't do this strictly for profit, meaning I don't
             buy fragrances just to sell them, so my prices will be lower than other decant sites.
-           <strong> If you find a lower price for these decants</strong>, send me a message through the &apos;Contact Me&apos; link at the top of the page, and I will try to match
-            the price.
+            <strong> If you find a lower price for these decants</strong>, send me a message through
+            the &apos;Contact Me&apos; link at the top of the page, and I will try to match the
+            price.
           </div>
         </div>
       </div>
