@@ -54,7 +54,7 @@ export default function ChatPage() {
         </h1>
 
         <p className="text-center text-sm text-gray-600 mt-1">
-          Or email me directly at STEPHANIE@FRAGRANTIQUE.NET.
+          Or email me directly at <strong>STEPHANIE@FRAGRANTIQUE.NET</strong>.
         </p>
 
         {/* Social Buttons */}
@@ -142,7 +142,7 @@ export default function ChatPage() {
 
             <div className="text-center md:text-left">
               <h2 className="text-2xl font-bold text-[#182A39]">
-                Hi!!
+                Hiiiii!!! 
               </h2>
 
               <p className="mt-3 text-gray-700 leading-relaxed">
