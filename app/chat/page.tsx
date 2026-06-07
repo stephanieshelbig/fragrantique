@@ -127,14 +127,14 @@ export default function ChatPage() {
         </div>
 
         {/* Stephanie Section */}
-        <div className="mt-8 bg-[#fdf8ef] border border-[#ead9b8] rounded-2xl p-5">
-          <div className="flex flex-col md:flex-row items-center gap-6">
+        <div className="mt-8 bg-white border border-[#ead9b8] rounded-2xl p-5 shadow-sm">
+          <div className="flex flex-col md:flex-row items-center gap-8">
             <div className="shrink-0">
               <Image
                 src="/meWaving.png"
                 alt="Stephanie from Fragrantique"
-                width={220}
-                height={220}
+                width={300}
+                height={300}
                 priority
                 className="rounded-2xl"
               />
