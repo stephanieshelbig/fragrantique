@@ -9,7 +9,7 @@ export default function AddFragrance() {
     brand: '',
     image_url: 'https://fimgs.net/mdimg/perfume-thumbs/375x500.XXXXX.2x.jpg',
     image_url_2: 'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
-    image_url_3: '',
+    image_url_3: 'https://www.fragrantique.net/DecantSizing.png',
     image_url_4: '',
     fragrantica_url: '',
     wikiparfum_url: 'https://www.wikiperfume.com/en/fragrances/fragrance-name',
@@ -74,7 +74,7 @@ export default function AddFragrance() {
           'https://fimgs.net/mdimg/perfume-thumbs/375x500.XXXXX.2x.jpg',
         image_url_2:
           'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
-        image_url_3: '',
+        image_url_3: 'https://www.fragrantique.net/DecantSizing.png',
         image_url_4: '',
         fragrantica_url: '',
         wikiparfum_url:
