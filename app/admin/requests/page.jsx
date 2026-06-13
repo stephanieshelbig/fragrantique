@@ -277,7 +277,11 @@ export default function AdminRequestsPage() {
 
       setStatusMessage(
         result.added_to_site
-          ? 'Request marked as added to site.'
+          ? result.email_sent
+            ? 'Request marked as added to site. Email sent.'
+            : `Request marked as added to site, but email did not send. ${
+                result.email_error || ''
+              }`
           : 'Request unmarked as added to site.'
       );
     } catch (error) {
