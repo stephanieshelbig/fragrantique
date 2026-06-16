@@ -300,7 +300,7 @@ export default function FragranceDetail({ params }) {
       }
 
       if (q > remaining) {
-        setMsg(`Only ${remaining} left for "${opt.label}" (you already have ${alreadyInCart} in your cart).`);
+        setMsg(`Max ${remaining} for "${opt.label}" (you already have ${alreadyInCart} in your cart).`);
         return;
       }
     }
