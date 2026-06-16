@@ -83,8 +83,12 @@ export default function RequestsPage() {
       const result = await response.json();
 
       if (response.ok) {
-        setRequests(result.requests || []);
-      }
+  const sorted = (result.requests || []).sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+
+  setRequests(sorted);
+}
     } catch (error) {
       console.error(error);
     } finally {
