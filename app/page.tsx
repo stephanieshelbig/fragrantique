@@ -7,7 +7,7 @@ export default function HomePage() {
   return (
     <>
       <main
-        className="min-h-screen flex justify-center px-4 py-12 bg-[#fdfcf9]"
+        className="min-h-screen flex justify-center px-4 py-12 bg-[#2A0347]"
         style={{
           backgroundImage:
             "radial-gradient(circle at top, #f5ebdc 0, #fdfcf9 40%, #fdfcf9 100%), repeating-linear-gradient(45deg, rgba(217,195,154,0.08), rgba(217,195,154,0.08) 6px, transparent 6px, transparent 12px)",
