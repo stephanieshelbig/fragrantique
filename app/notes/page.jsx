@@ -179,7 +179,7 @@ export default function NotesPage() {
   }, [rows, q]);
 
   return (
-    <div className="min-h-screen bg-[#182A39] text-white">
+    <div className="min-h-screen bg-[#001138] text-white">
       <HeaderNav />
 
       <main className="mx-auto max-w-7xl px-4 pb-20">
