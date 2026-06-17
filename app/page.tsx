@@ -7,13 +7,20 @@ export default function HomePage() {
   return (
     <>
       <main
-        className="min-h-screen flex justify-center px-4 py-12 bg-[#2A0347]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at top, #f5ebdc 0, #fdfcf9 40%, #fdfcf9 100%), repeating-linear-gradient(45deg, rgba(217,195,154,0.08), rgba(217,195,154,0.08) 6px, transparent 6px, transparent 12px)",
-          backgroundBlendMode: "soft-light",
-        }}
-      >
+  className="min-h-screen flex justify-center px-4 py-12 bg-[#1B012F]"
+  style={{
+    backgroundImage: `
+      radial-gradient(circle at top, rgba(217,195,154,0.10), transparent 35%),
+      repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.03),
+        rgba(255,255,255,0.03) 6px,
+        transparent 6px,
+        transparent 12px
+      )
+    `,
+  }}
+>
         <div className="w-full max-w-3xl">
           <div
             className="rounded-3xl border border-[#d9c39a] shadow-xl px-8 py-10 bg-white/95"
