@@ -14,6 +14,26 @@ function normalizeText(str = '') {
     .trim();
 }
 
+function parseFragranceTitle(title = '') {
+  const text = String(title);
+
+  const sizeMatch = text.match(/\(([^)]*?decant[^)]*?)\)/i);
+  const sizeText = sizeMatch ? sizeMatch[1] : '';
+
+  const sizeOnlyMatch = sizeText.match(/(\d+(?:\.\d+)?\s*mL)/i);
+  const size = sizeOnlyMatch ? sizeOnlyMatch[1].replace(/\s+/g, '') : '';
+
+  const cleanName = text
+    .replace(/\([^)]*?decant[^)]*?\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    cleanName,
+    size,
+  };
+}
+
 export default function AdminFragranceSalesPage() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,20 +77,23 @@ export default function AdminFragranceSalesPage() {
 
       for (const item of items) {
         const brand = item.brand || '';
-        const name =
+
+        const rawName =
           item.name ||
           item.fragrance_name ||
           item.title ||
           item.product_name ||
           '';
 
-        const haystack = normalizeText(`${brand} ${name}`);
+        const haystack = normalizeText(`${brand} ${rawName}`);
 
         if (!haystack.includes(q)) continue;
 
+        const parsed = parseFragranceTitle(rawName);
+
         const quantity = Number(item.quantity || item.qty || 1);
 
-        const unitPrice = Number(
+        const rawUnitPrice = Number(
           item.price ||
             item.unit_price ||
             item.decant_price ||
@@ -78,14 +101,17 @@ export default function AdminFragranceSalesPage() {
             0
         );
 
-        const lineTotal =
+        const rawLineTotal =
           Number(
             item.total ||
               item.line_total ||
               item.amount_total ||
               item.subtotal ||
               0
-          ) || unitPrice * quantity;
+          ) || rawUnitPrice * quantity;
+
+        const unitPrice = rawUnitPrice / 100;
+        const lineTotal = rawLineTotal / 100;
 
         matches.push({
           orderId: order.id,
@@ -93,12 +119,11 @@ export default function AdminFragranceSalesPage() {
           buyer:
             order.buyer_name ||
             item.buyer_name ||
-            item.customer_name ||
             order.buyer_email ||
             'Unknown',
           buyerEmail: order.buyer_email,
-          brand,
-          name,
+          fragrance: parsed.cleanName || rawName,
+          size: item.size || item.size_ml || parsed.size || '',
           quantity,
           unitPrice,
           lineTotal,
@@ -112,11 +137,12 @@ export default function AdminFragranceSalesPage() {
   const totals = useMemo(() => {
     return rows.reduce(
       (acc, row) => {
+        acc.orders += 1;
         acc.quantity += row.quantity;
         acc.sales += row.lineTotal;
         return acc;
       },
-      { quantity: 0, sales: 0 }
+      { orders: 0, quantity: 0, sales: 0 }
     );
   }, [rows]);
 
@@ -129,6 +155,7 @@ export default function AdminFragranceSalesPage() {
 
   function dateOnly(date) {
     if (!date) return '';
+
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -146,8 +173,7 @@ export default function AdminFragranceSalesPage() {
         <h1 style={styles.title}>Fragrance Sales Search</h1>
 
         <p style={styles.subtitle}>
-          Search a fragrance to see every matching decant sale, quantity sold,
-          purchase date, buyer, and total sales.
+          Search a fragrance to see every matching decant sale.
         </p>
 
         <form onSubmit={runSearch} style={styles.form}>
@@ -169,6 +195,11 @@ export default function AdminFragranceSalesPage() {
           <>
             <div style={styles.summary}>
               <div style={styles.summaryBox}>
+                <strong># Orders</strong>
+                <span>{totals.orders}</span>
+              </div>
+
+              <div style={styles.summaryBox}>
                 <strong>Total Quantity Sold</strong>
                 <span>{totals.quantity}</span>
               </div>
@@ -185,6 +216,7 @@ export default function AdminFragranceSalesPage() {
                   <tr>
                     <th style={styles.th}>Date</th>
                     <th style={styles.th}>Fragrance</th>
+                    <th style={styles.th}>Size</th>
                     <th style={styles.th}>Buyer</th>
                     <th style={styles.th}>Qty</th>
                     <th style={styles.th}>Price</th>
@@ -197,14 +229,13 @@ export default function AdminFragranceSalesPage() {
                     <tr key={`${row.orderId}-${i}`}>
                       <td style={styles.td}>{dateOnly(row.date)}</td>
 
-                      <td style={styles.td}>
-                        <strong>{row.brand}</strong>
-                        <br />
-                        {row.name}
-                      </td>
+                      <td style={styles.td}>{row.fragrance}</td>
+
+                      <td style={styles.td}>{row.size || '—'}</td>
 
                       <td style={styles.td}>
                         {row.buyer}
+
                         {row.buyerEmail && row.buyerEmail !== row.buyer && (
                           <>
                             <br />
@@ -222,9 +253,10 @@ export default function AdminFragranceSalesPage() {
 
                 <tfoot>
                   <tr>
-                    <td style={styles.footerTd} colSpan="3">
+                    <td colSpan="4" style={styles.footerTd}>
                       Totals
                     </td>
+
                     <td style={styles.footerTd}>{totals.quantity}</td>
                     <td style={styles.footerTd}></td>
                     <td style={styles.footerTd}>{money(totals.sales)}</td>
@@ -251,7 +283,7 @@ const styles = {
     fontFamily: 'Georgia, serif',
   },
   card: {
-    maxWidth: 1100,
+    maxWidth: 1250,
     margin: '0 auto',
     background: '#fff',
     border: '1px solid #eadfd4',
@@ -271,7 +303,6 @@ const styles = {
   },
   subtitle: {
     color: '#76685c',
-    lineHeight: 1.5,
   },
   form: {
     display: 'flex',
@@ -291,21 +322,18 @@ const styles = {
     border: 'none',
     background: '#b08a57',
     color: '#fff',
-    fontSize: 16,
     cursor: 'pointer',
-    whiteSpace: 'nowrap',
   },
   error: {
     color: '#a33',
   },
   empty: {
     color: '#76685c',
-    marginTop: 18,
   },
   summary: {
     display: 'flex',
     gap: 18,
-    marginBottom: 20,
+    marginBottom: 24,
     flexWrap: 'wrap',
   },
   summaryBox: {
@@ -313,11 +341,10 @@ const styles = {
     border: '1px solid #eadfd4',
     borderRadius: 16,
     padding: '18px 22px',
-    minWidth: 220,
+    minWidth: 200,
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
-    color: '#2f241c',
   },
   tableWrap: {
     overflowX: 'auto',
@@ -325,27 +352,23 @@ const styles = {
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    fontFamily: 'Arial, sans-serif',
   },
   th: {
     textAlign: 'left',
-    padding: '12px',
+    padding: 12,
+    background: '#f3ede8',
     borderBottom: '2px solid #d8c8b7',
-    color: '#2f241c',
-    background: '#fbf7f2',
   },
   td: {
-    padding: '12px',
+    padding: 12,
     borderBottom: '1px solid #eadfd4',
     verticalAlign: 'top',
-    color: '#3a3028',
   },
   footerTd: {
-    padding: '14px 12px',
-    borderTop: '2px solid #d8c8b7',
+    padding: 14,
     fontWeight: 'bold',
-    color: '#2f241c',
-    background: '#fbf7f2',
+    background: '#f7f2ee',
+    borderTop: '2px solid #d8c8b7',
   },
   small: {
     color: '#76685c',
