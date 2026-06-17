@@ -25,7 +25,7 @@ export default function AdminFragranceSalesPage() {
 
     const { data, error } = await supabase
       .from('orders')
-      .select('id, created_at, buyer_email, buyer_name, customer_name, items')
+      .select('id, created_at, buyer_email, buyer_name, buyer_name, items')
       .order('created_at', { ascending: false })
       .limit(5000);
 
@@ -61,7 +61,7 @@ export default function AdminFragranceSalesPage() {
           date: order.created_at,
           buyer:
             order.buyer_name ||
-            order.customer_name ||
+            order.buyer_name ||
             item.buyer_name ||
             order.buyer_email ||
             'Unknown',
