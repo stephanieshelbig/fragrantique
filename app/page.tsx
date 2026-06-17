@@ -34,7 +34,7 @@ export default function HomePage() {
               <h1 className="text-3xl md:text-5xl font-semibold tracking-wide text-[#182A39]">
                 Welcome to Fragrantique
               </h1>
-              <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
+              <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
                 Thank you so much for viewing my page! I have a large fragrance collection,
                 and I sell decants of it to make some extra money. Click one
                 of the buttons below to start browsing my collection. Feel free to contact me
