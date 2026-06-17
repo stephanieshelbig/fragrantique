@@ -1,26 +1,25 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
   return (
     <>
       <main
-  className="min-h-screen flex justify-center px-4 py-12 bg-[#1B012F]"
-  style={{
-    backgroundImage: `
-      radial-gradient(circle at top, rgba(217,195,154,0.10), transparent 35%),
-      repeating-linear-gradient(
-        45deg,
-        rgba(255,255,255,0.03),
-        rgba(255,255,255,0.03) 6px,
-        transparent 6px,
-        transparent 12px
-      )
-    `,
-  }}
->
+        className="min-h-screen flex justify-center px-4 py-12 bg-[#1B012F]"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at top, rgba(217,195,154,0.10), transparent 35%),
+            repeating-linear-gradient(
+              45deg,
+              rgba(255,255,255,0.03),
+              rgba(255,255,255,0.03) 6px,
+              transparent 6px,
+              transparent 12px
+            )
+          `,
+        }}
+      >
         <div className="w-full max-w-3xl">
           <div
             className="rounded-3xl border border-[#d9c39a] shadow-xl px-8 py-10 bg-white/95"
@@ -30,27 +29,9 @@ export default function HomePage() {
               backgroundBlendMode: "soft-light",
             }}
           >
-            {/* Logo */}
-            <div className="flex justify-center mb-6">
-              <div
-                className="rounded-full border border-[#e3cfaa] bg-white/80 shadow-md px-6 py-4 transform transition-transform duration-700 hover:scale-105 hover:shadow-2xl"
-                style={{
-                  animation: "floatLogo 6s ease-in-out infinite, logoGlow 6s ease-in-out infinite",
-                }}
-              >
-                <Image
-                  src="/Logo4.png"
-                  alt="Fragrantique Logo"
-                  width={190}
-                  height={80}
-                  priority
-                />
-              </div>
-            </div>
-
             {/* Text */}
             <div className="text-center space-y-4">
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-wide text-[#182A39]">
+              <h1 className="text-3xl md:text-5xl font-semibold tracking-wide text-[#182A39]">
                 Welcome to Fragrantique
               </h1>
               <p className="text-base md:text-lg text-[#182A39]/90 leading-relaxed">
@@ -146,15 +127,12 @@ export default function HomePage() {
               {/* Fragrantique AI */}
               <Link href="/fragrantique-ai">
                 <div className="group relative overflow-hidden flex items-center gap-5 rounded-2xl border border-[#d9c39a] bg-gradient-to-br from-[#fff7ec] to-[#f7e8d4] px-6 py-5 shadow-md hover:shadow-[0_0_35px_rgba(217,195,154,0.9)] hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-                  {/* Glow accent */}
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_center,rgba(217,195,154,0.25),transparent_70%)]" />
 
-                  {/* Icon */}
                   <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#fff1d6] to-[#e7cfa2] shadow-inner text-xl">
                     🤖
                   </div>
 
-                  {/* Text */}
                   <div className="relative z-10">
                     <div className="text-lg md:text-xl font-semibold text-[#182A39] tracking-wide">
                       Fragrantique AI
@@ -202,7 +180,6 @@ export default function HomePage() {
 
               {/* Social Buttons */}
               <div className="flex flex-wrap justify-center gap-3 -mt-1">
-                {/* TikTok */}
                 <a
                   href="https://www.tiktok.com/@fragrantique.net"
                   target="_blank"
@@ -221,7 +198,6 @@ export default function HomePage() {
                   <span className="text-sm font-medium text-[#182A39]">TikTok</span>
                 </a>
 
-                {/* Instagram */}
                 <a
                   href="https://www.instagram.com/fragrantique_net"
                   target="_blank"
@@ -251,7 +227,6 @@ export default function HomePage() {
                   <span className="text-sm font-medium text-[#182A39]">Instagram</span>
                 </a>
 
-                {/* YouTube */}
                 <a
                   href="https://www.youtube.com/@fragrantique"
                   target="_blank"
@@ -274,25 +249,6 @@ export default function HomePage() {
           </div>
         </div>
       </main>
-
-      <style jsx global>{`
-        @keyframes floatLogo {
-          0% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
-          100% { transform: translateY(0); }
-        }
-
-        @keyframes logoGlow {
-          0%,100% {
-            box-shadow: 0 10px 24px rgba(0,0,0,0.08),
-            0 0 0 0 rgba(217,195,154,0.4);
-          }
-          50% {
-            box-shadow: 0 14px 36px rgba(0,0,0,0.12),
-            0 0 18px 4px rgba(217,195,154,0.6);
-          }
-        }
-      `}</style>
     </>
   );
 }
