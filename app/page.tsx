@@ -31,7 +31,7 @@ export default function HomePage() {
           >
             {/* Text */}
             <div className="text-center space-y-4">
-              <h1 className="font-[family:var(--font-cormorant)] text-2xl md:text-6xl font-medium tracking-[0.08em] text-[#182A39]">
+              <h1 className="font-[family:var(--font-cormorant)] text-2xl md:text-2xl font-medium tracking-[0.08em] text-[#182A39]">
                 Welcome to Fragrantique
               </h1>
               <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
