@@ -8,8 +8,8 @@ export default function AddFragrance() {
     name: '',
     brand: '',
     image_url: 'https://fimgs.net/mdimg/perfume-thumbs/375x500.XXXXX.2x.jpg',
-    image_url_2: 'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
-    image_url_3: '',
+    image_url_2: 'https://www.fragrantique.net/',
+    image_url_3: 'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
     image_url_4: 'https://www.fragrantique.net/DecantSizing.png',
     fragrantica_url: '',
     wikiparfum_url: 'https://www.wikiperfume.com/en/fragrances/fragrance-name',
@@ -73,8 +73,8 @@ export default function AddFragrance() {
         image_url:
           'https://fimgs.net/mdimg/perfume-thumbs/375x500.XXXXX.2x.jpg',
         image_url_2:
-          'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
-        image_url_3: '',
+          'https://www.fragrantique.net/xxx.png',
+        image_url_3: 'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
         image_url_4: 'https://www.fragrantique.net/DecantSizing.png',
         fragrantica_url: '',
         wikiparfum_url:
@@ -116,14 +116,14 @@ export default function AddFragrance() {
 
       <input
         className="w-full border rounded-lg px-3 py-2"
-        placeholder="Image URL 2 (Fragrance Card)"
+        placeholder="Image URL 2 (ChatGPT card)"
         value={form.image_url_2}
         onChange={(e) => update('image_url_2', e.target.value)}
       />
 
       <input
         className="w-full border rounded-lg px-3 py-2"
-        placeholder="Image URL 3"
+        placeholder="Image URL 3 (Fragrance Card)"
         value={form.image_url_3}
         onChange={(e) => update('image_url_3', e.target.value)}
       />
