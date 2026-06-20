@@ -25,10 +25,10 @@ export default function HeaderBar() {
           <Link href="/muskAnosmia" className="hover:underline">
             Musk Anosmia
           </Link>
-          <Link href="/requests" className="hover:underline">
+          <Link href="/fragrance/27bfb4b1-4f99-4e15-903d-bd641ed442fe" className="hover:underline">
             🆕Body Mists
           </Link>
-          <Link href="/fragrance/27bfb4b1-4f99-4e15-903d-bd641ed442fe" className="hover:underline">
+          <Link href="/reviews" className="hover:underline">
             🥰Reviews
           </Link>
           <Link href="/chat" className="hover:underline">
