@@ -79,9 +79,9 @@ function Card({ f }) {
   const accords = parseAccordNames(f.accords).slice(0, 3);
 
   return (
-    <div className="rounded-2xl border p-3 shadow-sm bg-white">
-      <div className="flex items-start gap-3">
-        <div className="w-16 h-20 rounded overflow-hidden border bg-gray-100 shrink-0">
+    <div className="rounded-2xl border p-4 shadow-sm bg-white min-h-[210px]">
+      <div className="flex items-start gap-5">
+        <div className="w-24 h-32 rounded overflow-hidden border bg-gray-100 shrink-0">
           <img
             src={img}
             alt={`${f.brand || ''} ${f.name || ''}`}
@@ -98,22 +98,27 @@ function Card({ f }) {
           />
         </div>
 
-        <div className="flex-1">
-          <div className="font-medium text-black">{f.brand || '—'}</div>
-          <div className="font-medium text-black">{f.name || '—'}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-black text-lg leading-snug">
+            {f.brand || '—'}
+          </div>
+
+          <div className="font-semibold text-black text-lg leading-snug mt-1">
+            {f.name || '—'}
+          </div>
 
           {accords.length > 0 && (
-            <div className="mt-1 text-sm text-gray-600">
+            <div className="mt-2 text-base text-gray-600 leading-snug">
               {accords.join(', ')}
             </div>
           )}
 
-          <div className="mt-3">
+          <div className="mt-4">
             <Link
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-100 text-black"
+              className="text-sm rounded-lg border px-4 py-2 bg-white hover:bg-gray-100 text-black inline-block"
             >
               Info
             </Link>
@@ -203,7 +208,7 @@ export default function NotesPage() {
             No matches. Try searching multiple keywords, like woody and floral, vanilla amber, or fruity musk.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pt-2">
             {filtered.map((f) => (
               <Card key={f.id} f={f} />
             ))}
