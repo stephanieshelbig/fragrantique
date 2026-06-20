@@ -56,7 +56,7 @@ function HeaderNav() {}
 
 function SearchBar({ value, onChange, onReload }) {
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-6 pb-4 flex items-center gap-3">
+    <div className="mx-auto max-w-[1800px] px-4 pt-6 pb-4 flex items-center gap-3">
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -79,9 +79,14 @@ function Card({ f }) {
   const accords = parseAccordNames(f.accords).slice(0, 3);
 
   return (
-    <div className="rounded-2xl border p-4 shadow-sm bg-white min-h-[210px]">
-      <div className="flex items-start gap-5">
-        <div className="w-24 h-32 rounded overflow-hidden border bg-gray-100 shrink-0">
+    <Link
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded-2xl border p-4 shadow-sm bg-white min-h-[180px] hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-24 h-28 rounded overflow-hidden border bg-gray-100 shrink-0">
           <img
             src={img}
             alt={`${f.brand || ''} ${f.name || ''}`}
@@ -99,33 +104,22 @@ function Card({ f }) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-black text-lg leading-snug">
+          <div className="font-semibold text-black text-lg leading-tight">
             {f.brand || '—'}
           </div>
 
-          <div className="font-semibold text-black text-lg leading-snug mt-1">
+          <div className="font-semibold text-black text-lg leading-tight mt-1">
             {f.name || '—'}
           </div>
 
           {accords.length > 0 && (
-            <div className="mt-2 text-base text-gray-600 leading-snug">
+            <div className="mt-2 text-sm text-gray-500 leading-snug">
               {accords.join(', ')}
             </div>
           )}
-
-          <div className="mt-4">
-            <Link
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm rounded-lg border px-4 py-2 bg-white hover:bg-gray-100 text-black inline-block"
-            >
-              Info
-            </Link>
-          </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -187,16 +181,16 @@ export default function NotesPage() {
     <div className="min-h-screen bg-[#2A0347] text-white">
       <HeaderNav />
 
-      <main className="mx-auto max-w-7xl px-4 pb-20">
+      <main className="mx-auto max-w-[1800px] px-4 pb-20">
         <SearchBar value={q} onChange={setQ} onReload={() => location.reload()} />
 
         {loadError && (
-          <div className="mx-auto max-w-7xl mt-2 mb-4 rounded-lg border bg-red-200 px-3 py-2 text-xs text-red-900">
+          <div className="mx-auto max-w-[1800px] mt-2 mb-4 rounded-lg border bg-red-200 px-3 py-2 text-xs text-red-900">
             {loadError}
           </div>
         )}
 
-        <div className="mx-auto max-w-7xl mt-2 mb-4 flex items-center justify-between text-sm text-white/70">
+        <div className="mx-auto max-w-[1800px] mt-2 mb-4 flex items-center justify-between text-sm text-white/70">
           <div>
             {filtered.length} result{filtered.length === 1 ? '' : 's'}
           </div>
@@ -208,7 +202,7 @@ export default function NotesPage() {
             No matches. Try searching multiple keywords, like woody and floral, vanilla amber, or fruity musk.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 pt-2">
             {filtered.map((f) => (
               <Card key={f.id} f={f} />
             ))}
