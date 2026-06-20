@@ -14,17 +14,20 @@ function parseAccordNames(accords) {
       if ((s.startsWith('[') && s.endsWith(']')) || (s.startsWith('{') && s.endsWith('}'))) {
         return parseAccordNames(JSON.parse(s));
       }
-      return s.split(/[,\|]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+      return s.split(/[,\|]/).map((x) => x.trim()).filter(Boolean);
     }
+
     if (Array.isArray(accords)) {
       return accords
         .map((x) => (typeof x === 'string' ? x : x?.name))
         .filter(Boolean)
-        .map((n) => String(n).toLowerCase().trim());
+        .map((n) => String(n).trim());
     }
+
     if (accords && typeof accords === 'object' && 'name' in accords) {
-      return [String(accords.name).toLowerCase().trim()];
+      return [String(accords.name).trim()];
     }
+
     return [];
   } catch {
     return [];
@@ -45,14 +48,7 @@ function fragranceSearchText(f) {
   const acc = parseAccordNames(f.accords).join(' ');
   const notesText = (f.notes ?? '').toString();
 
-  return [
-    f.brand || '',
-    f.name || '',
-    acc,
-    notesText,
-  ]
-    .join(' ')
-    .toLowerCase();
+  return [f.brand || '', f.name || '', acc, notesText].join(' ').toLowerCase();
 }
 
 // ---------- UI ----------
@@ -80,6 +76,7 @@ function SearchBar({ value, onChange, onReload }) {
 function Card({ f }) {
   const img = bottleUrl(f);
   const href = `/fragrance/${encodeURIComponent(f.id)}`;
+  const accords = parseAccordNames(f.accords).slice(0, 3);
 
   return (
     <div className="rounded-2xl border p-3 shadow-sm bg-white">
@@ -102,11 +99,14 @@ function Card({ f }) {
         </div>
 
         <div className="flex-1">
-          <div className="text-xs text-gray-600">Brand</div>
           <div className="font-medium text-black">{f.brand || '—'}</div>
-
-          <div className="mt-1 text-xs text-gray-600">Fragrance Name</div>
           <div className="font-medium text-black">{f.name || '—'}</div>
+
+          {accords.length > 0 && (
+            <div className="mt-1 text-sm text-gray-600">
+              {accords.join(', ')}
+            </div>
+          )}
 
           <div className="mt-3">
             <Link
