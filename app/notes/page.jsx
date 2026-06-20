@@ -208,7 +208,7 @@ export default function NotesPage() {
             No matches. Try searching multiple keywords, like woody and floral, vanilla amber, or fruity musk.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 l:grid-cols-4 gap-6 pt-2">
             {filtered.map((f) => (
               <Card key={f.id} f={f} />
             ))}
