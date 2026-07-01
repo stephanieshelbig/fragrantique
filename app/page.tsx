@@ -153,54 +153,12 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-            <SquareCard
-              href="/notes"
-              icon="🔍"
-              title="Search My Collection"
-              description="Best for easy viewing on mobile"
-              iconClassName="bg-gradient-to-br from-[#f5e2c3] to-[#d9b675]"
-            />
-
-            <SquareCard
-              href="/brand"
-              icon="🏷️"
-              title="Sort by Brand"
-              description="Display my collection by Brand Name"
-              iconClassName="bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0]"
-            />
-
-            <SquareCard
-              href="/new"
-              icon="🆕"
-              title="See What’s New"
-              description="Browse fragrances added in the last 30 days"
-              iconClassName="bg-gradient-to-br from-[#fff1d6] to-[#d9b675]"
-            />
-
-            <SquareCard
-              href="/recommendations"
-              icon="✨"
-              title="Get Recommendations"
-              description="Let me suggest something you might love"
-              iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]"
-            />
-
-            <SquareCard
-              href="/fragrantique-ai"
-              icon="🤖"
-              title="Fragrantique AI"
-              description="Get personalized fragrance matches powered by AI"
-              iconClassName="bg-gradient-to-br from-[#fff1d6] to-[#e7cfa2]"
-              featured
-            />
-
-            <SquareCard
-              href="/requests"
-              icon="🙏🏻"
-              title="Request a Fragrance"
-              description="Submit a request for a fragrance not on the site"
-              iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]"
-            />
+            <SquareCard href="/notes" icon="🔍" title="Search My Collection" description="Best for easy viewing on mobile" iconClassName="bg-gradient-to-br from-[#f5e2c3] to-[#d9b675]" />
+            <SquareCard href="/brand" icon="🏷️" title="Sort by Brand" description="Display my collection by Brand Name" iconClassName="bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0]" />
+            <SquareCard href="/new" icon="🆕" title="See What’s New" description="Browse fragrances added in the last 30 days" iconClassName="bg-gradient-to-br from-[#fff1d6] to-[#d9b675]" />
+            <SquareCard href="/recommendations" icon="✨" title="Get Recommendations" description="Let me suggest something you might love" iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]" />
+            <SquareCard href="/fragrantique-ai" icon="🤖" title="Fragrantique AI" description="Get personalized fragrance matches powered by AI" iconClassName="bg-gradient-to-br from-[#fff1d6] to-[#e7cfa2]" featured />
+            <SquareCard href="/requests" icon="🙏🏻" title="Request a Fragrance" description="Submit a request for a fragrance not on the site" iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]" />
           </div>
 
           <Link href="/photos" className="block mt-8">
@@ -223,79 +181,71 @@ export default function HomePage() {
             </div>
           </Link>
 
-          <div className="mt-8 rounded-3xl border border-[#d9c39a] bg-white/85 px-6 py-6 shadow-sm">
-            <div className="text-center mb-4">
-              <div className="text-xl md:text-2xl font-[family:var(--font-cormorant)] font-semibold tracking-[0.05em] text-[#182A39]">
-                Join the Fragrantique List
+          <div className="mt-8 relative overflow-hidden rounded-3xl border-2 border-[#d9c39a] bg-gradient-to-br from-[#fff7ec] to-[#f7e8d4] px-8 py-8 shadow-[0_0_35px_rgba(217,195,154,0.35)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(217,195,154,0.18),transparent_60%)]" />
+
+            <div className="relative z-10">
+              <div className="flex justify-center mb-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#fff1d6] to-[#e7cfa2] shadow-inner text-3xl">
+                  💌
+                </div>
               </div>
 
-              <p className="mt-2 text-sm md:text-base text-[#4b5360] leading-relaxed">
-                Sign up to receive promotional emails, new fragrance updates, special offers,
-                and Fragrantique news.
+              <div className="text-center mb-5">
+                <div className="text-3xl md:text-4xl font-[family:var(--font-cormorant)] font-semibold tracking-[0.08em] text-[#182A39]">
+                  Join the Fragrantique List
+                </div>
+
+                <p className="mt-3 text-sm md:text-base text-[#4b5360] leading-relaxed max-w-xl mx-auto">
+                  Be the first to hear about new fragrance arrivals, exclusive discovery sets,
+                  special offers, and Stephanie&apos;s latest fragrance finds.
+                </p>
+              </div>
+
+              <form onSubmit={handleEmailSignup} className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="min-w-0 flex-1 rounded-full border border-[#d9c39a] bg-white px-5 py-3 text-sm text-[#182A39] outline-none placeholder:text-[#182A39]/40 focus:border-[#b99254] focus:ring-2 focus:ring-[#d9c39a]/40"
+                />
+
+                <button
+                  type="submit"
+                  disabled={signupStatus === "loading"}
+                  className="rounded-full bg-gradient-to-r from-[#182A39] to-[#24384b] px-8 py-3 text-sm font-semibold tracking-[0.08em] text-white shadow-md hover:shadow-[0_0_20px_rgba(24,42,57,0.4)] hover:-translate-y-0.5 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {signupStatus === "loading" ? "SIGNING UP..." : "SIGN UP"}
+                </button>
+              </form>
+
+              {signupMessage && (
+                <p
+                  className={`mt-3 text-center text-sm ${
+                    signupStatus === "error" ? "text-red-700" : "text-[#b99254]"
+                  }`}
+                >
+                  {signupMessage}
+                </p>
+              )}
+
+              <p className="mt-3 text-center text-xs text-[#182A39]/55">
+                By signing up, you agree to receive promotional emails from Fragrantique.
               </p>
             </div>
-
-            <form onSubmit={handleEmailSignup} className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="min-w-0 flex-1 rounded-full border border-[#ead9b8] bg-white px-5 py-3 text-sm text-[#182A39] outline-none placeholder:text-[#182A39]/40 focus:border-[#b99254] focus:ring-2 focus:ring-[#d9c39a]/40"
-              />
-
-              <button
-                type="submit"
-                disabled={signupStatus === "loading"}
-                className="rounded-full bg-[#182A39] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(24,42,57,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {signupStatus === "loading" ? "Signing up..." : "Sign Up"}
-              </button>
-            </form>
-
-            {signupMessage && (
-              <p
-                className={`mt-3 text-center text-sm ${
-                  signupStatus === "error" ? "text-red-700" : "text-[#b99254]"
-                }`}
-              >
-                {signupMessage}
-              </p>
-            )}
-
-            <p className="mt-3 text-center text-xs text-[#182A39]/55">
-              By signing up, you agree to receive promotional emails from Fragrantique.
-            </p>
           </div>
 
           <div className="flex flex-wrap justify-center gap-3 mt-6">
-            <a
-              href="https://www.tiktok.com/@fragrantique.net"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Visit Fragrantique on TikTok"
-              className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200"
-            >
+            <a href="https://www.tiktok.com/@fragrantique.net" target="_blank" rel="noopener noreferrer" aria-label="Visit Fragrantique on TikTok" className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200">
               <span className="text-sm font-medium text-[#182A39]">TikTok</span>
             </a>
 
-            <a
-              href="https://www.instagram.com/fragrantique_net"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Visit Fragrantique on Instagram"
-              className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200"
-            >
+            <a href="https://www.instagram.com/fragrantique_net" target="_blank" rel="noopener noreferrer" aria-label="Visit Fragrantique on Instagram" className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200">
               <span className="text-sm font-medium text-[#182A39]">Instagram</span>
             </a>
 
-            <a
-              href="https://www.youtube.com/@fragrantique"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Visit Fragrantique on YouTube"
-              className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200"
-            >
+            <a href="https://www.youtube.com/@fragrantique" target="_blank" rel="noopener noreferrer" aria-label="Visit Fragrantique on YouTube" className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200">
               <span className="text-sm font-medium text-[#182A39]">YouTube</span>
             </a>
           </div>
