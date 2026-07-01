@@ -192,15 +192,27 @@ export default function HomePage() {
               iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]"
             />
 
-            <SquareCard
-              href="/photos"
-              icon="📸"
-              title="Pictures of My Collection"
-              description="See photos of my fragrance collection"
-              iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]"
-            />
+           
           </div>
+<Link href="/photos" className="block mt-8">
+  <div className="group relative overflow-hidden rounded-3xl border border-[#ead9b8] bg-white/90 px-6 py-6 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+    <div className="flex items-center gap-5">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
+        <span className="text-2xl">📸</span>
+      </div>
 
+      <div>
+        <div className="text-lg md:text-xl font-semibold text-[#182A39]">
+          Pictures of My Collection
+        </div>
+
+        <div className="text-sm md:text-base text-[#182A39]/70 mt-1">
+          See photos of my fragrance collection
+        </div>
+      </div>
+    </div>
+  </div>
+</Link>
           <div className="mt-8 rounded-3xl border border-[#d9c39a] bg-white/85 px-6 py-6 shadow-sm">
             <div className="text-center mb-4">
               <div className="text-xl md:text-2xl font-[family:var(--font-cormorant)] font-semibold tracking-[0.05em] text-[#182A39]">
