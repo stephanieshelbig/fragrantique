@@ -54,7 +54,7 @@ export async function POST(request) {
 
     await transporter.sendMail({
       from: process.env.FROM_EMAIL || process.env.GMAIL_USER,
-      to: "stephanieshelbig@gmail.com",
+      to: "stephanie@fragrantique.net",
       subject: alreadySignedUp
         ? "Duplicate Fragrantique Email Signup"
         : "New Fragrantique Email Signup",
