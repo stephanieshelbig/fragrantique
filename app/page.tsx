@@ -1,8 +1,50 @@
 "use client";
 
 import Link from "next/link";
+import { FormEvent, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function HomePage() {
+  const [email, setEmail] = useState("");
+  const [signupStatus, setSignupStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [signupMessage, setSignupMessage] = useState("");
+
+  async function handleEmailSignup(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      setSignupStatus("error");
+      setSignupMessage("Please enter your email address.");
+      return;
+    }
+
+    setSignupStatus("loading");
+    setSignupMessage("");
+
+    const { error } = await supabase
+      .from("promotional_email_signups")
+      .insert([{ email: trimmedEmail }]);
+
+    if (error) {
+      if (error.code === "23505") {
+        setSignupStatus("success");
+        setSignupMessage("You’re already signed up 💕");
+        setEmail("");
+        return;
+      }
+
+      setSignupStatus("error");
+      setSignupMessage("Something went wrong. Please try again.");
+      return;
+    }
+
+    setSignupStatus("success");
+    setSignupMessage("Thank you! You’re signed up for Fragrantique emails 💕");
+    setEmail("");
+  }
+
   return (
     <>
       <main
@@ -29,11 +71,11 @@ export default function HomePage() {
               backgroundBlendMode: "soft-light",
             }}
           >
-            {/* Text */}
             <div className="text-center space-y-4">
               <h1 className="font-[family:var(--font-cormorant)] text-2xl md:text-3xl font-medium tracking-[0.08em] text-[#182A39]">
                 Welcome to Fragrantique
               </h1>
+
               <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
                 Thank you so much for viewing my page! I have a large fragrance collection,
                 and I sell decants of it to make some extra money. Click one
@@ -49,14 +91,11 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Divider */}
             <div className="mt-8 mb-6 flex justify-center">
               <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
             </div>
 
-            {/* Buttons */}
             <div className="grid gap-4">
-              {/* Search Collection */}
               <Link href="/notes">
                 <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#f5e2c3] to-[#d9b675] shadow-inner">
@@ -73,7 +112,6 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* Sort by Brand */}
               <Link href="/brand">
                 <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0] shadow-inner">
@@ -90,7 +128,6 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* See What's New */}
               <Link href="/new">
                 <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#fff1d6] to-[#d9b675] shadow-inner">
@@ -107,7 +144,6 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* Recommendations */}
               <Link href="/recommendations">
                 <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
@@ -124,7 +160,6 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* Fragrantique AI */}
               <Link href="/fragrantique-ai">
                 <div className="group relative overflow-hidden flex items-center gap-5 rounded-2xl border border-[#d9c39a] bg-gradient-to-br from-[#fff7ec] to-[#f7e8d4] px-6 py-5 shadow-md hover:shadow-[0_0_35px_rgba(217,195,154,0.9)] hover:-translate-y-1 transition-all duration-300 cursor-pointer">
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_center,rgba(217,195,154,0.25),transparent_70%)]" />
@@ -144,7 +179,6 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* Requests */}
               <Link href="/requests">
                 <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
@@ -161,7 +195,6 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* Pictures */}
               <Link href="/photos">
                 <div className="group relative overflow-hidden flex items-center gap-4 rounded-2xl border border-[#ead9b8] bg-white/90 px-6 py-4 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-0.5 transition-transform duration-200 cursor-pointer">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
@@ -178,7 +211,50 @@ export default function HomePage() {
                 </div>
               </Link>
 
-              {/* Social Buttons */}
+              <div className="mt-3 rounded-3xl border border-[#d9c39a] bg-white/85 px-6 py-6 shadow-sm">
+                <div className="text-center mb-4">
+                  <div className="text-xl md:text-2xl font-[family:var(--font-cormorant)] font-semibold tracking-[0.05em] text-[#182A39]">
+                    Join the Fragrantique List
+                  </div>
+                  <p className="mt-2 text-sm md:text-base text-[#4b5360] leading-relaxed">
+                    Sign up to receive promotional emails, new fragrance updates, special offers,
+                    and Fragrantique news.
+                  </p>
+                </div>
+
+                <form onSubmit={handleEmailSignup} className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="min-w-0 flex-1 rounded-full border border-[#ead9b8] bg-white px-5 py-3 text-sm text-[#182A39] outline-none placeholder:text-[#182A39]/40 focus:border-[#b99254] focus:ring-2 focus:ring-[#d9c39a]/40"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={signupStatus === "loading"}
+                    className="rounded-full bg-[#182A39] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(24,42,57,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {signupStatus === "loading" ? "Signing up..." : "Sign Up"}
+                  </button>
+                </form>
+
+                {signupMessage && (
+                  <p
+                    className={`mt-3 text-center text-sm ${
+                      signupStatus === "error" ? "text-red-700" : "text-[#b99254]"
+                    }`}
+                  >
+                    {signupMessage}
+                  </p>
+                )}
+
+                <p className="mt-3 text-center text-xs text-[#182A39]/55">
+                  By signing up, you agree to receive promotional emails from Fragrantique.
+                </p>
+              </div>
+
               <div className="flex flex-wrap justify-center gap-3 -mt-1">
                 <a
                   href="https://www.tiktok.com/@fragrantique.net"
@@ -187,14 +263,6 @@ export default function HomePage() {
                   aria-label="Visit Fragrantique on TikTok"
                   className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    aria-hidden="true"
-                    fill="currentColor"
-                  >
-                    <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.68h-3.274v13.37a2.96 2.96 0 1 1-2.96-2.96c.244 0 .48.03.707.086V9.157a6.236 6.236 0 0 0-.707-.04A6.233 6.233 0 1 0 15.818 15.35V8.568a8.048 8.048 0 0 0 4.71 1.52V6.686h-.939Z" />
-                  </svg>
                   <span className="text-sm font-medium text-[#182A39]">TikTok</span>
                 </a>
 
@@ -205,25 +273,6 @@ export default function HomePage() {
                   aria-label="Visit Fragrantique on Instagram"
                   className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    aria-hidden="true"
-                  >
-                    <defs>
-                      <linearGradient id="instagramGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#feda75" />
-                        <stop offset="35%" stopColor="#fa7e1e" />
-                        <stop offset="65%" stopColor="#d62976" />
-                        <stop offset="85%" stopColor="#962fbf" />
-                        <stop offset="100%" stopColor="#4f5bd5" />
-                      </linearGradient>
-                    </defs>
-                    <path
-                      fill="url(#instagramGradient)"
-                      d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2Zm0 1.8A3.95 3.95 0 0 0 3.8 7.75v8.5a3.95 3.95 0 0 0 3.95 3.95h8.5a3.95 3.95 0 0 0 3.95-3.95v-8.5a3.95 3.95 0 0 0-3.95-3.95h-8.5Zm8.95 1.35a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 1.8A3.2 3.2 0 1 0 12 15.2 3.2 3.2 0 0 0 12 8.8Z"
-                    />
-                  </svg>
                   <span className="text-sm font-medium text-[#182A39]">Instagram</span>
                 </a>
 
@@ -234,14 +283,6 @@ export default function HomePage() {
                   aria-label="Visit Fragrantique on YouTube"
                   className="group inline-flex items-center gap-2 rounded-full border border-[#ead9b8] bg-white/90 px-4 py-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(217,195,154,0.5)] transition-all duration-200"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    aria-hidden="true"
-                    fill="#FF0000"
-                  >
-                    <path d="M23.498 6.186a2.997 2.997 0 0 0-2.11-2.12C19.505 3.5 12 3.5 12 3.5s-7.505 0-9.388.566a2.997 2.997 0 0 0-2.11 2.12C0 8.08 0 12 0 12s0 3.92.502 5.814a2.997 2.997 0 0 0 2.11 2.12C4.495 20.5 12 20.5 12 20.5s7.505 0 9.388-.566a2.997 2.997 0 0 0 2.11-2.12C24 15.92 24 12 24 12s0-3.92-.502-5.814ZM9.75 15.568V8.432L15.818 12 9.75 15.568Z" />
-                  </svg>
                   <span className="text-sm font-medium text-[#182A39]">YouTube</span>
                 </a>
               </div>
