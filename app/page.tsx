@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, ReactNode, useState } from "react";
-import { supabase } from "@/lib/supabase";
 
 type SignupStatus = "idle" | "loading" | "success" | "error";
 
@@ -71,26 +70,37 @@ export default function HomePage() {
     setSignupStatus("loading");
     setSignupMessage("");
 
-    const { error } = await supabase
-      .from("promotional_email_signups")
-      .insert([{ email: trimmedEmail }]);
+    try {
+      const response = await fetch("/api/email-signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: trimmedEmail }),
+      });
 
-    if (error) {
-      if (error.code === "23505") {
-        setSignupStatus("success");
-        setSignupMessage("You’re already signed up 💕");
-        setEmail("");
+      const result = await response.json();
+
+      if (!response.ok) {
+        setSignupStatus("error");
+        setSignupMessage(result.error || "Something went wrong. Please try again.");
         return;
       }
 
+      setSignupStatus("success");
+
+      if (result.alreadySignedUp) {
+        setSignupMessage("You’re already signed up 💕");
+      } else {
+        setSignupMessage("Thank you! You’re signed up for Fragrantique emails 💕");
+      }
+
+      setEmail("");
+    } catch (error) {
+      console.error(error);
       setSignupStatus("error");
       setSignupMessage("Something went wrong. Please try again.");
-      return;
     }
-
-    setSignupStatus("success");
-    setSignupMessage("Thank you! You’re signed up for Fragrantique emails 💕");
-    setEmail("");
   }
 
   return (
@@ -191,28 +201,28 @@ export default function HomePage() {
               description="Submit a request for a fragrance not on the site"
               iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]"
             />
-
-           
           </div>
-<Link href="/photos" className="block mt-8">
-  <div className="group relative overflow-hidden rounded-3xl border border-[#ead9b8] bg-white/90 px-6 py-6 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-    <div className="flex items-center gap-5">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
-        <span className="text-2xl">📸</span>
-      </div>
 
-      <div>
-        <div className="text-lg md:text-xl font-semibold text-[#182A39]">
-          Pictures of My Collection
-        </div>
+          <Link href="/photos" className="block mt-8">
+            <div className="group relative overflow-hidden rounded-3xl border border-[#ead9b8] bg-white/90 px-6 py-6 shadow-sm hover:shadow-[0_0_25px_rgba(217,195,154,0.7)] hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+              <div className="flex items-center gap-5">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff] shadow-inner">
+                  <span className="text-2xl">📸</span>
+                </div>
 
-        <div className="text-sm md:text-base text-[#182A39]/70 mt-1">
-          See photos of my fragrance collection
-        </div>
-      </div>
-    </div>
-  </div>
-</Link>
+                <div>
+                  <div className="text-lg md:text-xl font-semibold text-[#182A39]">
+                    Pictures of My Collection
+                  </div>
+
+                  <div className="text-sm md:text-base text-[#182A39]/70 mt-1">
+                    See photos of my fragrance collection
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Link>
+
           <div className="mt-8 rounded-3xl border border-[#d9c39a] bg-white/85 px-6 py-6 shadow-sm">
             <div className="text-center mb-4">
               <div className="text-xl md:text-2xl font-[family:var(--font-cormorant)] font-semibold tracking-[0.05em] text-[#182A39]">
