@@ -839,10 +839,12 @@ export default function FragranceDetail({ params }) {
 
                             return (
                               <Link
-                                key={rec.id}
-                                href={`/fragrance/${rec.id}`}
-                                className="group rounded-2xl border border-[#eadfcb] bg-[#fffaf3] p-3 text-center shadow-sm transition hover:-translate-y-[1px] hover:shadow"
-                              >
+  key={rec.id}
+  href={`/fragrance/${rec.id}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="group rounded-2xl border border-[#eadfcb] bg-[#fffaf3] p-3 text-center shadow-sm transition hover:-translate-y-[1px] hover:shadow"
+>
                                 <div className="mx-auto flex h-28 items-center justify-center">
                                   <img
                                     src={recImage}
