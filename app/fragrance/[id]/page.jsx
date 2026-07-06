@@ -69,6 +69,42 @@ function scoreRecommendation(candidate, currentFragrance, terms) {
   return score;
 }
 
+
+function getAccordsArray(fragrance) {
+  const raw = fragrance?.accords;
+
+  if (Array.isArray(raw)) return raw;
+
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getRecommendationAccordTag(fragrance) {
+  const accords = getAccordsArray(fragrance);
+
+  const names = accords
+    .map((accord) => ({
+      name: String(accord?.name || '').trim(),
+      strength: Number(accord?.strength || 0),
+    }))
+    .filter((accord) => accord.name)
+    .sort((a, b) => b.strength - a.strength)
+    .map((accord) => accord.name);
+
+  if (names.length >= 2) return `${names[0]} • ${names[1]}`;
+  if (names.length === 1) return names[0];
+
+  return 'Similar • Style';
+}
+
 export default function FragranceDetail({ params }) {
   const id = decodeURIComponent(params.id || '');
 
@@ -134,7 +170,7 @@ export default function FragranceDetail({ params }) {
       const { data: f } = await supabase
         .from('fragrances')
         .select(
-          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, wikiparfum_url, notes'
+          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, wikiparfum_url, notes, accords'
         )
         .eq('id', id)
         .maybeSingle();
@@ -335,7 +371,7 @@ export default function FragranceDetail({ params }) {
 
       const { data, error } = await supabase
         .from('fragrances')
-        .select('id, brand, name, image_url, image_url_transparent, notes')
+        .select('id, brand, name, image_url, image_url_transparent, notes, accords')
         .neq('id', currentFragrance.id)
         .limit(5000);
 
@@ -348,6 +384,7 @@ export default function FragranceDetail({ params }) {
         .map((item) => ({
           ...item,
           score: scoreRecommendation(item, currentFragrance, terms),
+          accordTag: getRecommendationAccordTag(item),
         }))
         .filter((item) => item.score > 0)
         .sort((a, b) => {
@@ -828,6 +865,9 @@ export default function FragranceDetail({ params }) {
                                   {rec.brand}
                                 </div>
                                 <div className="text-xs text-gray-700">{rec.name}</div>
+                                <div className="mt-2 rounded-full border border-[#d6c6a5] bg-white px-3 py-1 text-[12px] font-semibold text-[#7a5c2e]">
+                                  {rec.accordTag || getRecommendationAccordTag(rec)}
+                                </div>
                               </Link>
                             );
                           })}
