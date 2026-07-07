@@ -1,5 +1,3 @@
-working /fragrance/[id]/page.jsx (shows suggestions after adding to cart):
-
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
