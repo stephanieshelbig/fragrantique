@@ -131,6 +131,11 @@ export default function FragranceDetail({ params }) {
   const [recommendations, setRecommendations] = useState([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 
+  const [allFragrances, setAllFragrances] = useState([]);
+  const [alsoLikeIds, setAlsoLikeIds] = useState(['', '', '']);
+  const [alsoLikeFragrances, setAlsoLikeFragrances] = useState([]);
+  const [alsoLikeSaving, setAlsoLikeSaving] = useState(false);
+
   const [newLabel, setNewLabel] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newSize, setNewSize] = useState('');
@@ -170,7 +175,7 @@ export default function FragranceDetail({ params }) {
       const { data: f } = await supabase
         .from('fragrances')
         .select(
-          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, wikiparfum_url, notes, accords'
+          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, wikiparfum_url, notes, accords, recommendation_1_id, recommendation_2_id, recommendation_3_id'
         )
         .eq('id', id)
         .maybeSingle();
@@ -180,6 +185,35 @@ export default function FragranceDetail({ params }) {
       setImageUrl3(f?.image_url_3 || '');
       setImageUrl4(f?.image_url_4 || '');
       setCurrentImage(0);
+
+      const savedAlsoLikeIds = [
+        f?.recommendation_1_id || '',
+        f?.recommendation_2_id || '',
+        f?.recommendation_3_id || '',
+      ];
+      setAlsoLikeIds(savedAlsoLikeIds);
+
+      try {
+        const { data: catalog, error: catalogError } = await supabase
+          .from('fragrances')
+          .select('id, brand, name, image_url, image_url_transparent, accords')
+          .neq('id', id)
+          .order('brand', { ascending: true })
+          .order('name', { ascending: true })
+          .limit(5000);
+
+        const safeCatalog = !catalogError && Array.isArray(catalog) ? catalog : [];
+        setAllFragrances(safeCatalog);
+
+        const picked = savedAlsoLikeIds
+          .map((recId) => safeCatalog.find((item) => String(item.id) === String(recId)))
+          .filter(Boolean);
+
+        setAlsoLikeFragrances(picked);
+      } catch {
+        setAllFragrances([]);
+        setAlsoLikeFragrances([]);
+      }
 
       try {
         let decantsQuery = supabase
@@ -453,6 +487,68 @@ export default function FragranceDetail({ params }) {
     saveCart(cart);
     setAdded(true);
     await loadRecommendationsForCartAdd(frag);
+  }
+
+
+  function updateAlsoLikeSlot(index, value) {
+    setAlsoLikeIds((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      setAlsoLikeFragrances(
+        next
+          .map((recId) => allFragrances.find((item) => String(item.id) === String(recId)))
+          .filter(Boolean)
+      );
+      return next;
+    });
+    setMsg('');
+  }
+
+  async function saveAlsoLikeSuggestions() {
+    if (!canAdmin || !frag?.id) {
+      setMsg('Not authorized');
+      return;
+    }
+
+    setAlsoLikeSaving(true);
+    setMsg('');
+
+    const cleaned = alsoLikeIds.map((recId) => (recId ? String(recId) : null));
+
+    const { error } = await supabase
+      .from('fragrances')
+      .update({
+        recommendation_1_id: cleaned[0],
+        recommendation_2_id: cleaned[1],
+        recommendation_3_id: cleaned[2],
+      })
+      .eq('id', frag.id);
+
+    setAlsoLikeSaving(false);
+
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+
+    setFrag((prev) =>
+      prev
+        ? {
+            ...prev,
+            recommendation_1_id: cleaned[0],
+            recommendation_2_id: cleaned[1],
+            recommendation_3_id: cleaned[2],
+          }
+        : prev
+    );
+
+    setAlsoLikeFragrances(
+      cleaned
+        .map((recId) => allFragrances.find((item) => String(item.id) === String(recId)))
+        .filter(Boolean)
+    );
+
+    setMsg('You may also like suggestions saved ✓');
   }
 
   async function saveOption(row) {
@@ -1116,6 +1212,105 @@ export default function FragranceDetail({ params }) {
                 </div>
               </div>
             )}
+
+            <div className="rounded-2xl border border-[#eadfcb] bg-[#fffaf3] p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-[#182A39]">You may also like:</div>
+                  {canAdmin && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Choose exactly 3 fragrances to suggest on this page.
+                    </div>
+                  )}
+                </div>
+
+                {canAdmin && (
+                  <button
+                    type="button"
+                    onClick={saveAlsoLikeSuggestions}
+                    disabled={alsoLikeSaving}
+                    className="rounded-full bg-[#182A39] px-4 py-2 text-xs font-medium text-white shadow-sm transition hover:-translate-y-[1px] hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {alsoLikeSaving ? 'Saving…' : 'Save suggestions'}
+                  </button>
+                )}
+              </div>
+
+              {canAdmin && (
+                <div className="mt-4 grid gap-3">
+                  {[0, 1, 2].map((slot) => (
+                    <div key={`also-like-picker-${slot}`}>
+                      <label className="mb-1 block text-xs font-medium text-[#5f4724]">
+                        Suggestion {slot + 1}
+                      </label>
+                      <select
+                        className="w-full rounded-xl border border-[#eadfcb] bg-white px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
+                        value={alsoLikeIds[slot] || ''}
+                        onChange={(e) => updateAlsoLikeSlot(slot, e.target.value)}
+                      >
+                        <option value="">— Choose a fragrance —</option>
+                        {allFragrances.map((item) => (
+                          <option key={`${slot}-${item.id}`} value={item.id}>
+                            {item.brand} — {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {alsoLikeFragrances.length > 0 ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {alsoLikeFragrances.map((rec) => {
+                    const recImage =
+                      rec.image_url_transparent || rec.image_url || '/bottle-placeholder.png';
+
+                    return (
+                      <Link
+                        key={rec.id}
+                        href={`/fragrance/${rec.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group rounded-2xl border border-[#eadfcb] bg-white p-3 text-center shadow-sm transition hover:-translate-y-[1px] hover:shadow"
+                      >
+                        <div className="mx-auto flex h-28 items-center justify-center">
+                          <img
+                            src={recImage}
+                            alt={`${rec.brand || ''} ${rec.name || ''}`.trim()}
+                            className="max-h-full max-w-full object-contain transition group-hover:scale-[1.03]"
+                            style={{
+                              mixBlendMode: 'multiply',
+                              filter: 'drop-shadow(0 10px 14px rgba(0,0,0,0.14))',
+                            }}
+                            onError={(e) => {
+                              const el = e.currentTarget;
+                              if (!el.dataset.fallback) {
+                                el.dataset.fallback = '1';
+                                el.src = '/bottle-placeholder.png';
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="mt-2 text-xs font-semibold text-[#182A39]">
+                          {rec.brand}
+                        </div>
+                        <div className="text-xs text-gray-700">{rec.name}</div>
+                        <div className="mt-2 rounded-full border border-[#d6c6a5] bg-[#fffaf3] px-3 py-1 text-[12px] font-semibold text-[#7a5c2e]">
+                          {getRecommendationAccordTag(rec)}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-dashed border-[#d6c6a5] bg-white px-4 py-3 text-sm text-gray-500">
+                  {canAdmin
+                    ? 'Choose and save 3 fragrances above.'
+                    : 'More suggestions are coming soon.'}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="text-sm opacity-80 leading-relaxed">
