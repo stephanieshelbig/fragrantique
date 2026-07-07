@@ -4,6 +4,34 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+const PAGE_SIZE = 1000;
+
+async function fetchAllPages(buildQuery) {
+  let allRows = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error } = await buildQuery().range(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    const page = data || [];
+    allRows = allRows.concat(page);
+
+    if (page.length < PAGE_SIZE) {
+      break;
+    }
+
+    from += PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
 export default function AdminFragranceList() {
   const [viewer, setViewer] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -51,43 +79,38 @@ export default function AdminFragranceList() {
     setLoading(true);
     setMsg('');
 
-    const { data: allFrags, error: allFragsError } = await supabase
-      .from('fragrances')
-      .select(
-        'id, brand, name, image_url, image_url_2, image_url_3, image_url_saved, image_url_2_saved, image_url_3_saved, image_url_transparent, fragrantica_url'
-      )
-      .order('brand', { ascending: true })
-      .order('name', { ascending: true })
-      .limit(5000);
+    try {
+      const allFrags = await fetchAllPages(() =>
+        supabase
+          .from('fragrances')
+          .select(
+            'id, brand, name, image_url, image_url_2, image_url_3, image_url_saved, image_url_2_saved, image_url_3_saved, image_url_transparent, fragrantica_url'
+          )
+          .order('brand', { ascending: true })
+          .order('name', { ascending: true })
+      );
 
-    if (allFragsError) {
-      setMsg(`Load error: ${allFragsError.message}`);
+      setRows(allFrags || []);
+
+      if (ownerId) {
+        const links = await fetchAllPages(() =>
+          supabase
+            .from('user_fragrances')
+            .select('fragrance_id')
+            .eq('user_id', ownerId)
+        );
+
+        setLinkedIds(new Set((links || []).map((l) => l.fragrance_id)));
+      } else {
+        setLinkedIds(new Set());
+      }
+    } catch (e) {
+      setMsg(`Load error: ${e.message}`);
       setRows([]);
       setLinkedIds(new Set());
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setRows(allFrags || []);
-
-    if (ownerId) {
-      const { data: links, error: linksError } = await supabase
-        .from('user_fragrances')
-        .select('fragrance_id')
-        .eq('user_id', ownerId)
-        .limit(10000);
-
-      if (linksError) {
-        setMsg(`Shelf link load error: ${linksError.message}`);
-        setLinkedIds(new Set());
-      } else {
-        setLinkedIds(new Set((links || []).map((l) => l.fragrance_id)));
-      }
-    } else {
-      setLinkedIds(new Set());
-    }
-
-    setLoading(false);
   }
 
   const filtered = useMemo(() => {
@@ -416,6 +439,11 @@ export default function AdminFragranceList() {
 
       <p className="opacity-70 text-sm">
         Managing catalog for <span className="font-medium">@{owner.username}</span>.
+      </p>
+
+      <p className="opacity-70 text-xs">
+        Loaded {rows.length} fragrance{rows.length === 1 ? '' : 's'} and{' '}
+        {linkedIds.size} shelf link{linkedIds.size === 1 ? '' : 's'}.
       </p>
 
       <div className="flex flex-wrap gap-2 items-center">
