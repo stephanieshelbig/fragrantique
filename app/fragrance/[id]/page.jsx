@@ -50,6 +50,14 @@ function getRecommendationTerms(fragrance) {
     .slice(0, 18);
 }
 
+function isSameBrand(candidate, currentFragrance) {
+  return (
+    candidate?.brand &&
+    currentFragrance?.brand &&
+    normalizeText(candidate.brand) === normalizeText(currentFragrance.brand)
+  );
+}
+
 function scoreRecommendation(candidate, currentFragrance, terms) {
   const haystack = normalizeText(`${candidate?.brand || ''} ${candidate?.name || ''} ${candidate?.notes || ''}`);
   let score = 0;
@@ -57,14 +65,6 @@ function scoreRecommendation(candidate, currentFragrance, terms) {
   terms.forEach((term) => {
     if (haystack.includes(term)) score += 1;
   });
-
-  if (
-    candidate?.brand &&
-    currentFragrance?.brand &&
-    normalizeText(candidate.brand) === normalizeText(currentFragrance.brand)
-  ) {
-    score += 2;
-  }
 
   return score;
 }
@@ -126,19 +126,30 @@ function buildYouMayAlsoLikeList(currentFragrance, catalog, savedIds = []) {
   if (picked.length >= 3) return picked.slice(0, 3);
 
   const terms = getRecommendationTerms(currentFragrance);
-  const scored = catalog
-    .filter((item) => item?.id && !usedIds.has(String(item.id)))
-    .map((item) => ({
-      ...item,
-      score: scoreRecommendation(item, currentFragrance, terms),
-      accordTag: getRecommendationAccordTag(item),
-    }))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return `${a.brand || ''} ${a.name || ''}`.localeCompare(`${b.brand || ''} ${b.name || ''}`);
-    });
 
-  scored.forEach((item) => {
+  function scoreAndSort(items) {
+    return items
+      .filter((item) => item?.id && !usedIds.has(String(item.id)))
+      .map((item) => ({
+        ...item,
+        score: scoreRecommendation(item, currentFragrance, terms),
+        accordTag: getRecommendationAccordTag(item),
+      }))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return `${a.brand || ''} ${a.name || ''}`.localeCompare(`${b.brand || ''} ${b.name || ''}`);
+      });
+  }
+
+  const differentBrandMatches = scoreAndSort(
+    catalog.filter((item) => !isSameBrand(item, currentFragrance))
+  );
+
+  const sameBrandFallbacks = scoreAndSort(
+    catalog.filter((item) => isSameBrand(item, currentFragrance))
+  );
+
+  [...differentBrandMatches, ...sameBrandFallbacks].forEach((item) => {
     if (picked.length < 3 && !usedIds.has(String(item.id))) {
       picked.push(item);
       usedIds.add(String(item.id));
