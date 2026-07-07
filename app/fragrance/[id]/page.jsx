@@ -171,8 +171,6 @@ export default function FragranceDetail({ params }) {
   const [selectedId, setSelectedId] = useState('');
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
-  const [recommendations, setRecommendations] = useState([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 
   const [allFragrances, setAllFragrances] = useState([]);
   const [youMayAlsoLike, setYouMayAlsoLike] = useState([]);
@@ -445,52 +443,9 @@ export default function FragranceDetail({ params }) {
   }
 
 
-  async function loadRecommendationsForCartAdd(currentFragrance) {
-    if (!currentFragrance?.id) return;
-
-    setRecommendations([]);
-    setRecommendationsLoading(true);
-
-    try {
-      const terms = getRecommendationTerms(currentFragrance);
-
-      const { data, error } = await supabase
-        .from('fragrances')
-        .select('id, brand, name, image_url, image_url_transparent, notes, accords')
-        .neq('id', currentFragrance.id)
-        .limit(5000);
-
-      if (error || !Array.isArray(data)) {
-        setRecommendations([]);
-        return;
-      }
-
-      const scored = data
-        .map((item) => ({
-          ...item,
-          score: scoreRecommendation(item, currentFragrance, terms),
-          accordTag: getRecommendationAccordTag(item),
-        }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          return `${a.brand || ''} ${a.name || ''}`.localeCompare(`${b.brand || ''} ${b.name || ''}`);
-        })
-        .slice(0, 3);
-
-      setRecommendations(scored);
-    } catch {
-      setRecommendations([]);
-    } finally {
-      setRecommendationsLoading(false);
-    }
-  }
-
   async function handleAddToCart() {
     setMsg('');
     setAdded(false);
-    setRecommendations([]);
-
     const opt = selectedOpt || options.find((o) => o.in_stock) || null;
 
     if (!opt) {
@@ -537,7 +492,6 @@ export default function FragranceDetail({ params }) {
     cart.push(item);
     saveCart(cart);
     setAdded(true);
-    await loadRecommendationsForCartAdd(frag);
   }
 
   async function saveYouMayAlsoLike() {
@@ -988,74 +942,11 @@ export default function FragranceDetail({ params }) {
                 )}
 
                 {added && (
-                  <div className="space-y-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm">
-                    <div>
-                      <span className="font-medium">Fragrance added to cart.</span>{' '}
-                      <Link href="/cart" className="underline">
-                        View cart →
-                      </Link>
-                    </div>
-
-                    <div className="rounded-2xl border border-[#eadfcb] bg-white/90 p-4">
-                      <div className="font-semibold text-[#182A39]">
-                        If you like this fragrance, you might also like
-                      </div>
-
-                      {recommendationsLoading && (
-                        <div className="mt-3 text-sm opacity-70">Finding similar fragrances…</div>
-                      )}
-
-                      {!recommendationsLoading && recommendations.length === 0 && (
-                        <div className="mt-3 text-sm opacity-70">
-                          Browse more fragrances to find another favorite.
-                        </div>
-                      )}
-
-                      {!recommendationsLoading && recommendations.length > 0 && (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          {recommendations.map((rec) => {
-                            const recImage =
-                              rec.image_url_transparent || rec.image_url || '/bottle-placeholder.png';
-
-                            return (
-                              <Link
-  key={rec.id}
-  href={`/fragrance/${rec.id}`}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="group rounded-2xl border border-[#eadfcb] bg-[#fffaf3] p-3 text-center shadow-sm transition hover:-translate-y-[1px] hover:shadow"
->
-                                <div className="mx-auto flex h-28 items-center justify-center">
-                                  <img
-                                    src={recImage}
-                                    alt={`${rec.brand || ''} ${rec.name || ''}`.trim()}
-                                    className="max-h-full max-w-full object-contain transition group-hover:scale-[1.03]"
-                                    style={{
-                                      mixBlendMode: 'multiply',
-                                      filter: 'drop-shadow(0 10px 14px rgba(0,0,0,0.14))',
-                                    }}
-                                    onError={(e) => {
-                                      const el = e.currentTarget;
-                                      if (!el.dataset.fallback) {
-                                        el.dataset.fallback = '1';
-                                        el.src = '/bottle-placeholder.png';
-                                      }
-                                    }}
-                                  />
-                                </div>
-                                <div className="mt-2 text-xs font-semibold text-[#182A39]">
-                                  {rec.brand}
-                                </div>
-                                <div className="text-xs text-gray-700">{rec.name}</div>
-                                <div className="mt-2 rounded-full border border-[#d6c6a5] bg-white px-3 py-1 text-[12px] font-semibold text-[#7a5c2e]">
-                                  {rec.accordTag || getRecommendationAccordTag(rec)}
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                    <span className="font-medium">Fragrance added to cart.</span>{' '}
+                    <Link href="/cart" className="underline">
+                      View cart →
+                    </Link>
                   </div>
                 )}
 
