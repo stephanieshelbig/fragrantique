@@ -4,359 +4,134 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-function dollarsToCents(v) {
-  if (v == null || v === '') return null;
-  const n = Number(String(v).replace(/[^0-9.]/g, ''));
-  if (Number.isNaN(n)) return null;
-  return Math.round(n * 100);
-}
+const PAGE_SIZE = 1000;
 
-function centsToDollars(c) {
-  if (c == null) return '';
-  return (Number(c) / 100).toFixed(2);
-}
+async function fetchAllPages(buildQuery) {
+  let allRows = [];
+  let from = 0;
 
-function normalizeText(v) {
-  return String(v || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
 
-function getRecommendationTerms(fragrance) {
-  const commonWords = new Set([
-    'and',
-    'the',
-    'with',
-    'notes',
-    'note',
-    'top',
-    'middle',
-    'heart',
-    'base',
-    'are',
-    'is',
-    'or',
-    'of',
-    'oil',
-  ]);
+    const { data, error } = await buildQuery().range(from, to);
 
-  const source = normalizeText(`${fragrance?.brand || ''} ${fragrance?.name || ''} ${fragrance?.notes || ''}`);
-
-  return source
-    .split(' ')
-    .filter((word) => word.length >= 4 && !commonWords.has(word))
-    .slice(0, 18);
-}
-
-function scoreRecommendation(candidate, currentFragrance, terms) {
-  const haystack = normalizeText(`${candidate?.brand || ''} ${candidate?.name || ''} ${candidate?.notes || ''}`);
-  let score = 0;
-
-  terms.forEach((term) => {
-    if (haystack.includes(term)) score += 1;
-  });
-
-  if (
-    candidate?.brand &&
-    currentFragrance?.brand &&
-    normalizeText(candidate.brand) === normalizeText(currentFragrance.brand)
-  ) {
-    score += 2;
-  }
-
-  return score;
-}
-
-
-function getAccordsArray(fragrance) {
-  const raw = fragrance?.accords;
-
-  if (Array.isArray(raw)) return raw;
-
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+    if (error) {
+      throw error;
     }
+
+    const page = data || [];
+    allRows = allRows.concat(page);
+
+    if (page.length < PAGE_SIZE) {
+      break;
+    }
+
+    from += PAGE_SIZE;
   }
 
-  return [];
+  return allRows;
 }
 
-function getRecommendationAccordTag(fragrance) {
-  const accords = getAccordsArray(fragrance);
-
-  const names = accords
-    .map((accord) => ({
-      name: String(accord?.name || '').trim(),
-      strength: Number(accord?.strength || 0),
-    }))
-    .filter((accord) => accord.name)
-    .sort((a, b) => b.strength - a.strength)
-    .map((accord) => accord.name);
-
-  if (names.length >= 2) return `${names[0]} • ${names[1]}`;
-  if (names.length === 1) return names[0];
-
-  return 'Similar • Style';
-}
-
-export default function FragranceDetail({ params }) {
-  const id = decodeURIComponent(params.id || '');
-
+export default function AdminFragranceList() {
   const [viewer, setViewer] = useState(null);
-  const [owner, setOwner] = useState(null);
-  const [isOwner, setIsOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [owner, setOwner] = useState({ id: null, username: 'stephanie' });
 
-  const [frag, setFrag] = useState(null);
-  const [options, setOptions] = useState([]);
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState([]);
+  const [linkedIds, setLinkedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
-
-  const [currentImage, setCurrentImage] = useState(0);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [imageUrl2, setImageUrl2] = useState('');
-  const [imageUrl3, setImageUrl3] = useState('');
-  const [imageUrl4, setImageUrl4] = useState('');
-
-  const [selectedId, setSelectedId] = useState('');
-  const [qty, setQty] = useState(1);
-  const [added, setAdded] = useState(false);
-  const [recommendations, setRecommendations] = useState([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-
-  const [newLabel, setNewLabel] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newSize, setNewSize] = useState('');
-  const [newCurrency, setNewCurrency] = useState('usd');
-  const [newQuantity, setNewQuantity] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setMsg('');
-
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user || null;
       setViewer(user);
 
-      if (user?.id) {
-        const { data: myProf } = await supabase
-          .from('profiles')
-          .select('id, is_admin')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        setIsAdmin(!!myProf?.is_admin);
-      } else {
-        setIsAdmin(false);
+      if (!user) {
+        setLoading(false);
+        return;
       }
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('id, is_admin, username')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      setIsAdmin(!!prof?.is_admin);
 
       const { data: ownerProf } = await supabase
         .from('profiles')
-        .select('id, username, is_admin')
+        .select('id, username')
         .eq('username', 'stephanie')
         .maybeSingle();
 
-      setOwner(ownerProf || null);
-      setIsOwner(!!(user && ownerProf && user.id === ownerProf.id));
+      if (ownerProf?.id) setOwner(ownerProf);
 
-      const { data: f } = await supabase
-        .from('fragrances')
-        .select(
-          'id, brand, name, image_url, image_url_saved, image_url_transparent, image_url_2, image_url_2_saved, image_url_3, image_url_3_saved, image_url_4, image_url_4_saved, wikiparfum_url, notes, accords'
-        )
-        .eq('id', id)
-        .maybeSingle();
-
-      setFrag(f || null);
-      setImageUrl2(f?.image_url_2 || '');
-      setImageUrl3(f?.image_url_3 || '');
-      setImageUrl4(f?.image_url_4 || '');
-      setCurrentImage(0);
-
-      try {
-        let decantsQuery = supabase
-          .from('decants')
-          .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
-          .eq('fragrance_id', id);
-
-        if (id === '27bfb4b1-4f99-4e15-903d-bd641ed442fe') {
-          decantsQuery = decantsQuery.order('label', { ascending: true });
-        } else {
-          decantsQuery = decantsQuery.order('size_ml', { ascending: true });
-        }
-
-        const { data: ds, error: de } = await decantsQuery;
-
-        if (!de && Array.isArray(ds)) {
-          const mapped = ds.map((d) => ({
-            ...d,
-            currency: (d.currency || 'usd').toLowerCase(),
-            in_stock: d.in_stock ?? true,
-            quantity: (d.quantity ?? null) === null ? null : Number(d.quantity),
-          }));
-
-          setOptions(mapped);
-          if (!selectedId && mapped.length) setSelectedId(String(mapped[0].id));
-        } else {
-          setOptions([]);
-        }
-      } catch {
-        setOptions([]);
-      }
-
-      setLoading(false);
+      await load(ownerProf?.id || null);
     })();
-  }, [id]);
+  }, []);
 
-  const displayName = frag ? `${frag.brand || ''} — ${frag.name || ''}`.trim() : 'Fragrance';
+  async function load(ownerId) {
+    setLoading(true);
+    setMsg('');
 
-  const galleryImages = useMemo(() => {
-    const main = frag?.image_url_transparent || frag?.image_url_saved || frag?.image_url || '/bottle-placeholder.png';
+    try {
+      const allFrags = await fetchAllPages(() =>
+        supabase
+          .from('fragrances')
+          .select(
+            'id, brand, name, image_url, image_url_2, image_url_3, image_url_saved, image_url_2_saved, image_url_3_saved, image_url_transparent, fragrantica_url'
+          )
+          .order('brand', { ascending: true })
+          .order('name', { ascending: true })
+      );
 
-    return [
-      {
-        src: main,
-        label: 'Main photo',
-      },
-      frag?.image_url_2_saved || frag?.image_url_2
-        ? {
-            src: frag.image_url_2_saved || frag.image_url_2,
-            label: 'Photo 2',
-          }
-        : null,
-      frag?.image_url_3_saved || frag?.image_url_3
-        ? {
-            src: frag.image_url_3_saved || frag.image_url_3,
-            label: 'Photo 3',
-          }
-        : null,
-      frag?.image_url_4_saved || frag?.image_url_4
-        ? {
-            src: frag.image_url_4_saved || frag.image_url_4,
-            label: 'Photo 4',
-          }
-        : null,
-    ].filter(Boolean);
-  }, [frag]);
+      setRows(allFrags || []);
 
-  useEffect(() => {
-    if (!lightboxOpen) return;
+      if (ownerId) {
+        const links = await fetchAllPages(() =>
+          supabase
+            .from('user_fragrances')
+            .select('fragrance_id')
+            .eq('user_id', ownerId)
+        );
 
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'ArrowLeft') goPrevLightboxImage();
-      if (e.key === 'ArrowRight') goNextLightboxImage();
+        setLinkedIds(new Set((links || []).map((l) => l.fragrance_id)));
+      } else {
+        setLinkedIds(new Set());
+      }
+    } catch (e) {
+      setMsg(`Load error: ${e.message}`);
+      setRows([]);
+      setLinkedIds(new Set());
+    } finally {
+      setLoading(false);
     }
-
-    window.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [lightboxOpen, galleryImages.length]);
-
-  const selectedOpt = useMemo(
-    () => options.find((o) => String(o.id) === String(selectedId)),
-    [options, selectedId]
-  );
-
-  const canAdmin = isOwner || isAdmin;
-
-  function openLightbox(index = currentImage) {
-    if (!galleryImages.length) return;
-    const safeIndex = Math.min(Math.max(index, 0), galleryImages.length - 1);
-    setLightboxIndex(safeIndex);
-    setCurrentImage(safeIndex);
-    setLightboxOpen(true);
   }
 
-  function closeLightbox() {
-    setLightboxOpen(false);
-  }
-
-  function goPrevImage() {
-    if (!galleryImages.length) return;
-    setCurrentImage((prev) => (prev === 0 ? galleryImages.length - 1 : prev - 1));
-  }
-
-  function goNextImage() {
-    if (!galleryImages.length) return;
-    setCurrentImage((prev) => (prev + 1) % galleryImages.length);
-  }
-
-  function goPrevLightboxImage() {
-    if (!galleryImages.length) return;
-    setLightboxIndex((prev) => {
-      const next = prev === 0 ? galleryImages.length - 1 : prev - 1;
-      setCurrentImage(next);
-      return next;
-    });
-  }
-
-  function goNextLightboxImage() {
-    if (!galleryImages.length) return;
-    setLightboxIndex((prev) => {
-      const next = (prev + 1) % galleryImages.length;
-      setCurrentImage(next);
-      return next;
-    });
-  }
-
-  async function saveExtraImages() {
-    if (!canAdmin || !frag?.id) {
-      setMsg('Not authorized');
-      return;
-    }
-
-    setMsg('Saving photo URLs…');
-
-    const { data: updatedFragrance, error } = await supabase
-      .from('fragrances')
-      .update({
-        image_url_2: imageUrl2.trim() || null,
-        image_url_3: imageUrl3.trim() || null,
-        image_url_4: imageUrl4.trim() || null,
-      })
-      .eq('id', frag.id)
-      .select(
-        'id, brand, name, image_url, image_url_saved, image_url_transparent, image_url_2, image_url_2_saved, image_url_3, image_url_3_saved, image_url_4, image_url_4_saved, wikiparfum_url, notes, accords'
-      )
-      .maybeSingle();
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-
-    setFrag((prev) =>
-      prev
-        ? {
-            ...prev,
-            ...(updatedFragrance || {}),
-            image_url_2: imageUrl2.trim() || null,
-            image_url_3: imageUrl3.trim() || null,
-            image_url_4: imageUrl4.trim() || null,
-          }
-        : updatedFragrance || prev
+  const filtered = useMemo(() => {
+    if (!q) return rows;
+    const s = q.toLowerCase();
+    return rows.filter(
+      (r) =>
+        (r.brand || '').toLowerCase().includes(s) ||
+        (r.name || '').toLowerCase().includes(s)
     );
+  }, [rows, q]);
 
-    setMsg('Copying photos to Supabase Storage…');
+  async function saveImagesToSupabase(fragrance) {
+    setBusy(true);
+    setMsg(`Saving images for ${fragrance.brand} — ${fragrance.name}…`);
 
     try {
       const res = await fetch('/api/admin/mirror-fragrance-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fragranceId: frag.id }),
+        body: JSON.stringify({ fragranceId: fragrance.id }),
       });
 
       const j = await res.json().catch(() => ({}));
@@ -366,861 +141,379 @@ export default function FragranceDetail({ params }) {
       }
 
       const savedCount = Object.keys(j.updates || {}).length;
-
-      const { data: refreshedFragrance, error: refreshError } = await supabase
-        .from('fragrances')
-        .select(
-          'id, brand, name, image_url, image_url_saved, image_url_transparent, image_url_2, image_url_2_saved, image_url_3, image_url_3_saved, image_url_4, image_url_4_saved, wikiparfum_url, notes, accords'
-        )
-        .eq('id', frag.id)
-        .maybeSingle();
-
-      if (!refreshError && refreshedFragrance) {
-        setFrag(refreshedFragrance);
-        setImageUrl2(refreshedFragrance.image_url_2 || '');
-        setImageUrl3(refreshedFragrance.image_url_3 || '');
-        setImageUrl4(refreshedFragrance.image_url_4 || '');
-      }
-
-      setCurrentImage(0);
       setMsg(
         savedCount
-          ? `Saved ${savedCount} photo${savedCount === 1 ? '' : 's'} to Supabase Storage ✓`
-          : 'Photo URLs saved, but no new photos needed to be copied.'
+          ? `Saved ${savedCount} image${savedCount === 1 ? '' : 's'} to Supabase ✓`
+          : 'No image URLs found to save.'
       );
+
+      await load(owner.id);
     } catch (e) {
-      setCurrentImage(0);
-      setMsg(`Photo URLs saved, but Supabase copy failed: ${e.message}`);
-    }
-  }
-
-  function loadCart() {
-    try {
-      return JSON.parse(localStorage.getItem('cart_v1') || '[]');
-    } catch {
-      return [];
-    }
-  }
-
-  function saveCart(arr) {
-    localStorage.setItem('cart_v1', JSON.stringify(arr));
-  }
-
-
-  async function loadRecommendationsForCartAdd(currentFragrance) {
-    if (!currentFragrance?.id) return;
-
-    setRecommendations([]);
-    setRecommendationsLoading(true);
-
-    try {
-      const terms = getRecommendationTerms(currentFragrance);
-
-      const { data, error } = await supabase
-        .from('fragrances')
-        .select('id, brand, name, image_url, image_url_transparent, notes, accords')
-        .neq('id', currentFragrance.id)
-        .limit(5000);
-
-      if (error || !Array.isArray(data)) {
-        setRecommendations([]);
-        return;
-      }
-
-      const scored = data
-        .map((item) => ({
-          ...item,
-          score: scoreRecommendation(item, currentFragrance, terms),
-          accordTag: getRecommendationAccordTag(item),
-        }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          return `${a.brand || ''} ${a.name || ''}`.localeCompare(`${b.brand || ''} ${b.name || ''}`);
-        })
-        .slice(0, 3);
-
-      setRecommendations(scored);
-    } catch {
-      setRecommendations([]);
+      setMsg(`Save images error: ${e.message}`);
     } finally {
-      setRecommendationsLoading(false);
+      setBusy(false);
     }
   }
 
-  async function handleAddToCart() {
-    setMsg('');
-    setAdded(false);
-    setRecommendations([]);
+  async function saveAllImagesToSupabase() {
+    setBusy(true);
 
-    const opt = selectedOpt || options.find((o) => o.in_stock) || null;
+    const targets = rows.filter(
+      (f) =>
+        (f.image_url || f.image_url_2 || f.image_url_3) &&
+        !(f.image_url_saved && f.image_url_2_saved && f.image_url_3_saved)
+    );
 
-    if (!opt) {
-      setMsg('Please select an option that is in stock.');
+    if (!targets.length) {
+      setMsg('All fragrance images are already saved ✓');
+      setBusy(false);
       return;
     }
 
-    if (!opt.price_cents || opt.price_cents <= 0) {
-      setMsg('This option is not available for purchase right now.');
+    const okToRun = window.confirm(
+      `Save images for ${targets.length} fragrance${targets.length === 1 ? '' : 's'}?\n\n` +
+        `This may take a little while. Please keep this page open until it finishes.`
+    );
+
+    if (!okToRun) {
+      setBusy(false);
       return;
     }
 
-    const q = Math.max(1, parseInt(qty, 10) || 1);
+    let ok = 0;
+    let fail = 0;
 
-    if (opt.quantity !== null && typeof opt.quantity === 'number') {
-      const cart = loadCart();
-      const alreadyInCart = cart
-        .filter((i) => String(i.option_id) === String(opt.id))
-        .reduce((sum, i) => sum + (parseInt(i.quantity, 10) || 0), 0);
+    for (let i = 0; i < targets.length; i++) {
+      const f = targets[i];
 
-      const remaining = Math.max(0, Number(opt.quantity) - alreadyInCart);
+      setMsg(
+        `Saving images ${i + 1} of ${targets.length}: ${f.brand} — ${f.name}…`
+      );
 
-      if (remaining <= 0) {
-        setMsg(`"${opt.label}" is already at the limit in your cart (${alreadyInCart}/${opt.quantity}).`);
+      try {
+        const res = await fetch('/api/admin/mirror-fragrance-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fragranceId: f.id }),
+        });
+
+        const j = await res.json().catch(() => ({}));
+
+        if (!res.ok || !j?.ok) {
+          throw new Error(j?.error || 'Image save failed');
+        }
+
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+
+    setMsg(`Save all images done: ${ok} saved, ${fail} failed`);
+    setBusy(false);
+    await load(owner.id);
+  }
+
+  async function addOneToShelves(fragranceId) {
+    if (!owner.id) return;
+    setBusy(true);
+    setMsg('Adding to shelves…');
+
+    const { error } = await supabase
+      .from('user_fragrances')
+      .upsert(
+        {
+          user_id: owner.id,
+          fragrance_id: fragranceId,
+          manual: true,
+        },
+        {
+          onConflict: 'user_id,fragrance_id',
+        }
+      );
+
+    if (error) {
+      setMsg(`Add error: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+
+    await load(owner.id);
+    setBusy(false);
+    setMsg('Added to shelves ✓');
+  }
+
+  async function removeOneFromShelves(fragranceId) {
+    if (!owner.id) return;
+    setBusy(true);
+    setMsg('Removing from shelves…');
+
+    const { error } = await supabase
+      .from('user_fragrances')
+      .delete()
+      .eq('user_id', owner.id)
+      .eq('fragrance_id', fragranceId);
+
+    if (error) {
+      setMsg(`Remove error: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+
+    await load(owner.id);
+    setBusy(false);
+    setMsg('Removed from shelves ✓');
+  }
+
+  async function addAllMissingToShelves() {
+    if (!owner.id) return;
+    setBusy(true);
+    setMsg('Adding ALL missing to shelves…');
+
+    const missing = rows.filter((r) => !linkedIds.has(r.id)).map((r) => r.id);
+
+    if (!missing.length) {
+      setMsg('Everything is already on your shelves.');
+      setBusy(false);
+      return;
+    }
+
+    const chunk = 200;
+    let inserted = 0;
+
+    for (let i = 0; i < missing.length; i += chunk) {
+      const batch = missing.slice(i, i + chunk).map((fid) => ({
+        user_id: owner.id,
+        fragrance_id: fid,
+        manual: true,
+      }));
+
+      const { error } = await supabase
+        .from('user_fragrances')
+        .upsert(batch, { onConflict: 'user_id,fragrance_id' });
+
+      if (error) {
+        setMsg(`Bulk add error: ${error.message}`);
+        setBusy(false);
         return;
       }
 
-      if (q > remaining) {
-        setMsg(`Max ${remaining} for "${opt.label}" (you already have ${alreadyInCart} in your cart).`);
-        return;
+      inserted += batch.length;
+    }
+
+    await load(owner.id);
+    setBusy(false);
+    setMsg(`Added ${inserted} items to shelves ✓`);
+  }
+
+  async function makeTransparent(fragrance) {
+    setBusy(true);
+    setMsg('Removing background…');
+
+    try {
+      const res = await fetch('/api/remove-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: fragrance.image_url,
+          fragranceId: fragrance.id,
+        }),
+      });
+
+      const j = await res.json().catch(() => ({}));
+
+      if (!res.ok || !j?.success) {
+        throw new Error(j?.error || 'remove-bg failed');
+      }
+
+      setMsg('Transparent image saved ✓');
+    } catch (e) {
+      setMsg(`Background remover error: ${e.message}`);
+    } finally {
+      setBusy(false);
+      await load(owner.id);
+    }
+  }
+
+  async function makeAllMissingTransparent() {
+    setBusy(true);
+    setMsg('Making transparent for all missing…');
+
+    const targets = rows.filter((r) => !r.image_url_transparent && r.image_url);
+    let ok = 0;
+    let fail = 0;
+
+    for (const f of targets) {
+      try {
+        const res = await fetch('/api/remove-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: f.image_url, fragranceId: f.id }),
+        });
+
+        const j = await res.json().catch(() => ({}));
+
+        if (res.ok && j?.success) ok++;
+        else fail++;
+      } catch {
+        fail++;
       }
     }
 
-    const item = {
-      name: `${displayName} (${opt.label})`,
-      quantity: q,
-      unit_amount: opt.price_cents,
-      currency: opt.currency || 'usd',
-      fragrance_id: frag?.id,
-      option_id: opt.id,
-    };
-
-    const cart = loadCart();
-    cart.push(item);
-    saveCart(cart);
-    setAdded(true);
-    await loadRecommendationsForCartAdd(frag);
+    setMsg(`Transparent done: ${ok} ok, ${fail} failed`);
+    setBusy(false);
+    await load(owner.id);
   }
 
-  async function saveOption(row) {
-    if (!canAdmin || !owner?.id || !frag?.id) {
-      setMsg('Not authorized');
-      return;
+  async function deleteFragrance(fragrance) {
+    if (!isAdmin) return;
+
+    const ok = window.confirm(
+      `Delete "${fragrance.brand} — ${fragrance.name}" from the catalog?\n` +
+        `This will also remove it from your shelves.\n\nThis cannot be undone.`
+    );
+
+    if (!ok) return;
+
+    setBusy(true);
+    setMsg('Deleting fragrance…');
+
+    try {
+      const res = await fetch('/api/admin-delete-fragrance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fragranceId: fragrance.id,
+          deleteFromShelves: true,
+          deleteStorage: true,
+        }),
+      });
+
+      const j = await res.json().catch(() => ({}));
+
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || 'delete failed');
+      }
+
+      setMsg('Fragrance deleted ✓');
+      await load(owner.id);
+    } catch (e) {
+      setMsg(`Delete error: ${e.message}`);
+    } finally {
+      setBusy(false);
     }
-
-    const up = {
-      id: row.id || undefined,
-      fragrance_id: frag.id,
-      seller_user_id: owner.id,
-      label: row.label?.trim() || 'Option',
-      price_cents:
-        typeof row.price_cents === 'number'
-          ? row.price_cents
-          : dollarsToCents(row.price_dollars || ''),
-      size_ml: row.size_ml ? Number(row.size_ml) : null,
-      currency: (row.currency || 'usd').toLowerCase(),
-      in_stock: !!row.in_stock,
-      quantity:
-        row.quantity === '' || row.quantity === null || row.quantity === undefined
-          ? null
-          : Math.max(0, Number(row.quantity) || 0),
-    };
-
-    const { data, error } = await supabase
-      .from('decants')
-      .upsert(up)
-      .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
-      .maybeSingle();
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-
-    setOptions((prev) => prev.map((o) => (o.id === row.id ? { ...o, ...data } : o)));
-    if (!selectedId) setSelectedId(String(data.id));
-    setMsg('Option saved ✓');
-  }
-
-  async function addNewOption() {
-    if (!canAdmin || !owner?.id || !frag?.id) {
-      setMsg('Not authorized');
-      return;
-    }
-
-    const payload = {
-      fragrance_id: frag.id,
-      seller_user_id: owner.id,
-      label: newLabel?.trim() || 'Option',
-      price_cents: dollarsToCents(newPrice),
-      size_ml: newSize ? Number(newSize) : null,
-      currency: newCurrency.toLowerCase(),
-      in_stock: true,
-      quantity:
-        newQuantity === '' || newQuantity === null || newQuantity === undefined
-          ? null
-          : Math.max(0, Number(newQuantity) || 0),
-    };
-
-    const { data, error } = await supabase
-      .from('decants')
-      .insert(payload)
-      .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
-      .maybeSingle();
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-
-    setOptions((prev) => [...prev, data]);
-    setSelectedId(String(data.id));
-    setNewLabel('');
-    setNewPrice('');
-    setNewSize('');
-    setNewCurrency('usd');
-    setNewQuantity('');
-    setMsg('Added option ✓');
-  }
-
-  async function deleteOption(idToDelete) {
-    if (!canAdmin) return;
-
-    const { error } = await supabase.from('decants').delete().eq('id', idToDelete);
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
-
-    setOptions((prev) => prev.filter((o) => o.id !== idToDelete));
-
-    if (String(selectedId) === String(idToDelete)) {
-      const next = options.filter((o) => o.id !== idToDelete);
-      setSelectedId(next.length ? String(next[0].id) : '');
-    }
-
-    setMsg('Deleted option ✓');
   }
 
   if (loading) return <div className="p-6">Loading…</div>;
 
-  if (!frag) {
+  if (!viewer || !isAdmin) {
     return (
-      <div className="p-6">
-        <div className="mb-3">Fragrance not found.</div>
-        <Link href="/brand" className="underline">
-          ← Back to Brand index
+      <div className="max-w-3xl mx-auto p-6 space-y-3">
+        <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
+        <p className="opacity-70">{msg || 'Please sign in as an admin.'}</p>
+        <Link href="/admin" className="underline text-sm">
+          ← Back to Admin
         </Link>
       </div>
     );
   }
 
-  const activeImage = galleryImages[currentImage]?.src || '/bottle-placeholder.png';
-
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-6xl mx-auto p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <div />
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          {frag.wikiparfum_url && (
-            <a
-              href={frag.wikiparfum_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-[#d6c6a5] bg-gradient-to-r from-white via-[#fffaf2] to-white px-4 py-1.5 text-sm font-medium text-[#7a5c2e] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#fffaf0] hover:shadow"
-              title="View fragrance on Wikiparfum in new tab"
-            >
-              <span className="text-base leading-none">✦</span>
-              <span>View on Wikiparfum</span>
-              <span className="text-xs opacity-70">↗</span>
-            </a>
-          )}
+        <h1 className="text-2xl font-bold">Admin · Fragrances</h1>
 
-          {canAdmin && (
-            <Link
-              href={`/fragrance/${frag.id}/edit`}
-              className="text-sm rounded-full border px-3 py-1.5 hover:bg-gray-50 transition"
-              title="Edit this fragrance"
-            >
-              Edit
-            </Link>
-          )}
-        </div>
-      </div>
+        <div className="flex items-center gap-3">
+          <Link href="/admin" className="underline text-sm">
+            ← Back to Admin
+          </Link>
 
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold leading-tight">{frag.brand}</h1>
-          <div className="text-lg">{frag.name}</div>
-        </div>
-
-        <div className="p-4 rounded border bg-white">
-          <div className="font-medium">Fragrance Notes</div>
-          <div className={`mt-1 text-sm whitespace-pre-wrap ${frag.notes ? '' : 'opacity-60'}`}>
-            {frag.notes || 'No notes provided.'}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col md:flex-row md:items-start gap-6">
-        <div className="w-full md:w-64 mx-auto md:mx-0 space-y-4">
-          <div className="relative overflow-hidden rounded-[2rem] border border-[#eadfcb] bg-gradient-to-b from-white via-[#fffaf3] to-[#f7efe2] shadow-[0_18px_45px_rgba(90,64,32,0.14)]">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.9),transparent_55%)]" />
-            <div className="pointer-events-none absolute left-5 right-5 top-5 h-px bg-gradient-to-r from-transparent via-[#d6c6a5] to-transparent opacity-70" />
-
-            <div className="relative flex aspect-[3/5] items-center justify-center p-7">
-              <img
-                key={activeImage}
-                src={activeImage}
-                alt={frag.name}
-                onClick={() => openLightbox(currentImage)}
-                className="max-h-full max-w-full object-contain transition-all duration-500 ease-out cursor-zoom-in"
-                style={{
-                  mixBlendMode: 'multiply',
-                  filter: 'drop-shadow(0 16px 22px rgba(0,0,0,0.18))',
-                }}
-                onError={(e) => {
-                  const el = e.currentTarget;
-                  if (!el.dataset.fallback) {
-                    el.dataset.fallback = '1';
-                    el.src = '/bottle-placeholder.png';
-                  }
-                }}
-              />
-
-              {galleryImages.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={goPrevImage}
-                    className="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-[#d8c69f] bg-white/85 text-[#6f552c] shadow-sm backdrop-blur transition hover:-translate-x-0.5 hover:bg-white"
-                    aria-label="Previous fragrance photo"
-                  >
-                    ‹
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={goNextImage}
-                    className="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-[#d8c69f] bg-white/85 text-[#6f552c] shadow-sm backdrop-blur transition hover:translate-x-0.5 hover:bg-white"
-                    aria-label="Next fragrance photo"
-                  >
-                    ›
-                  </button>
-                </>
-              )}
-            </div>
-
-            {galleryImages.length > 1 && (
-              <div className="relative flex items-center justify-center gap-2 pb-4">
-                {galleryImages.map((img, index) => (
-                  <button
-                    key={`${img.src}-${index}`}
-                    type="button"
-                    onClick={() => setCurrentImage(index)}
-                    className={`h-2 rounded-full transition-all ${
-                      currentImage === index
-                        ? 'w-7 bg-[#9b7a3d]'
-                        : 'w-2 bg-[#d9c9aa] hover:bg-[#b99b64]'
-                    }`}
-                    aria-label={`View fragrance photo ${index + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {galleryImages.length > 1 && (
-            <div className="flex justify-center gap-2">
-              {galleryImages.map((img, index) => (
-                <button
-                  key={`thumb-${img.src}-${index}`}
-                  type="button"
-                  onClick={() => setCurrentImage(index)}
-                  className={`h-14 w-14 overflow-hidden rounded-2xl border bg-white p-1 shadow-sm transition ${
-                    currentImage === index
-                      ? 'border-[#9b7a3d] ring-2 ring-[#eadfcb]'
-                      : 'border-[#eadfcb] hover:border-[#c8ae7a]'
-                  }`}
-                  title={img.label}
-                >
-                  <img
-                    src={img.src}
-                    alt={img.label}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openLightbox(index);
-                    }}
-                    className="h-full w-full object-contain cursor-zoom-in"
-                    style={{ mixBlendMode: 'multiply' }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {canAdmin && (
-            <div className="rounded-2xl border border-[#eadfcb] bg-white/90 p-4 shadow-sm space-y-3">
-              <div>
-                <div className="text-sm font-semibold text-[#5f4724]">
-                  Additional fragrance photos
-                </div>
-                <div className="text-xs text-gray-500">
-                  Paste extra image URLs for the carousel.
-                </div>
-              </div>
-
-              <input
-                className="w-full rounded-xl border border-[#eadfcb] px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
-                placeholder="Image URL 2"
-                value={imageUrl2}
-                onChange={(e) => setImageUrl2(e.target.value)}
-              />
-
-              <input
-                className="w-full rounded-xl border border-[#eadfcb] px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
-                placeholder="Image URL 3"
-                value={imageUrl3}
-                onChange={(e) => setImageUrl3(e.target.value)}
-              />
-
-              <input
-                className="w-full rounded-xl border border-[#eadfcb] px-3 py-2 text-sm outline-none focus:border-[#b8975a]"
-                placeholder="Image URL 4"
-                value={imageUrl4}
-                onChange={(e) => setImageUrl4(e.target.value)}
-              />
-
-              <button
-                type="button"
-                onClick={saveExtraImages}
-                className="w-full rounded-full bg-[#182A39] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:-translate-y-[1px] hover:opacity-95"
-              >
-                Save photos
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 space-y-4">
-          <div className="p-3 rounded border bg-white space-y-3">
-            <div className="font-medium">Choose an option</div>
-
-            {!canAdmin && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Option</label>
-                  <select
-                    className="border rounded px-3 py-2 w-full"
-                    value={selectedId}
-                    onChange={(e) => {
-                      setSelectedId(e.target.value);
-                      setMsg('');
-                      setAdded(false);
-                    }}
-                  >
-                    {options.length === 0 && <option>— No options —</option>}
-                    {options.map((o) => (
-                      <option key={o.id} value={o.id} disabled={!o.in_stock}>
-                        {o.label}
-                        {!o.in_stock ? ' (out of stock)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Quantity</label>
-                    <input
-                      type="number"
-                      min="1"
-                      className="border rounded px-3 py-2 w-full"
-                      value={qty}
-                      onChange={(e) => {
-                        setQty(e.target.value);
-                        setMsg('');
-                        setAdded(false);
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleAddToCart}
-                  className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90"
-                >
-                  Add to cart
-                </button>
-
-                {added && (
-                  <div className="space-y-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm">
-                    <div>
-                      <span className="font-medium">Fragrance added to cart.</span>{' '}
-                      <Link href="/cart" className="underline">
-                        View cart →
-                      </Link>
-                    </div>
-
-                    <div className="rounded-2xl border border-[#eadfcb] bg-white/90 p-4">
-                      <div className="font-semibold text-[#182A39]">
-                        If you like this fragrance, you might also like
-                      </div>
-
-                      {recommendationsLoading && (
-                        <div className="mt-3 text-sm opacity-70">Finding similar fragrances…</div>
-                      )}
-
-                      {!recommendationsLoading && recommendations.length === 0 && (
-                        <div className="mt-3 text-sm opacity-70">
-                          Browse more fragrances to find another favorite.
-                        </div>
-                      )}
-
-                      {!recommendationsLoading && recommendations.length > 0 && (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          {recommendations.map((rec) => {
-                            const recImage =
-                              rec.image_url_transparent || rec.image_url || '/bottle-placeholder.png';
-
-                            return (
-                              <Link
-  key={rec.id}
-  href={`/fragrance/${rec.id}`}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="group rounded-2xl border border-[#eadfcb] bg-[#fffaf3] p-3 text-center shadow-sm transition hover:-translate-y-[1px] hover:shadow"
->
-                                <div className="mx-auto flex h-28 items-center justify-center">
-                                  <img
-                                    src={recImage}
-                                    alt={`${rec.brand || ''} ${rec.name || ''}`.trim()}
-                                    className="max-h-full max-w-full object-contain transition group-hover:scale-[1.03]"
-                                    style={{
-                                      mixBlendMode: 'multiply',
-                                      filter: 'drop-shadow(0 10px 14px rgba(0,0,0,0.14))',
-                                    }}
-                                    onError={(e) => {
-                                      const el = e.currentTarget;
-                                      if (!el.dataset.fallback) {
-                                        el.dataset.fallback = '1';
-                                        el.src = '/bottle-placeholder.png';
-                                      }
-                                    }}
-                                  />
-                                </div>
-                                <div className="mt-2 text-xs font-semibold text-[#182A39]">
-                                  {rec.brand}
-                                </div>
-                                <div className="text-xs text-gray-700">{rec.name}</div>
-                                <div className="mt-2 rounded-full border border-[#d6c6a5] bg-white px-3 py-1 text-[12px] font-semibold text-[#7a5c2e]">
-                                  {rec.accordTag || getRecommendationAccordTag(rec)}
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {msg && <div className="text-sm p-2 rounded bg-white border mt-2">{msg}</div>}
-              </>
-            )}
-
-            {canAdmin && (
-              <div className="space-y-4">
-                <div className="text-sm opacity-70">
-                  Create options like <b>5 mL decant</b>, <b>10 mL decant</b>, or{' '}
-                  <b>Full Bottle</b>.
-                </div>
-
-                <div className="border rounded divide-y">
-                  {options.map((o) => (
-                    <div key={o.id} className="p-3 grid sm:grid-cols-7 gap-3 items-end">
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium mb-1">Label</label>
-                        <input
-                          className="border rounded px-2 py-1 w-full"
-                          value={o.label || ''}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, label: e.target.value } : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Size (mL)</label>
-                        <input
-                          type="number"
-                          className="border rounded px-2 py-1 w-full"
-                          value={o.size_ml ?? ''}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, size_ml: e.target.value } : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Price (USD)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="border rounded px-2 py-1 w-full"
-                          value={centsToDollars(o.price_cents)}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id
-                                  ? { ...x, price_cents: dollarsToCents(e.target.value) }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Currency</label>
-                        <select
-                          className="border rounded px-2 py-1 w-full"
-                          value={o.currency || 'usd'}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, currency: e.target.value } : x
-                              )
-                            )
-                          }
-                        >
-                          <option value="usd">USD</option>
-                          <option value="eur">EUR</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium mb-1">Quantity</label>
-                        <input
-                          type="number"
-                          className="border rounded px-2 py-1 w-full"
-                          placeholder="Leave blank for unlimited"
-                          value={o.quantity ?? ''}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id
-                                  ? {
-                                      ...x,
-                                      quantity:
-                                        e.target.value === ''
-                                          ? null
-                                          : Math.max(0, Number(e.target.value) || 0),
-                                    }
-                                  : x
-                              )
-                            )
-                          }
-                        />
-                        <div className="text-[11px] mt-1 opacity-70">
-                          {o.quantity === null ? 'Unlimited' : `${o.quantity} left`}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`stock-${o.id}`}
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={!!o.in_stock}
-                          onChange={(e) =>
-                            setOptions((prev) =>
-                              prev.map((x) =>
-                                x.id === o.id ? { ...x, in_stock: e.target.checked } : x
-                              )
-                            )
-                          }
-                        />
-                        <label htmlFor={`stock-${o.id}`} className="text-xs">
-                          In stock
-                        </label>
-                      </div>
-
-                      <div className="flex gap-2 sm:justify-end">
-                        <button
-                          onClick={() => saveOption(o)}
-                          className="px-3 py-1.5 rounded bg-black text-white text-xs"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => deleteOption(o.id)}
-                          className="px-3 py-1.5 rounded border text-xs"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {!options.length && <div className="p-3 text-sm opacity-70">No options yet.</div>}
-                </div>
-
-                <div className="p-3 border rounded space-y-2">
-                  <div className="font-medium text-sm">Add a new option</div>
-
-                  <div className="grid sm:grid-cols-7 gap-3 items-end">
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium mb-1">Label</label>
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 5 mL decant / Full Bottle"
-                        value={newLabel}
-                        onChange={(e) => setNewLabel(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Size (mL)</label>
-                      <input
-                        type="number"
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 5 or 100"
-                        value={newSize}
-                        onChange={(e) => setNewSize(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Price (USD)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="e.g., 24.00"
-                        value={newPrice}
-                        onChange={(e) => setNewPrice(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Currency</label>
-                      <select
-                        className="border rounded px-2 py-1 w-full"
-                        value={newCurrency}
-                        onChange={(e) => setNewCurrency(e.target.value)}
-                      >
-                        <option value="usd">USD</option>
-                        <option value="eur">EUR</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Quantity</label>
-                      <input
-                        type="number"
-                        className="border rounded px-2 py-1 w-full"
-                        placeholder="Leave blank for unlimited"
-                        value={newQuantity}
-                        onChange={(e) =>
-                          setNewQuantity(
-                            e.target.value === ''
-                              ? ''
-                              : Math.max(0, Number(e.target.value) || 0)
-                          )
-                        }
-                      />
-                      <div className="text-[11px] mt-1 opacity-70">
-                        {newQuantity === '' ? 'Unlimited' : `${newQuantity} to start`}
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2 flex sm:justify-end">
-                      <button
-                        onClick={addNewOption}
-                        className="px-3 py-2 rounded bg-black text-white text-xs"
-                      >
-                        Add option
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {msg && <div className="text-sm p-2 rounded bg-white border">{msg}</div>}
-
-                <div className="text-xs opacity-60">
-                  Visitors won’t see prices here. They’ll just pick an option and quantity, then add
-                  to cart.
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="text-sm opacity-80 leading-relaxed">
-            These are fragrances from my personal collection. I'm selling decants of some of each
-            fragrance to earn some extra money. I don't do this strictly for profit, meaning I don't
-            buy fragrances just to sell them, so my prices will be lower than other decant sites.
-            <strong> If you find a lower price for these decants</strong>, send me a message through
-            the &apos;Contact Me&apos; link at the top of the page, and I will try to match the
-            price.
-          </div>
-        </div>
-      </div>
-
-      {!canAdmin && (
-        <div className="text-sm">
-          <Link className="underline" href="/cart">
-            Go to cart →
+          <Link
+            href="/add"
+            className="px-3 py-2 rounded bg-pink-600 text-white hover:bg-pink-700 text-sm"
+          >
+            + Add Fragrance
           </Link>
         </div>
-      )}
+      </div>
 
-      {lightboxOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4"
-          onClick={closeLightbox}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Fragrance photo gallery"
+      <p className="opacity-70 text-sm">
+        Managing catalog for <span className="font-medium">@{owner.username}</span>.
+      </p>
+
+      <p className="opacity-70 text-xs">
+        Loaded {rows.length} fragrance{rows.length === 1 ? '' : 's'} and{' '}
+        {linkedIds.size} shelf link{linkedIds.size === 1 ? '' : 's'}.
+      </p>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search by brand or name…"
+          className="border rounded px-3 py-2 w-full sm:w-80"
+        />
+
+        <button
+          onClick={() => load(owner.id)}
+          className="px-3 py-2 rounded bg-black text-white hover:opacity-90"
         >
-          <div
-            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col items-center justify-center rounded-[2rem] border border-white/20 bg-[#111]/90 p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={closeLightbox}
-              className="absolute right-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-2xl leading-none text-black shadow hover:bg-white"
-              aria-label="Close image gallery"
-            >
-              ×
-            </button>
+          Reload
+        </button>
 
-            {galleryImages.length > 1 && (
-              <button
-                type="button"
-                onClick={goPrevLightboxImage}
-                className="absolute left-4 top-1/2 z-20 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-4xl leading-none text-black shadow hover:bg-white"
-                aria-label="Previous image"
-              >
-                ‹
-              </button>
-            )}
+        <div className="flex-1" />
 
-            <div className="flex h-[78vh] w-full items-center justify-center px-10 py-8">
+        <button
+          disabled={busy}
+          onClick={addAllMissingToShelves}
+          className="px-3 py-2 rounded bg-blue-600 text-white hover:opacity-90 disabled:opacity-60"
+        >
+          Add all missing to shelves
+        </button>
+
+        <button
+          disabled={busy}
+          onClick={saveAllImagesToSupabase}
+          className="px-3 py-2 rounded bg-purple-700 text-white hover:opacity-90 disabled:opacity-60"
+        >
+          Save all images
+        </button>
+
+        <button
+          disabled={busy}
+          onClick={makeAllMissingTransparent}
+          className="px-3 py-2 rounded bg-pink-700 text-white hover:opacity-90 disabled:opacity-60"
+        >
+          Make transparent (missing only)
+        </button>
+      </div>
+
+      {msg && <div className="p-3 rounded bg-white border shadow text-sm">{msg}</div>}
+
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filtered.map((f) => {
+          const onShelves = linkedIds.has(f.id);
+
+          const img =
+            f.image_url_transparent ||
+            f.image_url_saved ||
+            f.image_url ||
+            '/bottle-placeholder.png';
+
+          const hasAnyRemoteImage = !!(f.image_url || f.image_url_2 || f.image_url_3);
+          const hasAnySavedImage = !!(
+            f.image_url_saved ||
+            f.image_url_2_saved ||
+            f.image_url_3_saved
+          );
+
+          return (
+            <div key={f.id} className="border rounded p-3 bg-white flex gap-3">
               <img
-                src={galleryImages[lightboxIndex]?.src || activeImage}
-                alt={galleryImages[lightboxIndex]?.label || frag.name}
-                className="max-h-full max-w-full object-contain"
+                src={img}
+                alt={f.name}
+                className="w-14 h-20 object-contain"
+                style={{ mixBlendMode: 'multiply' }}
                 onError={(e) => {
                   const el = e.currentTarget;
                   if (!el.dataset.fallback) {
@@ -1229,40 +522,84 @@ export default function FragranceDetail({ params }) {
                   }
                 }}
               />
-            </div>
 
-            {galleryImages.length > 1 && (
-              <button
-                type="button"
-                onClick={goNextLightboxImage}
-                className="absolute right-4 top-1/2 z-20 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-4xl leading-none text-black shadow hover:bg-white"
-                aria-label="Next image"
-              >
-                ›
-              </button>
-            )}
+              <div className="flex-1">
+                <div className="text-xs opacity-70">{f.brand}</div>
+                <div className="font-medium">{f.name}</div>
 
-            {galleryImages.length > 1 && (
-              <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 py-2 backdrop-blur">
-                {galleryImages.map((img, index) => (
+                <div className="mt-1 text-[11px] opacity-70">
+                  {hasAnySavedImage ? 'Supabase image saved ✓' : 'No saved image yet'}
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Link
+                    href={`/fragrance/${f.id}/edit`}
+                    className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
+                  >
+                    Edit
+                  </Link>
+
                   <button
-                    key={`lightbox-dot-${img.src}-${index}`}
-                    type="button"
-                    onClick={() => {
-                      setLightboxIndex(index);
-                      setCurrentImage(index);
-                    }}
-                    className={`h-2 rounded-full transition-all ${
-                      lightboxIndex === index ? 'w-8 bg-white' : 'w-2 bg-white/45 hover:bg-white/75'
-                    }`}
-                    aria-label={`View image ${index + 1}`}
-                  />
-                ))}
+                    disabled={busy || !hasAnyRemoteImage}
+                    onClick={() => saveImagesToSupabase(f)}
+                    className="px-2 py-1 rounded bg-purple-700 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                    title="Download this fragrance's image URLs and save them to Supabase Storage"
+                  >
+                    Save images
+                  </button>
+
+                  {!onShelves ? (
+                    <button
+                      disabled={busy}
+                      onClick={() => addOneToShelves(f.id)}
+                      className="px-2 py-1 rounded bg-black text-white text-xs hover:opacity-90 disabled:opacity-60"
+                    >
+                      Add to shelves
+                    </button>
+                  ) : (
+                    <button
+                      disabled={busy}
+                      onClick={() => removeOneFromShelves(f.id)}
+                      className="px-2 py-1 rounded bg-amber-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                    >
+                      Remove from shelves
+                    </button>
+                  )}
+
+                  <button
+                    disabled={busy || !f.image_url}
+                    onClick={() => makeTransparent(f)}
+                    className="px-2 py-1 rounded bg-pink-700 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                  >
+                    Transparent
+                  </button>
+
+                  <button
+                    disabled={busy}
+                    onClick={() => deleteFragrance(f)}
+                    className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:opacity-90 disabled:opacity-60"
+                  >
+                    Delete fragrance
+                  </button>
+
+                  {f.fragrantica_url && (
+                    <a
+                      href={f.fragrantica_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2 py-1 rounded bg-white border text-xs hover:bg-gray-50"
+                    >
+                      Fragrantica ↗
+                    </a>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
+
+      {!filtered.length && <div className="p-4 border rounded bg-white">No matches.</div>}
     </div>
   );
 }
