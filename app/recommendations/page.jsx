@@ -363,7 +363,7 @@ export default function RecommendationsPage() {
 
                             <button
                               onClick={() => saveRec(r.id, { comment: r.comment ?? null, category: r.category })}
-                              className="px-3 py-1.5 rounded bg-white text:black text-xs hover:opacity-90"
+                              className="px-3 py-1.5 rounded bg-white text:black border text-xs hover:opacity-90"
                             >
                               Save
                             </button>
