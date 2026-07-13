@@ -132,17 +132,41 @@ export default function BrandDetailPage({ params }) {
       }
 
       try {
-        let data = await fetchAllFragrances(brandParam);
+  console.log('BRAND PAGE DIAGNOSTIC');
+  console.log('Raw params.slug:', params.slug);
+  console.log('Decoded brandParam:', brandParam);
 
-        if (!data || data.length === 0) {
-          data = await fetchAllFragrancesFallback(brandParam);
-        }
+  let data = await fetchAllFragrances(brandParam);
 
-        setItems(data || []);
-      } catch (err) {
-        console.error(err);
-        setItems([]);
-      }
+  console.log('Exact brand query count:', data?.length);
+  console.table(
+    (data || []).map((fragrance) => ({
+      id: fragrance.id,
+      brand: fragrance.brand,
+      name: fragrance.name,
+    }))
+  );
+
+  if (!data || data.length === 0) {
+    console.log('Exact query returned nothing. Running fallback query.');
+
+    data = await fetchAllFragrancesFallback(brandParam);
+
+    console.log('Fallback query count:', data?.length);
+    console.table(
+      (data || []).map((fragrance) => ({
+        id: fragrance.id,
+        brand: fragrance.brand,
+        name: fragrance.name,
+      }))
+    );
+  }
+
+  setItems(data || []);
+} catch (err) {
+  console.error('BRAND PAGE QUERY ERROR:', err);
+  setItems([]);
+}
 
       setLoading(false);
     })();
