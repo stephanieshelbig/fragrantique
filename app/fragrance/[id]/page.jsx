@@ -897,12 +897,23 @@ export default function FragranceDetail({ params }) {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleAddToCart}
-                  className="mt-1 px-4 py-2 rounded bg-black text-white hover:opacity-90"
-                >
-                  Add to cart
-                </button>
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={handleAddToCart}
+                    className="px-4 py-2 rounded bg-black text-white hover:opacity-90"
+                  >
+                    Add to cart
+                  </button>
+
+                  {added && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                      <span className="font-medium">✓ Fragrance added to cart.</span>{' '}
+                      <Link href="/cart" className="underline">
+                        View cart →
+                      </Link>
+                    </div>
+                  )}
+                </div>
 
                 {youMayAlsoLike.length > 0 && (
                   <div className="rounded-2xl border border-[#eadfcb] bg-[#fffaf3] p-4">
@@ -949,15 +960,6 @@ export default function FragranceDetail({ params }) {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {added && (
-                  <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-                    <span className="font-medium">Fragrance added to cart.</span>{' '}
-                    <Link href="/cart" className="underline">
-                      View cart →
-                    </Link>
                   </div>
                 )}
 
