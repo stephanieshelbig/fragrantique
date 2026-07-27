@@ -197,7 +197,7 @@ export default function HomePage() {
                 </div>
 
                 <p className="mt-3 text-sm md:text-base text-[#4b5360] leading-relaxed max-w-xl mx-auto">
-                  Be the first to hear about new fragrance arrivals, discovery sets, and special offers.
+                  Be the first to hear about new fragrance arrivals and special offers.
                 </p>
               </div>
 
