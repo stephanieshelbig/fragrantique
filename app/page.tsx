@@ -230,7 +230,7 @@ export default function HomePage() {
               )}
 
               <p className="mt-3 text-center text-xs text-[#182A39]/55">
-                By signing up, you agree to receive promotional emails from Fragrantique.
+                By signing up, you agree to receive promotional emails from Fragrantique. I will <strong>never</strong> sell your info.
               </p>
             </div>
           </div>
