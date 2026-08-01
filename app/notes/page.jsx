@@ -144,21 +144,46 @@ export default function NotesPage() {
       const url =
         `${base}/rest/v1/fragrances` +
         `?select=id,brand,name,slug,accords,notes,image_url,image_url_transparent` +
-        `&order=brand.asc&order=name.asc`;
+        `&order=brand.asc,name.asc`;
 
       try {
-        const res = await fetch(url, {
-          headers: { apikey: anon, Authorization: `Bearer ${anon}` },
-          cache: 'no-store',
-        });
+        const pageSize = 1000;
+        let start = 0;
+        let allRows = [];
 
-        if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`);
+        while (true) {
+          const end = start + pageSize - 1;
+
+          const res = await fetch(url, {
+            headers: {
+              apikey: anon,
+              Authorization: `Bearer ${anon}`,
+              Range: `${start}-${end}`,
+              Prefer: 'count=exact',
+            },
+            cache: 'no-store',
+          });
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`);
+          }
+
+          const batch = await res.json();
+
+          if (!Array.isArray(batch)) {
+            throw new Error('Supabase returned an invalid fragrance response.');
+          }
+
+          allRows = allRows.concat(batch);
+
+          // A partial batch means we reached the final page.
+          if (batch.length < pageSize) break;
+
+          start += pageSize;
         }
 
-        const data = await res.json();
-        setRows(Array.isArray(data) ? data : []);
+        setRows(allRows);
       } catch (err) {
         console.error('Fragrances fetch error:', err);
         setLoadError(err?.message || 'Unknown error fetching fragrances.');
