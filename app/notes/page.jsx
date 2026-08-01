@@ -60,7 +60,7 @@ function SearchBar({ value, onChange, onReload }) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder='Search multiple terms, like "woody and floral and vanilla"…'
+        placeholder='Search multiple terms, like "woody floral Quentin Bisch" etc'
         className="w-full rounded-xl border px-4 py-2 bg-white text-black"
       />
       <button
