@@ -11,6 +11,7 @@ function SquareCard({
   title,
   description,
   iconClassName,
+  cardClassName,
   featured = false,
 }: {
   href: string;
@@ -18,15 +19,14 @@ function SquareCard({
   title: string;
   description: string;
   iconClassName: string;
+  cardClassName: string;
   featured?: boolean;
 }) {
   return (
     <Link href={href} className="block h-full">
       <div
-        className={`group relative h-full aspect-square overflow-hidden rounded-3xl border p-5 flex flex-col items-center justify-center text-center shadow-sm hover:-translate-y-1 transition-all duration-300 cursor-pointer ${
-          featured
-            ? "border-[#d9c39a] bg-gradient-to-br from-[#fff7ec] to-[#f7e8d4] hover:shadow-[0_0_35px_rgba(217,195,154,0.9)]"
-            : "border-[#ead9b8] bg-white/90 hover:shadow-[0_0_25px_rgba(217,195,154,0.7)]"
+        className={`group relative min-h-[170px] overflow-hidden rounded-2xl border-2 p-4 flex flex-col items-center justify-center text-center shadow-md hover:-translate-y-1 hover:scale-[1.02] hover:shadow-xl transition-all duration-300 cursor-pointer ${cardClassName} ${
+          featured ? "ring-2 ring-[#d9c39a]/60" : ""
         }`}
       >
         {featured && (
@@ -34,16 +34,16 @@ function SquareCard({
         )}
 
         <div
-          className={`relative z-10 mb-4 flex h-14 w-14 items-center justify-center rounded-full shadow-inner ${iconClassName}`}
+          className={`relative z-10 mb-3 flex h-12 w-12 items-center justify-center rounded-full shadow-inner ${iconClassName}`}
         >
-          <span className="text-2xl">{icon}</span>
+          <span className="text-xl">{icon}</span>
         </div>
 
-        <div className="relative z-10 text-base md:text-lg font-semibold text-[#182A39] leading-snug">
+        <div className="relative z-10 text-sm md:text-base font-semibold text-[#182A39] leading-snug">
           {title}
         </div>
 
-        <div className="relative z-10 mt-2 text-xs md:text-sm text-[#182A39]/70 leading-relaxed">
+        <div className="relative z-10 mt-1.5 text-xs text-[#182A39]/70 leading-relaxed">
           {description}
         </div>
       </div>
@@ -152,13 +152,56 @@ export default function HomePage() {
             <div className="h-px w-32 bg-gradient-to-r from-transparent via-[#d9c39a] to-transparent" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-            <SquareCard href="/notes" icon="🔍" title="Search My Collection" description="Best for easy viewing on mobile" iconClassName="bg-gradient-to-br from-[#f5e2c3] to-[#d9b675]" />
-            <SquareCard href="/brand" icon="🏷️" title="Sort by Brand" description="Display my collection by Brand Name" iconClassName="bg-gradient-to-br from-[#ffe9d9] to-[#f1bfa0]" />
-            <SquareCard href="/new" icon="🆕" title="See What’s New" description="Browse fragrances added in the last 30 days" iconClassName="bg-gradient-to-br from-[#fff1d6] to-[#d9b675]" />
-            <SquareCard href="/recommendations" icon="✨" title="Get Recommendations" description="Let me suggest something you might love" iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]" />
-            <SquareCard href="/fragrantique-ai" icon="🤖" title="Fragrantique AI" description="Get personalized fragrance matches powered by AI" iconClassName="bg-gradient-to-br from-[#fff1d6] to-[#e7cfa2]" featured />
-            <SquareCard href="/requests" icon="🙏🏻" title="Request a Fragrance" description="Submit a request for a fragrance not on the site" iconClassName="bg-gradient-to-br from-[#fbe5ff] to-[#e1b7ff]" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <SquareCard
+              href="/notes"
+              icon="🔍"
+              title="Search My Collection"
+              description="Best for easy viewing on mobile"
+              iconClassName="bg-gradient-to-br from-[#dce7ff] to-[#9eb8f4]"
+              cardClassName="border-[#9eb8f4] bg-gradient-to-br from-[#f4f7ff] to-[#e5ecff] hover:border-[#021E61]"
+            />
+            <SquareCard
+              href="/brand"
+              icon="🏷️"
+              title="Sort by Brand"
+              description="Display my collection by Brand Name"
+              iconClassName="bg-gradient-to-br from-[#eadcff] to-[#c7a4ef]"
+              cardClassName="border-[#c7a4ef] bg-gradient-to-br from-[#fbf7ff] to-[#efe4ff] hover:border-[#390379]"
+            />
+            <SquareCard
+              href="/new"
+              icon="🆕"
+              title="See What’s New"
+              description="Browse fragrances added in the last 30 days"
+              iconClassName="bg-gradient-to-br from-[#dff3e7] to-[#9ecfb2]"
+              cardClassName="border-[#9ecfb2] bg-gradient-to-br from-[#f7fcf8] to-[#e7f6ec] hover:border-[#4e8b69]"
+            />
+            <SquareCard
+              href="/recommendations"
+              icon="✨"
+              title="Get Recommendations"
+              description="Let me suggest something you might love"
+              iconClassName="bg-gradient-to-br from-[#fff0c9] to-[#dfbd6f]"
+              cardClassName="border-[#dfbd6f] bg-gradient-to-br from-[#fffaf0] to-[#f8ebca] hover:border-[#b99254]"
+            />
+            <SquareCard
+              href="/fragrantique-ai"
+              icon="🤖"
+              title="Fragrantique AI"
+              description="Get personalized fragrance matches powered by AI"
+              iconClassName="bg-gradient-to-br from-[#ffe9ad] to-[#c99f3d]"
+              cardClassName="border-[#c99f3d] bg-gradient-to-br from-[#fff8e5] to-[#f0d996] hover:border-[#8f6b1d] hover:shadow-[0_0_28px_rgba(201,159,61,0.45)]"
+              featured
+            />
+            <SquareCard
+              href="/requests"
+              icon="🙏🏻"
+              title="Request a Fragrance"
+              description="Submit a request for a fragrance not on the site"
+              iconClassName="bg-gradient-to-br from-[#f8dce5] to-[#d9a3b6]"
+              cardClassName="border-[#d9a3b6] bg-gradient-to-br from-[#fff7fa] to-[#f8e5ec] hover:border-[#9d4f69]"
+            />
           </div>
 
           <Link href="/photos" className="block mt-8">
