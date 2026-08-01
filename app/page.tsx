@@ -134,9 +134,7 @@ export default function HomePage() {
             </h1>
 
             <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
-              Thank you so much for viewing my page! I have a large fragrance collection,
-              and I sell decants of it to make some extra money. Click one
-              of the buttons below to start browsing my collection. Feel free to contact me
+              Welcome to Fragrantique, where you can explore my personal fragrance collection and purchase affordable luxury decants. Start browsing below and find your next favorite scent. Feel free to contact me
               using the <span className="font-semibold">'Contact Me'</span> link at the top
               of the page💕
             </p>
