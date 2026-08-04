@@ -133,9 +133,10 @@ export default function HomePage() {
               Welcome to Fragrantique
             </h1>
 
-            <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-bold italic max-w-2xl mx-auto">
               (Turn your phone to the side - it's best viewed in landscape mode)
-              
+            </p>
+            <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
               Thank you so much for viewing my page! I sell decants of my fragrance collection so everyone can enjoy. Click one
               of the buttons below to start browsing my collection💕
             </p>
