@@ -133,7 +133,7 @@ export default function HomePage() {
               Welcome to Fragrantique
             </h1>
 
-            <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-bold italic max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-semibold italic max-w-2xl mx-auto">
               (Turn your phone to the side - it's best viewed in landscape mode)
             </p>
             <p className="text-lg md:text-xl text-[#4b5360] leading-9 font-light italic max-w-2xl mx-auto">
