@@ -267,12 +267,6 @@ export default function CartPage() {
             Checkout
           </button>
 
-          <p className="text-sm text-gray-600 max-w-xl">
-            Payment processing is done through Stripe. I do not have access to your credit card
-            information, and it is not stored on my server.
-          </p>
-
-
           {msg && (
             <div
               className={`text-sm mt-2 ${
