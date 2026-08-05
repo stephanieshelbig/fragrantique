@@ -202,9 +202,7 @@ export default function CartPage() {
             </div>
           ))}
 
-          {/* Discount code section temporarily hidden.
-              Remove "hidden" from the className below to show it again. */}
-          <div className="hidden p-4 border rounded bg-white space-y-3">
+          <div className="p-4 border rounded bg-white space-y-3">
             <div className="font-semibold">Discount Code</div>
 
             <div className="flex gap-2">
