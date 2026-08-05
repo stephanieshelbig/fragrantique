@@ -71,9 +71,10 @@ export default function CartPage() {
       (it.name || '').toLowerCase().includes('lost in paris')
     );
 
-    if (!stillHasLostInParis) {
+    if (appliedDiscount?.code === 'LOSTINPARIS10' && !stillHasLostInParis) {
       setAppliedDiscount(null);
       localStorage.removeItem('cart_discount_v1');
+      setMsg('The LOSTINPARIS10 discount was removed because Lost in Paris is no longer in your cart.');
     }
   }
 
@@ -91,16 +92,37 @@ export default function CartPage() {
   const BASE_SHIPPING_CENTS = 600;
   const TAX_RATE = 0.07;
 
-  const discountCents = appliedDiscount?.amountCents || 0;
+  const discountCents = useMemo(() => {
+    if (!appliedDiscount) return 0;
+
+    if (appliedDiscount.type === 'fixed') {
+      return Math.min(
+        subtotalCents,
+        Math.max(0, Number(appliedDiscount.value || 0))
+      );
+    }
+
+    if (appliedDiscount.type === 'percent') {
+      const percent = Math.max(
+        0,
+        Math.min(100, Number(appliedDiscount.value || 0))
+      );
+      return Math.floor((subtotalCents * percent) / 100);
+    }
+
+    return 0;
+  }, [appliedDiscount, subtotalCents]);
+
   const discountedSubtotalCents = Math.max(0, subtotalCents - discountCents);
 
-  const shippingCents = BASE_SHIPPING_CENTS;
+  const shippingCents =
+    appliedDiscount?.type === 'free_shipping' ? 0 : BASE_SHIPPING_CENTS;
   const taxCents = Math.round(discountedSubtotalCents * TAX_RATE);
   const totalCents = discountedSubtotalCents + shippingCents + taxCents;
 
   const fmt = (c) => (c / 100).toFixed(2);
 
-  function applyDiscountCode() {
+  async function applyDiscountCode() {
     setMsg('');
 
     const code = discountCode.trim().toUpperCase();
@@ -112,29 +134,51 @@ export default function CartPage() {
       return;
     }
 
-    if (code !== 'LOSTINPARIS10') {
-      setAppliedDiscount(null);
-      localStorage.removeItem('cart_discount_v1');
-      setMsg('Invalid discount code.');
-      return;
-    }
-
-    if (!hasLostInParis) {
+    if (code === 'LOSTINPARIS10' && !hasLostInParis) {
       setAppliedDiscount(null);
       localStorage.removeItem('cart_discount_v1');
       setMsg('This discount code only works when Roja Lost in Paris is in your cart.');
       return;
     }
 
-    const discount = {
-      code,
-      amountCents: 1000,
-      requiredItem: 'Lost in Paris',
-    };
+    try {
+      const res = await fetch('/api/discount/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          subtotalCents,
+        }),
+      });
 
-    setAppliedDiscount(discount);
-    localStorage.setItem('cart_discount_v1', JSON.stringify(discount));
-    setMsg('$10 discount applied to Roja Lost in Paris.');
+      const data = await res.json();
+
+      if (!res.ok || !data?.ok || !data?.discount) {
+        setAppliedDiscount(null);
+        localStorage.removeItem('cart_discount_v1');
+        setMsg(data?.error || 'Invalid discount code.');
+        return;
+      }
+
+      const discount = data.discount;
+
+      setAppliedDiscount(discount);
+      localStorage.setItem('cart_discount_v1', JSON.stringify(discount));
+
+      if (discount.type === 'free_shipping') {
+        setMsg('Free shipping applied.');
+      } else if (discount.type === 'fixed') {
+        setMsg(`$${fmt(Number(discount.value || 0))} discount applied.`);
+      } else if (discount.type === 'percent') {
+        setMsg(`${Number(discount.value || 0)}% discount applied.`);
+      } else {
+        setMsg('Discount code applied.');
+      }
+    } catch (e) {
+      setAppliedDiscount(null);
+      localStorage.removeItem('cart_discount_v1');
+      setMsg(e?.message || 'Unable to validate discount code.');
+    }
   }
 
   function removeDiscount() {
