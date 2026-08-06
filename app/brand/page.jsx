@@ -46,6 +46,32 @@ function BrandName({ name }) {
   );
 }
 
+function BrandLogoCard({ name, count, logoKey }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logoSrc = `/brand-logos/${logoKey}.png`;
+
+  return (
+    <div className="relative h-full w-full overflow-hidden rounded-2xl bg-[#211f20]">
+      {!logoFailed ? (
+        <img
+          src={logoSrc}
+          alt={`${name} logo`}
+          className="h-full w-full object-contain p-3 transition-transform duration-200 group-hover:scale-[1.03]"
+          onError={() => setLogoFailed(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center bg-[#2C0547] p-4 text-center text-white">
+          <BrandName name={name} />
+        </div>
+      )}
+
+      <span className="absolute bottom-2 right-3 rounded-full bg-black/65 px-2.5 py-1 text-[12px] font-semibold leading-none text-white shadow-sm">
+        {count}
+      </span>
+    </div>
+  );
+}
+
 export default function BrandClient() {
   const [mounted, setMounted] = useState(false);
   const [owner, setOwner] = useState({ id: null, username: "stephanie" });
@@ -212,13 +238,14 @@ export default function BrandClient() {
                 <Link
                   key={canon}
                   href={href}
-                  className="h-[80px] flex flex-col items-center justify-center rounded-2xl bg-[#2C0547] text-white hover:scale-[1.02] transition-all duration-200 p-4 text-center shadow-lg"
+                  className="group h-[120px] overflow-hidden rounded-2xl shadow-lg transition-all duration-200 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-xl"
+                  aria-label={`View ${meta.display} fragrances`}
                 >
-                  <BrandName name={meta.display} />
-
-                  <span className="opacity-75 text-[15px] mt-3 leading-none font-semibold">
-                    ({meta.count})
-                  </span>
+                  <BrandLogoCard
+                    name={meta.display}
+                    count={meta.count}
+                    logoKey={meta.strict}
+                  />
                 </Link>
               );
             })}
