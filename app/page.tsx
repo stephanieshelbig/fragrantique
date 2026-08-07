@@ -156,7 +156,7 @@ export default function HomePage() {
             <SquareCard
               href="/notes"
               icon="🔍"
-              title="Search My Collection"
+              title="Browse My Collection"
               description="Best for easy viewing on mobile"
               iconClassName="bg-gradient-to-br from-[#dce7ff] to-[#9eb8f4]"
               cardClassName="border-[#9eb8f4] bg-gradient-to-br from-[#f4f7ff] to-[#e5ecff] hover:border-[#021E61]"
