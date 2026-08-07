@@ -83,14 +83,14 @@ function Card({ f }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="block rounded-2xl border p-4 shadow-sm bg-white min-h-[180px] hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
+      className="block rounded-2xl border p-3 shadow-sm bg-white aspect-square hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
     >
-      <div className="flex items-start gap-4">
-        <div className="w-24 h-28 rounded overflow-hidden border bg-gray-100 shrink-0">
+      <div className="flex h-full flex-col items-center justify-between">
+        <div className="flex h-[58%] w-full items-center justify-center overflow-hidden">
           <img
             src={img}
             alt={`${f.brand || ''} ${f.name || ''}`}
-            className="w-full h-full object-contain"
+            className="max-h-full max-w-full object-contain"
             style={{ mixBlendMode: 'multiply' }}
             loading="lazy"
             onError={(e) => {
@@ -103,17 +103,17 @@ function Card({ f }) {
           />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-black text-lg leading-tight">
+        <div className="w-full min-w-0 text-center">
+          <div className="truncate text-sm font-semibold leading-tight text-black">
             {f.brand || '—'}
           </div>
 
-          <div className="font-semibold text-black text-lg leading-tight mt-1">
+          <div className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-black">
             {f.name || '—'}
           </div>
 
           {accords.length > 0 && (
-            <div className="mt-2 text-sm text-gray-500 leading-snug">
+            <div className="mt-1 line-clamp-2 text-xs leading-snug text-gray-500">
               {accords.join(', ')}
             </div>
           )}
@@ -227,7 +227,7 @@ export default function NotesPage() {
             No matches. Try searching multiple keywords, like woody and floral, vanilla amber, or fruity musk.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 pt-2">
             {filtered.map((f) => (
               <Card key={f.id} f={f} />
             ))}
