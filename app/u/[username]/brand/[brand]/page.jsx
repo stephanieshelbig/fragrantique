@@ -60,16 +60,40 @@ export default function BrandPage({ params }) {
 
       setOwner(prof);
 
-      const { data: rows } = await supabase
-        .from('user_fragrances')
-        .select(`
-          id,
-          fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
-        `)
-        .eq('user_id', prof.id)
-        .limit(5000);
+      // Load ALL fragrances for this boutique in batches.
+      // Supabase/PostgREST can cap a single response, so .limit(5000)
+      // does not reliably guarantee that every user_fragrances row is returned.
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      let allRows = [];
 
-      const items = (rows || []).map(r => r.fragrance).filter(Boolean);
+      while (true) {
+        const { data: rows, error } = await supabase
+          .from('user_fragrances')
+          .select(`
+            id,
+            fragrance:fragrances(id, brand, name, image_url, image_url_transparent)
+          `)
+          .eq('user_id', prof.id)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Error loading boutique fragrances:', error);
+          break;
+        }
+
+        const batch = rows || [];
+        allRows = allRows.concat(batch);
+
+        if (batch.length < PAGE_SIZE) {
+          break;
+        }
+
+        from += PAGE_SIZE;
+      }
+
+      const items = allRows.map(r => r.fragrance).filter(Boolean);
       setFrags(items);
       setLoading(false);
     })();
