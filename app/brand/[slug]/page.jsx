@@ -22,7 +22,7 @@ async function fetchAllFragrances(brandParam) {
       .select(
         'id, brand, name, image_url, image_url_transparent, fragrantica_url'
       )
-      .ilike('brand', brandParam)
+      .ilike('brand', `%${brandParam}%`)
       .order('name', { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
 
