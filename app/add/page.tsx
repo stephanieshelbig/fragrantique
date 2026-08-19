@@ -12,7 +12,8 @@ export default function AddFragrance() {
     image_url_3: 'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
     image_url_4: 'https://www.fragrantique.net/DecantSizing.png',
     fragrantica_url: '',
-    wikiparfum_url: 'https://www.wikiperfume.com/en/fragrances/fragrance-name',
+    wikiparfum_url:
+      'https://www.wikiperfume.com/en/fragrances/fragrance-name',
     notes: '',
     accords: '',
     decant_price: '',
@@ -20,6 +21,7 @@ export default function AddFragrance() {
   });
 
   const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const update = (k: string, v: string) =>
     setForm((prev) => ({
@@ -28,45 +30,129 @@ export default function AddFragrance() {
     }));
 
   async function submit() {
+    if (saving) return;
+
+    setSaving(true);
     setMsg(null);
 
-    const accords = form.accords
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((a) => ({
-        name: a,
-        strength: 50,
-      }));
+    try {
+      // Make sure the user is logged in BEFORE creating the fragrance.
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
 
-    const { error } = await supabase.from('fragrances').insert({
-      name: form.name || null,
-      brand: form.brand || null,
+      if (authError) {
+        throw new Error(`Login check failed: ${authError.message}`);
+      }
 
-      image_url: form.image_url || null,
-      image_url_2: form.image_url_2 || null,
-      image_url_3: form.image_url_3 || null,
-      image_url_4: form.image_url_4 || null,
+      const userId = authData?.user?.id;
 
-      fragrantica_url: form.fragrantica_url || null,
-      wikiparfum_url: form.wikiparfum_url || null,
+      if (!userId) {
+        setMsg('Please sign in before adding a fragrance.');
+        return;
+      }
 
-      notes: form.notes || null,
-      accords: accords.length ? accords : null,
+      // Convert comma-separated accords into the JSON format used by Fragrantique.
+      const accords = form.accords
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .map((a) => ({
+          name: a,
+          strength: 50,
+        }));
 
-      decant_price: form.decant_price
-        ? Number(form.decant_price)
-        : null,
+      // ---------------------------------------------------------
+      // 1. ADD THE FRAGRANCE TO THE MASTER FRAGRANCES TABLE
+      // ---------------------------------------------------------
+      const { data: newFragrance, error: fragranceError } =
+        await supabase
+          .from('fragrances')
+          .insert({
+            name: form.name || null,
+            brand: form.brand || null,
 
-      decant_payment_link:
-        form.decant_payment_link || null,
-    });
+            image_url: form.image_url || null,
+            image_url_2: form.image_url_2 || null,
+            image_url_3: form.image_url_3 || null,
+            image_url_4: form.image_url_4 || null,
 
-    if (error) {
-      setMsg(error.message);
-    } else {
-      setMsg('Added! Find it in your boutique shelves.');
+            fragrantica_url: form.fragrantica_url || null,
+            wikiparfum_url: form.wikiparfum_url || null,
 
+            notes: form.notes || null,
+            accords: accords.length ? accords : null,
+
+            decant_price: form.decant_price
+              ? Number(form.decant_price)
+              : null,
+
+            decant_payment_link:
+              form.decant_payment_link || null,
+          })
+          .select('id')
+          .single();
+
+      if (fragranceError) {
+        throw new Error(`Fragrance save failed: ${fragranceError.message}`);
+      }
+
+      if (!newFragrance?.id) {
+        throw new Error(
+          'The fragrance was saved, but its ID was not returned.'
+        );
+      }
+
+      // ---------------------------------------------------------
+      // 2. FIND THE LAST POSITION ON THIS USER'S SHELVES
+      // ---------------------------------------------------------
+      const { data: positions, error: positionError } =
+        await supabase
+          .from('user_fragrances')
+          .select('position')
+          .eq('user_id', userId)
+          .order('position', { ascending: false })
+          .limit(1);
+
+      if (positionError) {
+        throw new Error(
+          `Fragrance saved, but shelf position lookup failed: ${positionError.message}`
+        );
+      }
+
+      const nextPosition =
+        positions?.length && positions[0]?.position != null
+          ? Number(positions[0].position) + 1
+          : 0;
+
+      // ---------------------------------------------------------
+      // 3. LINK THE NEW FRAGRANCE TO THE USER'S COLLECTION
+      // ---------------------------------------------------------
+      const { error: shelfError } = await supabase
+        .from('user_fragrances')
+        .upsert(
+          {
+            user_id: userId,
+            fragrance_id: newFragrance.id,
+            position: nextPosition,
+            manual: true,
+          },
+          {
+            onConflict: 'user_id,fragrance_id',
+          }
+        );
+
+      if (shelfError) {
+        throw new Error(
+          `Fragrance saved, but couldn't add it to your shelves: ${shelfError.message}`
+        );
+      }
+
+      // ---------------------------------------------------------
+      // 4. SUCCESS
+      // ---------------------------------------------------------
+      setMsg('Added and added to your shelves ✓');
+
+      // Reset the form.
       setForm({
         name: '',
         brand: '',
@@ -74,8 +160,10 @@ export default function AddFragrance() {
           'https://fimgs.net/mdimg/perfume-thumbs/375x500.XXXXX.2x.jpg',
         image_url_2:
           'https://www.fragrantique.net/xxx.png',
-        image_url_3: 'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
-        image_url_4: 'https://www.fragrantique.net/DecantSizing.png',
+        image_url_3:
+          'https://fimgs.net/mdimg/perfume-social-cards/en-p_c_XXXXX.jpeg',
+        image_url_4:
+          'https://www.fragrantique.net/DecantSizing.png',
         fragrantica_url: '',
         wikiparfum_url:
           'https://www.wikiperfume.com/en/fragrances/fragrance-name',
@@ -84,6 +172,11 @@ export default function AddFragrance() {
         decant_price: '',
         decant_payment_link: '',
       });
+    } catch (err: any) {
+      console.error('Add fragrance error:', err);
+      setMsg(err?.message || 'Something went wrong while saving.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -168,25 +261,27 @@ export default function AddFragrance() {
           className="border rounded-lg px-3 py-2"
           placeholder="Decant price (USD)"
           value={form.decant_price}
-          onChange={(e) => update('decant_price', e.target.value)}
+          onChange={(e) =>
+            update('decant_price', e.target.value)
+          }
         />
 
         <input
           className="border rounded-lg px-3 py-2"
           placeholder="Payment link (Stripe, etc.)"
           value={form.decant_payment_link}
-          onChange={(e) => update(
-            'decant_payment_link',
-            e.target.value
-          )}
+          onChange={(e) =>
+            update('decant_payment_link', e.target.value)
+          }
         />
       </div>
 
       <button
         onClick={submit}
-        className="w-full bg-[var(--gold)] text-white rounded-lg py-2"
+        disabled={saving}
+        className="w-full bg-[var(--gold)] text-white rounded-lg py-2 disabled:opacity-50"
       >
-        Save
+        {saving ? 'Saving…' : 'Save'}
       </button>
 
       {msg && (
