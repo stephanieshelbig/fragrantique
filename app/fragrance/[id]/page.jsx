@@ -311,16 +311,16 @@ export default function FragranceDetail({ params }) {
     const main = frag?.image_url_transparent || frag?.image_url || '/bottle-placeholder.png';
 
     return [
-      {
-        src: main,
-        label: 'Main photo',
-      },
       frag?.image_url_2
         ? {
             src: frag.image_url_2,
             label: 'Photo 2',
           }
         : null,
+      {
+        src: main,
+        label: 'Main photo',
+      },
       frag?.image_url_3_saved || frag?.image_url_3
         ? {
             src: frag.image_url_3_saved || frag.image_url_3,
