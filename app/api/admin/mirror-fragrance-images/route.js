@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const BUCKET = "fragrance-images";
+
+/* =========================================================
+   SUPABASE ADMIN CLIENT
+========================================================= */
 
 function getAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,101 +28,262 @@ function getAdminClient() {
   });
 }
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 function extensionFromContentType(contentType) {
   if (!contentType) return "jpg";
-  if (contentType.includes("png")) return "png";
-  if (contentType.includes("webp")) return "webp";
-  if (contentType.includes("gif")) return "gif";
-  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
+
+  const type = contentType.toLowerCase();
+
+  if (type.includes("png")) return "png";
+  if (type.includes("webp")) return "webp";
+  if (type.includes("gif")) return "gif";
+  if (type.includes("avif")) return "avif";
+  if (type.includes("jpeg")) return "jpg";
+  if (type.includes("jpg")) return "jpg";
+
   return "jpg";
 }
 
-function getBrowserHeaders(sourceUrl) {
-  let referer = "https://www.google.com/";
-
+function getReferer(sourceUrl) {
   try {
     const url = new URL(sourceUrl);
 
-    // Use the image host itself as the default referer.
-    referer = `${url.protocol}//${url.host}/`;
-
-    // Fragrantica/fimgs can be picky about server-side requests.
     if (
       url.hostname.includes("fimgs.net") ||
       url.hostname.includes("fragrantica.com")
     ) {
-      referer = "https://www.fragrantica.com/";
+      return "https://www.fragrantica.com/";
     }
-  } catch {
-    // Keep fallback referer.
-  }
 
+    return `${url.protocol}//${url.hostname}/`;
+  } catch {
+    return "https://www.google.com/";
+  }
+}
+
+function getBrowserHeaders(sourceUrl) {
   return {
     "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+      "AppleWebKit/537.36 (KHTML, like Gecko) " +
+      "Chrome/152.0.0.0 Safari/537.36",
+
     Accept:
       "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+
     "Accept-Language": "en-US,en;q=0.9",
-    Referer: referer,
+
+    Referer: getReferer(sourceUrl),
+
+    "Sec-Fetch-Dest": "image",
+    "Sec-Fetch-Mode": "no-cors",
+    "Sec-Fetch-Site": "cross-site",
+
     "Cache-Control": "no-cache",
     Pragma: "no-cache",
   };
 }
 
-async function downloadImage(sourceUrl, imageNumber) {
-  const cleanUrl = sourceUrl.trim();
-  const headers = getBrowserHeaders(cleanUrl);
+/* =========================================================
+   FETCH ONE URL
+========================================================= */
 
-  // First attempt with browser-like headers.
-  let response = await fetch(cleanUrl, {
+async function fetchImageAttempt(url, headers = {}) {
+  return fetch(url, {
+    method: "GET",
     headers,
     redirect: "follow",
     cache: "no-store",
   });
-
-  // Retry once with simpler headers.
-  if (!response.ok) {
-    response = await fetch(cleanUrl, {
-      headers: {
-        "User-Agent": headers["User-Agent"],
-        Accept: headers.Accept,
-        "Accept-Language": headers["Accept-Language"],
-      },
-      redirect: "follow",
-      cache: "no-store",
-    });
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Image ${imageNumber} failed to download: ${response.status} ${
-        response.statusText || ""
-      }`.trim()
-    );
-  }
-
-  const contentType =
-    response.headers.get("content-type")?.split(";")[0]?.trim() ||
-    "image/jpeg";
-
-  if (!contentType.startsWith("image/")) {
-    throw new Error(
-      `Image ${imageNumber} is not an image. Content-Type: ${contentType}`
-    );
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-
-  if (!arrayBuffer.byteLength) {
-    throw new Error(`Image ${imageNumber} downloaded as an empty file`);
-  }
-
-  return {
-    buffer: Buffer.from(arrayBuffer),
-    contentType,
-  };
 }
+
+/* =========================================================
+   DOWNLOAD IMAGE
+
+   We make several attempts because Fragrantica/fimgs and
+   some other hosts occasionally reject server-side requests.
+========================================================= */
+
+async function downloadImage(sourceUrl, imageNumber) {
+  if (!sourceUrl || typeof sourceUrl !== "string") {
+    throw new Error(`Image ${imageNumber}: missing source URL`);
+  }
+
+  const cleanUrl = sourceUrl.trim();
+
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    throw new Error(
+      `Image ${imageNumber}: invalid source URL: ${cleanUrl}`
+    );
+  }
+
+  const browserHeaders = getBrowserHeaders(cleanUrl);
+
+  const attempts = [
+    {
+      name: "browser headers",
+      headers: browserHeaders,
+    },
+
+    {
+      name: "fragrance referer",
+      headers: {
+        "User-Agent": browserHeaders["User-Agent"],
+        Accept: browserHeaders.Accept,
+        "Accept-Language": "en-US,en;q=0.9",
+        Referer: "https://www.fragrantica.com/",
+      },
+    },
+
+    {
+      name: "simple request",
+      headers: {
+        "User-Agent": browserHeaders["User-Agent"],
+        Accept: "*/*",
+      },
+    },
+
+    {
+      name: "minimal request",
+      headers: {},
+    },
+  ];
+
+  let lastStatus = null;
+  let lastStatusText = "";
+  let lastContentType = "";
+
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+
+    try {
+      const response = await fetchImageAttempt(
+        cleanUrl,
+        attempt.headers
+      );
+
+      lastStatus = response.status;
+      lastStatusText = response.statusText || "";
+      lastContentType =
+        response.headers.get("content-type") || "";
+
+      console.log(
+        `[mirror] Image ${imageNumber}, attempt ${i + 1} (${attempt.name}):`,
+        response.status,
+        lastContentType
+      );
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const contentType =
+        response.headers
+          .get("content-type")
+          ?.split(";")[0]
+          ?.trim()
+          ?.toLowerCase() || "image/jpeg";
+
+      /*
+       Some image servers omit the correct content-type.
+       If it says text/html, though, we almost certainly got
+       an anti-bot/error page instead of an image.
+      */
+      if (
+        contentType.includes("text/html") ||
+        contentType.includes("application/json")
+      ) {
+        console.warn(
+          `[mirror] Image ${imageNumber} returned ${contentType} instead of an image`
+        );
+
+        continue;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        console.warn(
+          `[mirror] Image ${imageNumber} returned an empty file`
+        );
+
+        continue;
+      }
+
+      /*
+       Prevent obviously tiny HTML/error responses from
+       accidentally being saved as fragrance images.
+      */
+      if (arrayBuffer.byteLength < 100) {
+        console.warn(
+          `[mirror] Image ${imageNumber} response was suspiciously small: ${arrayBuffer.byteLength} bytes`
+        );
+
+        continue;
+      }
+
+      let finalContentType = contentType;
+
+      /*
+       Some servers return application/octet-stream even
+       though the response is actually an image.
+      */
+      if (
+        !finalContentType.startsWith("image/") &&
+        finalContentType !== "application/octet-stream"
+      ) {
+        console.warn(
+          `[mirror] Image ${imageNumber} unsupported content type: ${finalContentType}`
+        );
+
+        continue;
+      }
+
+      if (finalContentType === "application/octet-stream") {
+        finalContentType = "image/jpeg";
+      }
+
+      return {
+        buffer: Buffer.from(arrayBuffer),
+        contentType: finalContentType,
+      };
+    } catch (error) {
+      console.warn(
+        `[mirror] Image ${imageNumber}, attempt ${i + 1} failed:`,
+        error?.message || error
+      );
+    }
+  }
+
+  let explanation = "";
+
+  if (lastStatus === 403) {
+    explanation =
+      " The source website is blocking server-side image downloads (403 Forbidden).";
+  } else if (lastStatus === 429) {
+    explanation =
+      " The source website is rate-limiting image downloads (429 Too Many Requests).";
+  } else if (lastStatus === 404) {
+    explanation =
+      " The source image no longer exists at that URL.";
+  }
+
+  throw new Error(
+    `Image ${imageNumber} failed to download` +
+      (lastStatus
+        ? `: ${lastStatus} ${lastStatusText}`.trim()
+        : "") +
+      explanation +
+      ` URL: ${cleanUrl}`
+  );
+}
+
+/* =========================================================
+   SAVE ONE IMAGE TO SUPABASE
+========================================================= */
 
 async function mirrorOneImage({
   supabase,
@@ -142,7 +308,13 @@ async function mirrorOneImage({
 
   const ext = extensionFromContentType(contentType);
 
-  const path = `fragrances/${fragranceId}/image-${imageNumber}.${ext}`;
+  const path =
+    `fragrances/${fragranceId}/` +
+    `image-${imageNumber}.${ext}`;
+
+  console.log(
+    `[mirror] Uploading image ${imageNumber} to ${path}`
+  );
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -162,12 +334,24 @@ async function mirrorOneImage({
     .from(BUCKET)
     .getPublicUrl(path);
 
+  if (!data?.publicUrl) {
+    throw new Error(
+      `Image ${imageNumber} uploaded but public URL could not be created`
+    );
+  }
+
   return data.publicUrl;
 }
 
+/* =========================================================
+   API ROUTE
+========================================================= */
+
 export async function POST(request) {
   try {
-    const { fragranceId } = await request.json();
+    const body = await request.json().catch(() => ({}));
+
+    const fragranceId = body?.fragranceId;
 
     if (!fragranceId) {
       return NextResponse.json(
@@ -183,10 +367,27 @@ export async function POST(request) {
 
     const supabase = getAdminClient();
 
-    const { data: fragrance, error: fetchError } = await supabase
+    /* -----------------------------------------------------
+       GET FRAGRANCE
+    ----------------------------------------------------- */
+
+    const {
+      data: fragrance,
+      error: fetchError,
+    } = await supabase
       .from("fragrances")
       .select(
-        "id, image_url, image_url_2, image_url_3"
+        [
+          "id",
+          "brand",
+          "name",
+          "image_url",
+          "image_url_2",
+          "image_url_3",
+          "image_url_saved",
+          "image_url_2_saved",
+          "image_url_3_saved",
+        ].join(",")
       )
       .eq("id", fragranceId)
       .single();
@@ -205,29 +406,54 @@ export async function POST(request) {
       );
     }
 
-    const updates = {};
-    const warnings = [];
+    console.log(
+      `[mirror] Saving images for ${fragrance.brand || ""} — ${
+        fragrance.name || ""
+      } (${fragranceId})`
+    );
+
+    /* -----------------------------------------------------
+       BUILD IMAGE LIST
+    ----------------------------------------------------- */
 
     const images = [
       {
         sourceUrl: fragrance.image_url,
+        existingSavedUrl: fragrance.image_url_saved,
         imageNumber: 1,
         savedColumn: "image_url_saved",
       },
+
       {
         sourceUrl: fragrance.image_url_2,
+        existingSavedUrl: fragrance.image_url_2_saved,
         imageNumber: 2,
         savedColumn: "image_url_2_saved",
       },
+
       {
         sourceUrl: fragrance.image_url_3,
+        existingSavedUrl: fragrance.image_url_3_saved,
         imageNumber: 3,
         savedColumn: "image_url_3_saved",
       },
     ];
 
+    const updates = {};
+    const warnings = [];
+    const results = [];
+
+    /* -----------------------------------------------------
+       SAVE EACH IMAGE
+    ----------------------------------------------------- */
+
     for (const image of images) {
       if (!image.sourceUrl) {
+        results.push({
+          imageNumber: image.imageNumber,
+          status: "no-source",
+        });
+
         continue;
       }
 
@@ -241,21 +467,37 @@ export async function POST(request) {
 
         if (savedUrl) {
           updates[image.savedColumn] = savedUrl;
+
+          results.push({
+            imageNumber: image.imageNumber,
+            status: "saved",
+            url: savedUrl,
+          });
         }
       } catch (error) {
+        const message =
+          error?.message ||
+          `Image ${image.imageNumber} failed to save`;
+
         console.error(
-          `Mirror failed for fragrance ${fragranceId}, image ${image.imageNumber}:`,
+          `[mirror] Fragrance ${fragranceId}, image ${image.imageNumber}:`,
           error
         );
 
-        warnings.push(
-          error?.message ||
-            `Image ${image.imageNumber} failed to save`
-        );
+        warnings.push(message);
+
+        results.push({
+          imageNumber: image.imageNumber,
+          status: "failed",
+          error: message,
+        });
       }
     }
 
-    // Save any images that DID succeed, even if another image failed.
+    /* -----------------------------------------------------
+       UPDATE DATABASE WITH EVERYTHING THAT SUCCEEDED
+    ----------------------------------------------------- */
+
     if (Object.keys(updates).length > 0) {
       const { error: updateError } = await supabase
         .from("fragrances")
@@ -266,7 +508,12 @@ export async function POST(request) {
         return NextResponse.json(
           {
             ok: false,
-            error: updateError.message,
+            error:
+              `Images uploaded, but database update failed: ` +
+              updateError.message,
+            updates,
+            warnings,
+            results,
           },
           {
             status: 500,
@@ -276,23 +523,40 @@ export async function POST(request) {
     }
 
     const sourceCount = images.filter(
-      (image) => image.sourceUrl
+      (image) => !!image.sourceUrl
     ).length;
 
     const savedCount = Object.keys(updates).length;
 
-    // If every image failed, return an actual error.
-    if (
-      sourceCount > 0 &&
-      savedCount === 0 &&
-      warnings.length > 0
-    ) {
+    /* -----------------------------------------------------
+       NO SOURCE IMAGES
+    ----------------------------------------------------- */
+
+    if (sourceCount === 0) {
+      return NextResponse.json({
+        ok: true,
+        updates: {},
+        warnings: [],
+        results,
+        message: "No source image URLs were found.",
+      });
+    }
+
+    /* -----------------------------------------------------
+       EVERYTHING FAILED
+    ----------------------------------------------------- */
+
+    if (savedCount === 0) {
       return NextResponse.json(
         {
           ok: false,
-          error: warnings.join(" | "),
+          error:
+            warnings.length > 0
+              ? warnings.join(" | ")
+              : "No images could be saved.",
           warnings,
           updates,
+          results,
         },
         {
           status: 502,
@@ -300,11 +564,19 @@ export async function POST(request) {
       );
     }
 
-    // At least one image succeeded.
+    /* -----------------------------------------------------
+       SUCCESS / PARTIAL SUCCESS
+    ----------------------------------------------------- */
+
     return NextResponse.json({
       ok: true,
       updates,
       warnings,
+      results,
+      message:
+        warnings.length > 0
+          ? `${savedCount} image(s) saved. ${warnings.length} image(s) failed.`
+          : `${savedCount} image(s) saved successfully.`,
     });
   } catch (error) {
     console.error(
@@ -317,7 +589,7 @@ export async function POST(request) {
         ok: false,
         error:
           error?.message ||
-          "Unknown error",
+          "Unknown mirror-fragrance-images error",
       },
       {
         status: 500,
