@@ -102,9 +102,6 @@ async function fetchImageAttempt(url, headers = {}) {
 
 /* =========================================================
    DOWNLOAD IMAGE
-
-   We make several attempts because Fragrantica/fimgs and
-   some other hosts occasionally reject server-side requests.
 ========================================================= */
 
 async function downloadImage(sourceUrl, imageNumber) {
@@ -154,7 +151,6 @@ async function downloadImage(sourceUrl, imageNumber) {
 
   let lastStatus = null;
   let lastStatusText = "";
-  let lastContentType = "";
 
   for (let i = 0; i < attempts.length; i++) {
     const attempt = attempts[i];
@@ -167,13 +163,14 @@ async function downloadImage(sourceUrl, imageNumber) {
 
       lastStatus = response.status;
       lastStatusText = response.statusText || "";
-      lastContentType =
+
+      const responseContentType =
         response.headers.get("content-type") || "";
 
       console.log(
         `[mirror] Image ${imageNumber}, attempt ${i + 1} (${attempt.name}):`,
         response.status,
-        lastContentType
+        responseContentType
       );
 
       if (!response.ok) {
@@ -187,11 +184,6 @@ async function downloadImage(sourceUrl, imageNumber) {
           ?.trim()
           ?.toLowerCase() || "image/jpeg";
 
-      /*
-       Some image servers omit the correct content-type.
-       If it says text/html, though, we almost certainly got
-       an anti-bot/error page instead of an image.
-      */
       if (
         contentType.includes("text/html") ||
         contentType.includes("application/json")
@@ -213,10 +205,6 @@ async function downloadImage(sourceUrl, imageNumber) {
         continue;
       }
 
-      /*
-       Prevent obviously tiny HTML/error responses from
-       accidentally being saved as fragrance images.
-      */
       if (arrayBuffer.byteLength < 100) {
         console.warn(
           `[mirror] Image ${imageNumber} response was suspiciously small: ${arrayBuffer.byteLength} bytes`
@@ -227,10 +215,6 @@ async function downloadImage(sourceUrl, imageNumber) {
 
       let finalContentType = contentType;
 
-      /*
-       Some servers return application/octet-stream even
-       though the response is actually an image.
-      */
       if (
         !finalContentType.startsWith("image/") &&
         finalContentType !== "application/octet-stream"
@@ -308,9 +292,18 @@ async function mirrorOneImage({
 
   const ext = extensionFromContentType(contentType);
 
+  /*
+    IMPORTANT:
+    Use a unique filename every time the image is saved.
+
+    This prevents the browser/Supabase CDN from continuing
+    to display an older cached version of the image.
+  */
+  const version = Date.now();
+
   const path =
     `fragrances/${fragranceId}/` +
-    `image-${imageNumber}.${ext}`;
+    `image-${imageNumber}-${version}.${ext}`;
 
   console.log(
     `[mirror] Uploading image ${imageNumber} to ${path}`
@@ -320,8 +313,8 @@ async function mirrorOneImage({
     .from(BUCKET)
     .upload(path, buffer, {
       contentType,
-      upsert: true,
-      cacheControl: "31536000",
+      upsert: false,
+      cacheControl: "3600",
     });
 
   if (uploadError) {
@@ -419,21 +412,18 @@ export async function POST(request) {
     const images = [
       {
         sourceUrl: fragrance.image_url,
-        existingSavedUrl: fragrance.image_url_saved,
         imageNumber: 1,
         savedColumn: "image_url_saved",
       },
 
       {
         sourceUrl: fragrance.image_url_2,
-        existingSavedUrl: fragrance.image_url_2_saved,
         imageNumber: 2,
         savedColumn: "image_url_2_saved",
       },
 
       {
         sourceUrl: fragrance.image_url_3,
-        existingSavedUrl: fragrance.image_url_3_saved,
         imageNumber: 3,
         savedColumn: "image_url_3_saved",
       },
@@ -495,7 +485,7 @@ export async function POST(request) {
     }
 
     /* -----------------------------------------------------
-       UPDATE DATABASE WITH EVERYTHING THAT SUCCEEDED
+       UPDATE DATABASE WITH SUCCESSFUL SAVED URLS
     ----------------------------------------------------- */
 
     if (Object.keys(updates).length > 0) {
