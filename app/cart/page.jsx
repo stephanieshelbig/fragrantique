@@ -312,7 +312,14 @@ export default function CartPage() {
           <button onClick={checkout} className="bg-black text-white px-4 py-2 rounded">
             Checkout
           </button>
-
+<div className="mt-3 text-center">
+  <p className="text-xs text-gray-500 leading-relaxed max-w-md mx-auto">
+    🔒 Secure Checkout — You’ll be taken to our secure payment provider to
+    complete your purchase. Fragrantique does not receive, access, or store
+    your credit card or other payment information on our servers. Your payment
+    details are handled securely by our payment processor.
+  </p>
+</div>
           {msg && (
             <div
               className={`text-sm mt-2 ${
