@@ -81,7 +81,7 @@ export async function POST(request) {
       await transporter.sendMail({
         from: process.env.FROM_EMAIL || process.env.GMAIL_USER,
         to: email,
-        subject: "Welcome to Fragrantique 💕",
+        subject: "Welcome to Fragrantique",
         html: `
           <div style="font-family: Georgia, 'Times New Roman', serif; line-height: 1.7; color: #182A39; background: #fff7ec; padding: 24px;">
             <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #d9c39a; border-radius: 18px; padding: 28px;">
