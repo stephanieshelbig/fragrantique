@@ -178,10 +178,10 @@ export default function HomePage() {
               cardClassName="border-[#9ecfb2] bg-gradient-to-br from-[#f7fcf8] to-[#e7f6ec] hover:border-[#4e8b69]"
             />
             <SquareCard
-              href="/recommendations"
+              href="/reviews"
               icon="✨"
-              title="Get Recommendations"
-              description="Let me suggest something you might love"
+              title="Reviews"
+              description="Read reviews from some of my lovely customers"
               iconClassName="bg-gradient-to-br from-[#fff0c9] to-[#dfbd6f]"
               cardClassName="border-[#dfbd6f] bg-gradient-to-br from-[#fffaf0] to-[#f8ebca] hover:border-[#b99254]"
             />
