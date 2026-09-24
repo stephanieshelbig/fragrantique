@@ -246,7 +246,7 @@ export default function CartPage() {
             </div>
           ))}
 
-         
+          {/* Discount Code section temporarily hidden
 <div className="p-4 border rounded bg-white space-y-3">
   <div className="font-semibold">Discount Code</div>
 
@@ -278,7 +278,7 @@ export default function CartPage() {
     </div>
   )}
 </div>
-
+*/}
 
           <div className="p-4 border rounded bg-white space-y-1">
             <div className="flex justify-between">
