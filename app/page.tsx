@@ -165,7 +165,7 @@ export default function HomePage() {
               href="/notes"
               icon="🔍"
               title="Browse My Collection"
-              description="Best for easy viewing on mobile"
+              description="Search my entire collection"
               iconClassName="bg-gradient-to-br from-[#dce7ff] to-[#9eb8f4]"
               cardClassName="border-[#9eb8f4] bg-gradient-to-br from-[#f4f7ff] to-[#e5ecff] hover:border-[#021E61]"
             />
