@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -12,6 +13,7 @@ const adminLinks = [
   { href: '/admin/fragrances', label: 'Fragrances', desc: 'Manage fragrance listings' },
   { href: '/admin/fragrance-sales', label: 'Fragrance Sales', desc: 'Search decant sales by fragrance' },
   { href: '/admin/orders', label: 'Orders', desc: 'Review purchases and shipping details' },
+  { href: '/admin/income', label: 'Income', desc: 'Monthly orders, revenue, tax, and shipping' },
   { href: '/admin/requests', label: 'Requests', desc: 'Moderate customer requests' },
   { href: '/admin/reviews', label: 'Reviews', desc: 'Moderate customer reviews' }
 ];
