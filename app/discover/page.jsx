@@ -107,47 +107,49 @@ export default function DiscoverPage() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {categories.map((category) => (
-            <Link
-              key={category.slug}
-              href={`/discover/${category.slug}`}
-              className="group overflow-hidden rounded-[28px] border border-[#eadfd9] bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
-            >
-              <div
-                className="flex h-44 items-center justify-center"
-                style={{ backgroundColor: category.color }}
-              >
-                <span
-                  className="text-7xl transition duration-300 group-hover:scale-110"
-                  role="img"
-                  aria-label={category.name}
-                >
-                  {category.emoji}
-                </span>
-              </div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          
+{categories.map((category) => (
+  <Link
+    key={category.slug}
+    href={`/discover/${category.slug}`}
+    className="group overflow-hidden rounded-2xl border border-[#eadfd9] bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg sm:rounded-[28px]"
+  >
+    <div
+      className="flex h-[100px] items-center justify-center sm:h-44"
+      style={{ backgroundColor: category.color }}
+    >
+      <span
+        className="text-[44px] transition duration-300 group-hover:scale-110 sm:text-7xl"
+        role="img"
+        aria-label={category.name}
+      >
+        {category.emoji}
+      </span>
+    </div>
 
-              <div className="px-6 py-6 text-center">
-                <h2 className="font-serif text-2xl">
-                  {category.name}
-                </h2>
+    <div className="px-2 py-3 text-center sm:px-6 sm:py-6">
+      <h2 className="font-serif text-lg leading-tight sm:text-2xl">
+        {category.name}
+      </h2>
 
-                <p className="mt-2 text-sm text-[#8c6f64]">
-                  {category.description}
-                </p>
+      <p className="mt-1 text-xs leading-snug text-[#8c6f64] sm:mt-2 sm:text-sm">
+        {category.description}
+      </p>
 
-                <p className="mt-4 text-xs uppercase tracking-[0.15em] text-[#b38b7d]">
-                  {loading
-                    ? 'Loading...'
-                    : `${category.count} fragrances`}
-                </p>
+      <p className="mt-2 text-[10px] uppercase tracking-wide text-[#b38b7d] sm:mt-4 sm:text-xs sm:tracking-[0.15em]">
+        {loading
+          ? 'Loading...'
+          : `${category.count} fragrances`}
+      </p>
 
-                <p className="mt-4 text-sm font-medium text-[#a97584]">
-                  Explore Collection →
-                </p>
-              </div>
-            </Link>
-          ))}
+      <p className="mt-2 text-xs font-medium text-[#a97584] sm:mt-4 sm:text-sm">
+        Explore →
+      </p>
+    </div>
+  </Link>
+))}
+
         </div>
 
         {!loading && categories.length === 0 && (
