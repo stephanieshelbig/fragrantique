@@ -28,8 +28,8 @@ export default function HeaderBar() {
           <Link href="/notes" className="hover:underline">
             🔎Search
           </Link>
-          <Link href="/fragrantique-ai" className="hover:underline">
-            🤖FragrantiqueAI
+          <Link href="/requests" className="hover:underline">
+            🙏🏻Request a Fragrance
           </Link>
           <Link href="/chat" className="hover:underline">
             Contact Me
