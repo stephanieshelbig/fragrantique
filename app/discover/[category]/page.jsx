@@ -243,9 +243,42 @@ export default function DiscoveryCategoryPage() {
                         </p>
                       )}
 
-                      <p className="mt-3 text-xs font-medium text-[#a97584]">
-                        Discover Fragrance →
-                      </p>
+                      
+<div className="mt-3 flex flex-wrap justify-center gap-1">
+  {(Array.isArray(fragrance.accords)
+    ? fragrance.accords
+    : typeof fragrance.accords === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(fragrance.accords);
+          } catch {
+            return [];
+          }
+        })()
+      : []
+  ).map((accord, index) => {
+    const accordName =
+      typeof accord === 'string'
+        ? accord
+        : accord?.name;
+
+    if (!accordName) return null;
+
+    return (
+      <span
+        key={`${accordName}-${index}`}
+        className={`rounded-full px-2 py-1 text-[10px] font-medium ${
+          index === 0
+            ? 'bg-[#f4dfe6] text-[#79575d]'
+            : 'bg-[#f7f1ed] text-[#8c6f64]'
+        }`}
+      >
+        {accordName}
+      </span>
+    );
+  })}
+</div>
+
                     </div>
                   </Link>
                 ))}
