@@ -154,6 +154,14 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <SquareCard
+              href="/discover"
+              icon="❤️"
+              title="Discover"
+              description="A great place to start - view fragrances by category"
+              iconClassName="bg-gradient-to-br from-[#f8dce5] to-[#d9a3b6]"
+              cardClassName="border-[#d9a3b6] bg-gradient-to-br from-[#fff7fa] to-[#f8e5ec] hover:border-[#9d4f69]"
+            />
+            <SquareCard
               href="/notes"
               icon="🔍"
               title="Browse My Collection"
@@ -177,14 +185,7 @@ export default function HomePage() {
               iconClassName="bg-gradient-to-br from-[#dff3e7] to-[#9ecfb2]"
               cardClassName="border-[#9ecfb2] bg-gradient-to-br from-[#f7fcf8] to-[#e7f6ec] hover:border-[#4e8b69]"
             />
-            <SquareCard
-              href="/discover"
-              icon="❤️"
-              title="Discover"
-              description="A great place to start - view fragrances by category"
-              iconClassName="bg-gradient-to-br from-[#f8dce5] to-[#d9a3b6]"
-              cardClassName="border-[#d9a3b6] bg-gradient-to-br from-[#fff7fa] to-[#f8e5ec] hover:border-[#9d4f69]"
-            />
+            
             <SquareCard
               href="/reviews"
               icon="✨"
