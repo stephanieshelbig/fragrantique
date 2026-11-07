@@ -229,7 +229,7 @@ export default function FragranceDetail({ params }) {
       const { data: f } = await supabase
         .from('fragrances')
         .select(
-          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, wikiparfum_url, notes, accords, recommendation_1_id, recommendation_2_id, recommendation_3_id'
+          'id, brand, name, image_url, image_url_transparent, image_url_2, image_url_3, image_url_3_saved, image_url_4, fragrantica_url, notes, accords, recommendation_1_id, recommendation_2_id, recommendation_3_id'
         )
         .eq('id', id)
         .maybeSingle();
@@ -673,16 +673,16 @@ export default function FragranceDetail({ params }) {
       <div className="flex items-center justify-between">
         <div />
         <div className="flex items-center gap-3 flex-wrap justify-end">
-          {frag.wikiparfum_url && (
+          {frag.fragrantica_url && (
             <a
-              href={frag.wikiparfum_url}
+              href={frag.fragrantica_url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-full border border-[#d6c6a5] bg-gradient-to-r from-white via-[#fffaf2] to-white px-4 py-1.5 text-sm font-medium text-[#7a5c2e] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#fffaf0] hover:shadow"
-              title="View fragrance on Wikiparfum in new tab"
+              title="View fragrance on Fragrantica in new tab"
             >
               <span className="text-base leading-none">✦</span>
-              <span>View on Wikiparfum</span>
+              <span>View on Fragrantica</span>
               <span className="text-xs opacity-70">↗</span>
             </a>
           )}
