@@ -178,6 +178,14 @@ export default function HomePage() {
               cardClassName="border-[#9ecfb2] bg-gradient-to-br from-[#f7fcf8] to-[#e7f6ec] hover:border-[#4e8b69]"
             />
             <SquareCard
+              href="/discover"
+              icon="❤️"
+              title="Discover"
+              description="A great place to start - view fragrances by category"
+              iconClassName="bg-gradient-to-br from-[#f8dce5] to-[#d9a3b6]"
+              cardClassName="border-[#d9a3b6] bg-gradient-to-br from-[#fff7fa] to-[#f8e5ec] hover:border-[#9d4f69]"
+            />
+            <SquareCard
               href="/reviews"
               icon="✨"
               title="Reviews"
@@ -194,14 +202,7 @@ export default function HomePage() {
               cardClassName="border-[#c99f3d] bg-gradient-to-br from-[#fff8e5] to-[#f0d996] hover:border-[#8f6b1d] hover:shadow-[0_0_28px_rgba(201,159,61,0.45)]"
               featured
             />
-            <SquareCard
-              href="/requests"
-              icon="🙏🏻"
-              title="Request a Fragrance"
-              description="Submit a request for a fragrance not on the site"
-              iconClassName="bg-gradient-to-br from-[#f8dce5] to-[#d9a3b6]"
-              cardClassName="border-[#d9a3b6] bg-gradient-to-br from-[#fff7fa] to-[#f8e5ec] hover:border-[#9d4f69]"
-            />
+            
           </div>
 
           <Link href="/photos" className="block mt-8">
