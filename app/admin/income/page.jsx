@@ -126,3 +126,9 @@ export default function AdminIncomePage() {
             </div>
           </section>
           <p className="text-xs text-[#8c6f64]">Total income is the amount charged to customers, including tax and shipping. Label costs are recorded shipping-label expenses, not all business expenses. Refunds are not deducted unless the order status or total is updated in your database.</p>
+
+                  </>}
+      </div>
+    </main>
+  );
+}
