@@ -185,15 +185,6 @@ export default function HomePage() {
               iconClassName="bg-gradient-to-br from-[#dff3e7] to-[#9ecfb2]"
               cardClassName="border-[#9ecfb2] bg-gradient-to-br from-[#f7fcf8] to-[#e7f6ec] hover:border-[#4e8b69]"
             />
-            
-            <SquareCard
-              href="/reviews"
-              icon="✨"
-              title="Reviews"
-              description="Read reviews from some of my lovely customers"
-              iconClassName="bg-gradient-to-br from-[#fff0c9] to-[#dfbd6f]"
-              cardClassName="border-[#dfbd6f] bg-gradient-to-br from-[#fffaf0] to-[#f8ebca] hover:border-[#b99254]"
-            />
             <SquareCard
               href="/fragrantique-ai"
               icon="🤖"
@@ -203,6 +194,15 @@ export default function HomePage() {
               cardClassName="border-[#c99f3d] bg-gradient-to-br from-[#fff8e5] to-[#f0d996] hover:border-[#8f6b1d] hover:shadow-[0_0_28px_rgba(201,159,61,0.45)]"
               featured
             />
+            <SquareCard
+              href="/reviews"
+              icon="✨"
+              title="Reviews"
+              description="Read reviews from some of my lovely customers"
+              iconClassName="bg-gradient-to-br from-[#fff0c9] to-[#dfbd6f]"
+              cardClassName="border-[#dfbd6f] bg-gradient-to-br from-[#fffaf0] to-[#f8ebca] hover:border-[#b99254]"
+            />
+            
             
           </div>
 
