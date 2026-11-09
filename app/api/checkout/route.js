@@ -166,7 +166,7 @@ export async function POST(req) {
       }
     }
 
-    const BASE_SHIPPING_CENTS = 600;
+    const BASE_SHIPPING_CENTS = 650;
     const TAX_RATE = 0.07;
 
     let discountCents = 0;
