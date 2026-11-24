@@ -159,6 +159,23 @@ function buildYouMayAlsoLikeList(currentFragrance, catalog, savedIds = []) {
   return picked.slice(0, 3);
 }
 
+function sortProductOptions(items, fragrance) {
+  const alphabetical =
+    String(fragrance?.id) === '27bfb4b1-4f99-4e15-903d-bd641ed442fe' ||
+    /\bscent\s*bird\b|\bbody\s*mists?\b/i.test(`${fragrance?.brand || ''} ${fragrance?.name || ''}`);
+
+  return [...items].sort((a, b) => {
+    const byLabel = String(a.label || '').localeCompare(String(b.label || ''), 'en', {
+      sensitivity: 'base',
+      numeric: true,
+    });
+    if (alphabetical) return byLabel;
+    const sizeA = a.size_ml == null || a.size_ml === '' ? Infinity : Number(a.size_ml);
+    const sizeB = b.size_ml == null || b.size_ml === '' ? Infinity : Number(b.size_ml);
+    return sizeA === sizeB ? byLabel : sizeA - sizeB;
+  });
+}
+
 export default function FragranceDetail({ params }) {
   const id = decodeURIComponent(params.id || '');
 
@@ -244,26 +261,18 @@ export default function FragranceDetail({ params }) {
       setCurrentImage(0);
 
       try {
-        let decantsQuery = supabase
+        const { data: ds, error: de } = await supabase
           .from('decants')
           .select('id, label, price_cents, size_ml, currency, in_stock, quantity')
           .eq('fragrance_id', id);
 
-        if (id === '27bfb4b1-4f99-4e15-903d-bd641ed442fe') {
-          decantsQuery = decantsQuery.order('label', { ascending: true });
-        } else {
-          decantsQuery = decantsQuery.order('size_ml', { ascending: true });
-        }
-
-        const { data: ds, error: de } = await decantsQuery;
-
         if (!de && Array.isArray(ds)) {
-          const mapped = ds.map((d) => ({
+          const mapped = sortProductOptions(ds.map((d) => ({
             ...d,
             currency: (d.currency || 'usd').toLowerCase(),
             in_stock: d.in_stock ?? true,
             quantity: (d.quantity ?? null) === null ? null : Number(d.quantity),
-          }));
+          })), f);
 
           setOptions(mapped);
           if (!selectedId && mapped.length) setSelectedId(String(mapped[0].id));
@@ -587,7 +596,7 @@ export default function FragranceDetail({ params }) {
       return;
     }
 
-    setOptions((prev) => prev.map((o) => (o.id === row.id ? { ...o, ...data } : o)));
+    setOptions((prev) => sortProductOptions(prev.map((o) => (o.id === row.id ? { ...o, ...data } : o)), frag));
     if (!selectedId) setSelectedId(String(data.id));
     setMsg('Option saved ✓');
   }
@@ -623,7 +632,7 @@ export default function FragranceDetail({ params }) {
       return;
     }
 
-    setOptions((prev) => [...prev, data]);
+    setOptions((prev) => sortProductOptions([...prev, data], frag));
     setSelectedId(String(data.id));
     setNewLabel('');
     setNewPrice('');
